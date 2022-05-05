@@ -116,6 +116,14 @@ const char PAGE_index[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-2 align-self-end">
                     <button id="postZone1Text" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Send</button>
                   </div>
+                  <div class="col-sm-12"></div>
+                  <div class="col-10">
+                    <label for="messageZone2" class="form-label">Zone2 text</label>
+                    <input id="messageZone2" class="form-control form-control-lg" type="text" placeholder="Zone2 message">
+                  </div>
+                  <div class="col-2 align-self-end">
+                    <button id="postZone2Text" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Send</button>
+                  </div>
                 <div class="col-sm-12"></div>
             </div>
           </div>
@@ -169,6 +177,13 @@ function preparePostRequest(event, key, val) {
         }
         sendPost(data);
     };
+
+    if (key == "postZone2Text") {
+        data = {
+            messageZone2: document.getElementById("messageZone2").value,
+        }
+        sendPost(data);
+    };
 };
 
     function sendPost(dataPost) {
@@ -195,6 +210,7 @@ function preparePostRequest(event, key, val) {
     const zoneNumbers = %zoneNumbers%;
     const workModeZone0 = "%workModeZone0%"
     const workModeZone1 = "%workModeZone1%"
+    const workModeZone2 = "%workModeZone2%"
     if (workModeZone1 != "manualInput") {
         document.getElementById('messageZone1').disabled = true;
         document.getElementById('postZone1Text').disabled = true;
@@ -205,10 +221,19 @@ function preparePostRequest(event, key, val) {
         document.getElementById('postZone0Text').disabled = true;
         document.getElementById('messageZone0').placeholder = "Zone0 is not in a Manual input work mode";
     }
-    if (zoneNumbers < 2) {
+    if (workModeZone2 != "manualInput") {
+        document.getElementById('messageZone2').disabled = true;
+        document.getElementById('postZone2Text').disabled = true;
+        document.getElementById('messageZone2').placeholder = "Zone2 is not in a Manual input work mode";
+    }
+    if (zoneNumbers == 1) {
         document.getElementById('messageZone1').disabled = true;
         document.getElementById('postZone1Text').disabled = true;
         document.getElementById('messageZone1').placeholder = "Zone1 is not initialized";
+
+        document.getElementById('messageZone2').disabled = true;
+        document.getElementById('postZone2Text').disabled = true;
+        document.getElementById('messageZone2').placeholder = "Zone2 is not initialized";
     }
    
 </script>
@@ -304,6 +329,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     <select class="form-select" aria-label="Default select example" id="zoneNumbers">
                         <option value="1">1</option>
                         <option value="2">2</option>
+                        <option value="3">3</option>
                       </select>
                     <div class="invalid-feedback">
                       Valid first name is required.
@@ -312,32 +338,29 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       
                   <div class="col-sm-4">
                     <label for="zone0Begin" class="form-label">First module <span class="text-muted">[ zone 0 ]</span></label>
-                    <input type="text" class="form-control" id="zone0Begin" placeholder="" value="%zone0Begin%" required="">
-                    <div class="invalid-feedback">
-                      Zone 0 begin is required.
-                    </div>
+                    <input type="text" class="form-control" id="zone0Begin" value="%zone0Begin%" >
                   </div>
                   <div class="col-sm-4">
                     <label for="zone0End" class="form-label">Last module <span class="text-muted">[ zone 0 ]</span></label>
-                    <input type="text" class="form-control" id="zone0End" placeholder="" value="%zone0End%" required="">
-                    <div class="invalid-feedback">
-                      Zone 0 end is required.
-                    </div>
+                    <input type="text" class="form-control" id="zone0End" value="%zone0End%" >
                   </div>
                   <div class="col-sm-4"></div>
-                  <div class="col-sm-4" id="zone1Begin">
+                  <div class="col-sm-4" id="zone1BeginDiv">
                     <label for="zone1Begin" class="form-label">First module <span class="text-muted">[ zone 1 ]</span></label>
-                    <input type="text" class="form-control" id="zone1Begin" placeholder="" value="%zone1Begin%" required="">
-                    <div class="invalid-feedback">
-                      Zone 0 begin is required.
-                    </div>
+                    <input type="text" class="form-control" id="zone1Begin" value="%zone1Begin%" >
                   </div>
-                  <div class="col-sm-4" id="zone1End">
+                  <div class="col-sm-4" id="zone1EndDiv">
                     <label for="zone1End" class="form-label">Last module <span class="text-muted">[ zone 1 ]</span></label>
-                    <input type="text" class="form-control" id="zone1End" placeholder="" value="%zone1End%" required="">
-                    <div class="invalid-feedback">
-                      Zone 0 end is required.
-                    </div>
+                    <input type="text" class="form-control" id="zone1End" value="%zone1End%" >
+                  </div>
+                  <div class="col-sm-4"></div>
+                  <div class="col-sm-4" id="zone2BeginDiv">
+                    <label for="zone2Begin" class="form-label">First module <span class="text-muted">[ zone 2 ]</span></label>
+                    <input type="text" class="form-control" id="zone2Begin" value="%zone2Begin%" >
+                  </div>
+                  <div class="col-sm-4" id="zone2EndDiv">
+                    <label for="zone2End" class="form-label">Last module <span class="text-muted">[ zone 2 ]</span></label>
+                    <input type="text" class="form-control" id="zone2End" value="%zone2End%" >
                   </div>
                   <button id="applyAndReboot" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply and reboot</button>
                   
@@ -361,6 +384,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="mqttClient">MQTT client</option>
                         <option value="manualInput">Manual input</option>
                         <option value="wallClock">Wall clock</option>
+                        <option value="owmWeather">Open Weather map</option>
                     </select>
                   </div>
       
@@ -370,6 +394,17 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <input type="text" class="form-control" id="scrollSpeedZone0" value="%scrollSpeedZone0%">
                         <span class="input-group-text">ms</span>
                     </div>
+                  </div>
+
+                  <div class="col-12" id="owmWhatToDisplayZone0div">
+                    <label for="owmWhatToDisplayZone0" class="form-label">What to display</label>
+                    <select id="owmWhatToDisplayZone0" class="form-select">
+                        <option value="owmTemperature">Temperature</option>
+                        <option value="owmHumidity">Humidity</option>
+                        <option value="owmPressure">Pressure</option>
+                        <option value="owmWindSpeed">Wind speed</option>
+                        <option value="owmWeatherIcon">Wether icon</option>
+                    </select>
                   </div>
 
                   <div class="col-6">
@@ -478,6 +513,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="mqttClient">MQTT client</option>
                         <option value="manualInput">Manual input</option>
                         <option value="wallClock">Wall clock</option>
+                        <option value="owmWeather">Open Weather map</option>
                     </select>
                   </div>
       
@@ -487,9 +523,17 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <input type="text" class="form-control" id="scrollSpeedZone1" value="%scrollSpeedZone1%">
                         <span class="input-group-text">ms</span>
                     </div>
-                    <div class="invalid-feedback">
-                      Please enter a numbers only.
-                    </div>
+                  </div>
+
+                  <div class="col-12" id="owmWhatToDisplayZone1div">
+                    <label for="owmWhatToDisplayZone1" class="form-label">What to display</label>
+                    <select id="owmWhatToDisplayZone1" class="form-select">
+                        <option value="owmTemperature">Temperature</option>
+                        <option value="owmHumidity">Humidity</option>
+                        <option value="owmPressure">Pressure</option>
+                        <option value="owmWindSpeed">Wind speed</option>
+                        <option value="owmWeatherIcon">Wether icon</option>
+                    </select>
                   </div>
 
                   <div class="col-6">
@@ -541,7 +585,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollPauseZone0" class="form-label">Scroll pause</label>
+                    <label for="scrollPauseZone1" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone1" value="%scrollPauseZone1%">
                         <span class="input-group-text">ms</span>
@@ -588,7 +632,137 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
       
                 <button id="applyAdditionalSettingsZone1" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
-                
+
+
+                <hr class="my-4">
+                  <h3 class="mb-3">Zone 2</h3>
+
+                  <div class="col-6">
+                    <label for="workModeZone2" class="form-label">Working mode</label>
+                    <select id="workModeZone2" class="form-select">
+                        <option value="mqttClient">MQTT client</option>
+                        <option value="manualInput">Manual input</option>
+                        <option value="wallClock">Wall clock</option>
+                        <option value="owmWeather">Open Weather map</option>
+                    </select>
+                  </div>
+      
+                  <div class="col-6">
+                    <label for="scrollSpeedZone2" class="form-label">Scroll speed</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="scrollSpeedZone2" value="%scrollSpeedZone2%">
+                        <span class="input-group-text">ms</span>
+                    </div>
+                  </div>
+
+                  <div class="col-12" id="owmWhatToDisplayZone2div">
+                    <label for="owmWhatToDisplayZone2" class="form-label">What to display</label>
+                    <select id="owmWhatToDisplayZone2" class="form-select">
+                        <option value="owmTemperature">Temperature</option>
+                        <option value="owmHumidity">Humidity</option>
+                        <option value="owmPressure">Pressure</option>
+                        <option value="owmWindSpeed">Wind speed</option>
+                        <option value="owmWeatherIcon">Wether icon</option>
+                    </select>
+                  </div>
+
+                  <div class="col-6">
+                    <label for="scrollAlignStringZone2" class="form-label">Alignment</label>
+                    <select id="scrollAlignStringZone2" class="form-select">
+                        <option value="pa_left">Left</option>
+                        <option value="pa_center">Center</option>
+                        <option value="pa_right">Right</option>
+                      </select>
+                    <div class="invalid-feedback">
+                      Please enter a numbers only.
+                    </div>
+                  </div>
+
+                  <div class="col-6">
+                    <label for="scrollEffectStringZone2In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
+                    <select id="scrollEffectStringZone2In" class="form-select">
+                        <option value="pa_no_effect">NO_EFFECT</option>
+                        <option value="pa_print">PRINT</option>
+                        <option value="pa_scroll_up">SCROLL_UP</option>
+                        <option value="pa_scroll_down">SCROLL_DOWN</option>
+                        <option value="pa_scroll_left" >SCROLL_LEFT</option>
+                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
+                        <option value="pa_sprite">SPRITE</option>
+                        <option value="pa_slice">SLICE</option>
+                        <option value="pa_mesh">MESH</option>
+                        <option value="pa_fade">FADE</option>
+                        <option value="pa_dissolve">DISSOLVE</option>
+                        <option value="pa_blinds">BLINDS</option>
+                        <option value="pa_random">RANDOM</option>
+                        <option value="pa_wipe">WIPE</option>
+                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
+                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
+                        <option value="pa_scan_vert">SCAN_VERT</option>
+                        <option value="pa_opening">OPENING</option>
+                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
+                        <option value="pa_closing">CLOSING</option>
+                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
+                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
+                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
+                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
+                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
+                        <option value="pa_grow_up">GROW_UP</option>
+                        <option value="pa_grow_down">GROW_DOWN</option>
+                      </select>
+                    <div class="invalid-feedback">
+                      Please enter a numbers only.
+                    </div>
+                  </div>
+
+                  <div class="col-6">
+                    <label for="scrollPauseZone2" class="form-label">Scroll pause</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="scrollPauseZone2" value="%scrollPauseZone2%">
+                        <span class="input-group-text">ms</span>
+                    </div>
+                    <div class="invalid-feedback">
+                      Please enter a numbers only.
+                    </div>
+                  </div>
+
+                  <div class="col-6">
+                    <label for="scrollEffectStringZone2Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
+                    <select id="scrollEffectStringZone2Out" class="form-select">
+                        <option value="pa_no_effect">NO_EFFECT</option>
+                        <option value="pa_print">PRINT</option>
+                        <option value="pa_scroll_up">SCROLL_UP</option>
+                        <option value="pa_scroll_down">SCROLL_DOWN</option>
+                        <option value="pa_scroll_left" selected>SCROLL_LEFT</option>
+                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
+                        <option value="pa_sprite">SPRITE</option>
+                        <option value="pa_slice">SLICE</option>
+                        <option value="pa_mesh">MESH</option>
+                        <option value="pa_fade">FADE</option>
+                        <option value="pa_dissolve">DISSOLVE</option>
+                        <option value="pa_blinds">BLINDS</option>
+                        <option value="pa_random">RANDOM</option>
+                        <option value="pa_wipe">WIPE</option>
+                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
+                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
+                        <option value="pa_scan_vert">SCAN_VERT</option>
+                        <option value="pa_opening">OPENING</option>
+                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
+                        <option value="pa_closing">CLOSING</option>
+                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
+                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
+                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
+                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
+                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
+                        <option value="pa_grow_up">GROW_UP</option>
+                        <option value="pa_grow_down">GROW_DOWN</option>
+                      </select>
+                    <div class="invalid-feedback">
+                      Please enter a numbers only.
+                    </div>
+                  </div>
+      
+                <button id="applyAdditionalSettingsZone2" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
 
                 <hr class="my-4">
                   <h3 class="mb-3">MQTT settings</h3>
@@ -635,6 +809,13 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
+                  <div class="col-6">
+                    <label for="mqttZone2Topic" class="form-label">Zone2 MQTT topic</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="mqttZone2Topic" value="%mqttZone2Topic%">
+                    </div>
+                  </div>
+
                 <button id="applyMqttSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
                 
@@ -656,7 +837,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
                   <div class="col-4">
                     <label for="clockDisplayFormat" class="form-label">Time format</label>
-                    <div class="input-group mb-3">
+                    <div class="input-group mb-4">
                         <select id="clockDisplayFormat" class="form-select">
                           <option value="HHMM">HH:MM</option>
                           <option value="HHMMSS">HH:MM:SS</option>
@@ -668,6 +849,41 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   
 
                 <button id="applyWallClockSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
+
+                <hr class="my-4">
+                  <h3 class="mb-4">Open Weather map settings</h3>                 
+                  <div class="col-4">
+                    <label for="owmCity" class="form-label">City</label>
+                    <div class="input-group mb-4">
+                        <input type="text" class="form-control" id="owmCity" value="%owmCity%">
+                    </div>
+                  </div>
+                  <div class="col-8">
+                    <label for="owmApiToken" class="form-label">API token</label>
+                    <div class="input-group mb-4">
+                        <input type="password" class="form-control" id="owmApiToken" value="%owmApiToken%">
+                    </div>
+                  </div>
+                  <div class="col-3">
+                    <label for="clockDisplayUpdateTime" class="form-label">Update interval</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="owmUpdateInterval" value="%owmUpdateInterval%">
+                        <span class="input-group-text">s</span>
+                    </div>
+                  </div>
+                  <div class="col-3">
+                    <label for="clockDisplayFormat" class="form-label">Units format</label>
+                    <div class="input-group mb-3">
+                        <select id="owmUnitsFormat" class="form-select">
+                          <option value="metric">metric</option>
+                          <option value="imperial">imperial</option>
+                        </select>
+                    </div>
+                  </div>
+                  
+
+                <button id="applyOwmSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
                 <div class="col-sm-12"></div>
               </form>
@@ -709,40 +925,60 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 <script>
     window.onload = document.getElementById("workModeZone0").value = "%workModeZone0%";
     window.onload = document.getElementById("workModeZone1").value = "%workModeZone1%";
+    window.onload = document.getElementById("workModeZone2").value = "%workModeZone2%";
 
     window.onload = document.getElementById("zoneNumbers").value = "%zoneNumbers%";
     window.onload = document.getElementById("zone0Begin").value = "%zone0Begin%";
     window.onload = document.getElementById("zone0End").value = "%zone0End%";
     window.onload = document.getElementById("zone1Begin").value = "%zone1Begin%";
-    window.onload = document.getElementById("zone0End").value = "%zone0End%";
+    window.onload = document.getElementById("zone1End").value = "%zone1End%";
+    window.onload = document.getElementById("zone2Begin").value = "%zone2Begin%";
+    window.onload = document.getElementById("zone2End").value = "%zone2End%";
 
     window.onload = document.getElementById("intensity").value = "%intensity%";
     window.onload = document.getElementById("intensityValue").value = "%intensity%";
 
     window.onload = document.getElementById("scrollSpeedZone0").value = "%scrollSpeedZone0%";
     window.onload = document.getElementById("scrollSpeedZone1").value = "%scrollSpeedZone1%";
+    window.onload = document.getElementById("scrollSpeedZone2").value = "%scrollSpeedZone2%";
     window.onload = document.getElementById("scrollPauseZone0").value = "%scrollPauseZone0%";
     window.onload = document.getElementById("scrollPauseZone1").value = "%scrollPauseZone1%";
+    window.onload = document.getElementById("scrollPauseZone2").value = "%scrollPauseZone2%";
     window.onload = document.getElementById("scrollAlignStringZone0").value = "%scrollAlignStringZone0%";
     window.onload = document.getElementById("scrollAlignStringZone1").value = "%scrollAlignStringZone1%";
+    window.onload = document.getElementById("scrollAlignStringZone2").value = "%scrollAlignStringZone2%";
     
     window.onload = document.getElementById("scrollEffectStringZone0In").value = "%scrollEffectStringZone0In%";
     window.onload = document.getElementById("scrollEffectStringZone0Out").value = "%scrollEffectStringZone0Out%";
     window.onload = document.getElementById("scrollEffectStringZone1In").value = "%scrollEffectStringZone1In%";
     window.onload = document.getElementById("scrollEffectStringZone1Out").value = "%scrollEffectStringZone1Out%";
+    window.onload = document.getElementById("scrollEffectStringZone2In").value = "%scrollEffectStringZone2In%";
+    window.onload = document.getElementById("scrollEffectStringZone2Out").value = "%scrollEffectStringZone2Out%";
 
     window.onload = document.getElementById("mqttServerAddress").value = "%mqttServerAddress%";
     window.onload = document.getElementById("mqttServerPort").value = "%mqttServerPort%";
     window.onload = document.getElementById("mqttUsername").value = "%mqttUsername%";
     window.onload = document.getElementById("mqttZone0Topic").value = "%mqttZone0Topic%";
     window.onload = document.getElementById("mqttZone1Topic").value = "%mqttZone1Topic%";
+    window.onload = document.getElementById("mqttZone2Topic").value = "%mqttZone2Topic%";
     window.onload = document.getElementById("ntpTimeZone").value = "%ntpTimeZone%";
     window.onload = document.getElementById("clockDisplayUpdateTime").value = "%clockDisplayUpdateTime%";
     window.onload = document.getElementById("clockDisplayFormat").value = "%clockDisplayFormat%";
 
+    window.onload = document.getElementById("owmWhatToDisplayZone0").value = "%owmWhatToDisplayZone0%";
+    window.onload = document.getElementById("owmWhatToDisplayZone1").value = "%owmWhatToDisplayZone1%";
+    window.onload = document.getElementById("owmWhatToDisplayZone2").value = "%owmWhatToDisplayZone2%";
+    window.onload = document.getElementById("owmApiToken").value = "%owmApiToken%";
+    window.onload = document.getElementById("owmUnitsFormat").value = "%owmUnitsFormat%";
+    window.onload = document.getElementById("owmUpdateInterval").value = "%owmUpdateInterval%";
+    window.onload = document.getElementById("owmCity").value = "%owmCity%";
+
     const workModeZone0FirstValue = "%workModeZone0%";
     if (workModeZone0FirstValue == "wallClock") {
       document.getElementById("scrollPauseZone0").disabled = true;
+    }
+    if (workModeZone0FirstValue != "owmWeather") {
+      $(document.getElementById("owmWhatToDisplayZone0div")).hide();
     }
 
     workModeZone0.addEventListener('change', function (e) {  
@@ -752,11 +988,20 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (e.target.value != "wallClock") {
         document.getElementById("scrollPauseZone0").disabled = false;
       }
+      if (e.target.value == "owmWeather") {
+        $(document.getElementById("owmWhatToDisplayZone0div")).show();
+      }
+      if (e.target.value != "owmWeather") {
+        $(document.getElementById("owmWhatToDisplayZone0div")).hide();
+      }
     });
        
     const workModeZone1FirstValue = "%workModeZone1%";
     if (workModeZone1FirstValue == "wallClock") {
       document.getElementById("scrollPauseZone1").disabled = true;
+    }
+    if (workModeZone1FirstValue != "owmWeather") {
+      $(document.getElementById("owmWhatToDisplayZone1div")).hide();
     }
 
     workModeZone1.addEventListener('change', function (e) {  
@@ -766,19 +1011,58 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (e.target.value != "wallClock") {
         document.getElementById("scrollPauseZone1").disabled = false;
       }
+      if (e.target.value == "owmWeather") {
+        $(document.getElementById("owmWhatToDisplayZone1div")).show();
+      }
+      if (e.target.value != "owmWeather") {
+        $(document.getElementById("owmWhatToDisplayZone1div")).hide();
+      }
     });
 
-      document.getElementById("zoneNumbers").addEventListener('change', function (e) {
-        if (e.target.value == "1") {
-          $(document.getElementById("zone1Begin")).hide();
-          $(document.getElementById("zone1End")).hide();
-        }
-        if (e.target.value == "2") {
-          $(document.getElementById("zone1Begin")).show();
-          $(document.getElementById("zone1End")).show();
-        }
-      });
-    //}
+    const workModeZone2FirstValue = "%workModeZone2%";
+    if (workModeZone2FirstValue == "wallClock") {
+      document.getElementById("scrollPauseZone2").disabled = true;
+    }
+    if (workModeZone2FirstValue != "owmWeather") {
+      $(document.getElementById("owmWhatToDisplayZone2div")).hide();
+    }
+
+    workModeZone2.addEventListener('change', function (e) {  
+      if (e.target.value == "wallClock") {
+        document.getElementById("scrollPauseZone2").disabled = true;
+      }
+      if (e.target.value != "wallClock") {
+        document.getElementById("scrollPauseZone2").disabled = false;
+      }
+      if (e.target.value == "owmWeather") {
+        $(document.getElementById("owmWhatToDisplayZone2div")).show();
+      }
+      if (e.target.value != "owmWeather") {
+        $(document.getElementById("owmWhatToDisplayZone2div")).hide();
+      }
+    });
+
+//      document.getElementById("zoneNumbers").addEventListener('change', function (e) {
+//        if (e.target.value == "1") {
+//          $(document.getElementById("zone1Begin")).hide();
+//          $(document.getElementById("zone1End")).hide();
+//          $(document.getElementById("zone2Begin")).hide();
+//          $(document.getElementById("zone2End")).hide();
+//        }
+//        if (e.target.value == "2") {
+//          $(document.getElementById("zone1Begin")).show();
+//          $(document.getElementById("zone1End")).show();
+//          $(document.getElementById("zone2Begin")).hide();
+//          $(document.getElementById("zone2End")).hide();
+//        }
+//        if (e.target.value == "3") {
+//          $(document.getElementById("zone1Begin")).show();
+//          $(document.getElementById("zone1End")).show();
+//          $(document.getElementById("zone2Begin")).show();
+//          $(document.getElementById("zone2End")).show();
+//        }
+//      });
+//    //}
 
     function preparePostRequest(event, key, val) {
         event.preventDefault(); //This will prevent the default click action
@@ -790,71 +1074,99 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 
         if (key == "applyAndReboot") {
             data = {
-                zoneNumbers: document.getElementById("zoneNumbers").value,
-                zone0Begin: document.getElementById("zone0Begin").value,
-                zone0End: document.getElementById("zone0End").value,
-                zone1Begin: document.getElementById("zone1Begin").value,
-                zone1End: document.getElementById("zone1End").value
+                zoneNumbers:  document.getElementById("zoneNumbers").value,
+                zone0Begin:   document.getElementById("zone0Begin").value,
+                zone0End:     document.getElementById("zone0End").value,
+                zone1Begin:   document.getElementById("zone1Begin").value,
+                zone1End:     document.getElementById("zone1End").value,
+                zone2Begin:   document.getElementById("zone2Begin").value,
+                zone2End:     document.getElementById("zone2End").value
             }
             sendPost(data);
         }
         
         if (key == "applyAdditionalSettingsZone0") {
             data = {
-                workModeZone0: document.getElementById("workModeZone0").value,
-                scrollSpeedZone0: document.getElementById("scrollSpeedZone0").value,
-                scrollPauseZone0: document.getElementById("scrollPauseZone0").value,
-                scrollAlignStringZone0: document.getElementById("scrollAlignStringZone0").value,
-                scrollEffectStringZone0In: document.getElementById("scrollEffectStringZone0In").value,
-                scrollEffectStringZone0Out: document.getElementById("scrollEffectStringZone0Out").value
+                workModeZone0:              document.getElementById("workModeZone0").value,
+                scrollSpeedZone0:           document.getElementById("scrollSpeedZone0").value,
+                scrollPauseZone0:           document.getElementById("scrollPauseZone0").value,
+                scrollAlignStringZone0:     document.getElementById("scrollAlignStringZone0").value,
+                scrollEffectStringZone0In:  document.getElementById("scrollEffectStringZone0In").value,
+                scrollEffectStringZone0Out: document.getElementById("scrollEffectStringZone0Out").value,
+                owmWhatToDisplayZone0:      document.getElementById("owmWhatToDisplayZone0").value
             }
             sendPost(data);
         }
         
         if (key == "applyAdditionalSettingsZone1") {
             data = {
-                workModeZone1: document.getElementById("workModeZone1").value,
-                scrollSpeedZone1: document.getElementById("scrollSpeedZone1").value,
-                scrollPauseZone1: document.getElementById("scrollPauseZone1").value,
-                scrollAlignStringZone1: document.getElementById("scrollAlignStringZone1").value,
-                scrollEffectStringZone1In: document.getElementById("scrollEffectStringZone1In").value,
-                scrollEffectStringZone1Out: document.getElementById("scrollEffectStringZone1Out").value
+                workModeZone1:              document.getElementById("workModeZone1").value,
+                scrollSpeedZone1:           document.getElementById("scrollSpeedZone1").value,
+                scrollPauseZone1:           document.getElementById("scrollPauseZone1").value,
+                scrollAlignStringZone1:     document.getElementById("scrollAlignStringZone1").value,
+                scrollEffectStringZone1In:  document.getElementById("scrollEffectStringZone1In").value,
+                scrollEffectStringZone1Out: document.getElementById("scrollEffectStringZone1Out").value,
+                owmWhatToDisplayZone1:      document.getElementById("owmWhatToDisplayZone1").value
+            }
+            sendPost(data);
+        }
+
+        if (key == "applyAdditionalSettingsZone2") {
+            data = {
+                workModeZone2:              document.getElementById("workModeZone2").value,
+                scrollSpeedZone2:           document.getElementById("scrollSpeedZone2").value,
+                scrollPauseZone2:           document.getElementById("scrollPauseZone2").value,
+                scrollAlignStringZone2:     document.getElementById("scrollAlignStringZone2").value,
+                scrollEffectStringZone2In:  document.getElementById("scrollEffectStringZone2In").value,
+                scrollEffectStringZone2Out: document.getElementById("scrollEffectStringZone2Out").value,
+                owmWhatToDisplayZone2:      document.getElementById("owmWhatToDisplayZone2").value
             }
             sendPost(data);
         }
 
         if (key == "applyMqttSettings") {
             data = {
-                mqttServerAddress: document.getElementById("mqttServerAddress").value,
-                mqttServerPort: document.getElementById("mqttServerPort").value,
-                mqttUsername: document.getElementById("mqttUsername").value,
-                mqttPassword: document.getElementById("mqttPassword").value,
-                mqttZone0Topic: document.getElementById("mqttZone0Topic").value,
-                mqttZone1Topic: document.getElementById("mqttZone1Topic").value
+                mqttServerAddress:  document.getElementById("mqttServerAddress").value,
+                mqttServerPort:     document.getElementById("mqttServerPort").value,
+                mqttUsername:       document.getElementById("mqttUsername").value,
+                mqttPassword:       document.getElementById("mqttPassword").value,
+                mqttZone0Topic:     document.getElementById("mqttZone0Topic").value,
+                mqttZone1Topic:     document.getElementById("mqttZone1Topic").value,
+                mqttZone2Topic:     document.getElementById("mqttZone2Topic").value
             }
             sendPost(data);
         }
 
         if (key == "applyWallClockSettings") {
             data = {
-                ntpTimeZone: document.getElementById("ntpTimeZone").value,
+                ntpTimeZone:            document.getElementById("ntpTimeZone").value,
                 clockDisplayUpdateTime: document.getElementById("clockDisplayUpdateTime").value,
-                clockDisplayFormat: document.getElementById("clockDisplayFormat").value
+                clockDisplayFormat:     document.getElementById("clockDisplayFormat").value
             }
             sendPost(data);
         }
 
+        if (key == "applyOwmSettings") {
+            data = {
+                owmApiToken:       document.getElementById("owmApiToken").value,
+                owmUnitsFormat:    document.getElementById("owmUnitsFormat").value,
+                owmUpdateInterval: document.getElementById("owmUpdateInterval").value,
+                owmCity:           document.getElementById("owmCity").value
+            }
+            sendPost(data);
+        }        
+
     };
 
     function sendPost(dataPost) {
-        var toastDanger = new bootstrap.Toast(document.getElementById('liveToastDanger'));
-        var toastSuccess = new bootstrap.Toast(document.getElementById('liveToastSuccess'));
+        var toastDanger =   new bootstrap.Toast(document.getElementById('liveToastDanger'));
+        var toastSuccess =  new bootstrap.Toast(document.getElementById('liveToastSuccess'));
 
         var request = $.ajax({
-        url: "/configpost",
-        method: "POST",
-        cache: false,
-        data: dataPost,
+        url:      "/configpost",
+        method:   "POST",
+        cache:    false,
+        data:     dataPost,
         dataType: "json"
         });
         
@@ -870,8 +1182,6 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 </script>
 </body>
 </html>)=====";
-
-void printHtml();
 
 
 #endif
