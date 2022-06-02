@@ -37,40 +37,24 @@ long lastReconnectAttempt = 0;
 #define DATA_PIN  D7                      // WeMos D1 mini GPIO13
 #define CS_PIN    D6                      // WeMos D1 mini GPIO12
 #define CLK_PIN   D5                      // WeMos D1 mini GPIO14
-uint8_t MAX_DEVICES = 12;                            // number of device segments
+uint8_t MAX_DEVICES = 12;                 // number of device segments
 MD_Parola P = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
-uint8_t scrollSpeedZone0 = 35;                      // default frame delay value
-uint8_t scrollSpeedZone1 = 35;                      // default frame delay value
-uint8_t scrollSpeedZone2 = 35;                      // default frame delay value
 
-textEffect_t scrollEffectZone0In = PA_SCROLL_LEFT;  // default scroll effect
-textEffect_t scrollEffectZone0Out = PA_NO_EFFECT;   // default scroll effect
-String scrollEffectStringZone0In = "pa_scroll_left";
-String scrollEffectStringZone0Out = "pa_no_effect";
+typedef struct {
+    uint8_t   begin, end;
+    uint8_t   scrollSpeed;
+    uint16_t  scrollPause;
+    String    scrollAlign, scrollEffectIn, scrollEffectOut, workMode;
+} ZoneData;
 
-textEffect_t scrollEffectZone1In = PA_SCROLL_LEFT;  // default scroll effect
-textEffect_t scrollEffectZone1Out = PA_NO_EFFECT;   // default scroll effect
-String scrollEffectStringZone1In = "pa_scroll_left";
-String scrollEffectStringZone1Out = "pa_no_effect";
+ZoneData zones[] = {
+  {0, 3, 35, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "manualInput"},
+  {4, 5, 35, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "manualInput"},
+  {6, 7, 35, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "manualInput"},
+};
 
-textEffect_t scrollEffectZone2In = PA_SCROLL_LEFT;  // default scroll effect
-textEffect_t scrollEffectZone2Out = PA_NO_EFFECT;   // default scroll effect
-String scrollEffectStringZone2In = "pa_scroll_left";
-String scrollEffectStringZone2Out = "pa_no_effect";
-
-textPosition_t scrollAlignZone0 = PA_CENTER;        // default alligment
-String scrollAlignStringZone0 = "pa_center";
-
-textPosition_t scrollAlignZone1 = PA_CENTER;        // default alligment
-String scrollAlignStringZone1 = "pa_center";
-
-textPosition_t scrollAlignZone2 = PA_CENTER;        // default alligment
-String scrollAlignStringZone2 = "pa_center";
-
-
-uint16_t scrollPauseZone0 = 3000;                   // in milliseconds
-uint16_t scrollPauseZone1 = 3000;                   // in milliseconds
-uint16_t scrollPauseZone2 = 3000;                   // in milliseconds
+uint8_t zoneNumbers = 1;
+uint8_t intensity = 7;
 
 char zone0Message[100] = "zone0";                        // welcome message
 char zone1Message[100] = "zone1";                    // logo from custom font
@@ -84,9 +68,6 @@ String zone2MessageManual;
 bool zone0newMessageAvailable = false;
 bool zone1newMessageAvailable = false;
 bool zone2newMessageAvailable = false;
-bool zone0newMessageAvailableMQTT = false;
-bool zone1newMessageAvailableMQTT = false;
-bool zone2newMessageAvailableMQTT = false;
 bool zone0newMessageAvailableManual = false;
 bool zone1newMessageAvailableManual = false;
 bool zone2newMessageAvailableManual = false;
@@ -104,14 +85,13 @@ int ntpTimeZone = 3;
 int clockDisplayUpdateTime = 60;
 String clockDisplayFormat = "HHMM";
 WiFiUDP ntpUDP;
-//int timeOffset = 0;
 NTPClient timeClient(ntpUDP, ntpServerAddress.c_str());
 
 AsyncWebServer server(80);
 DNSServer dns;
 AsyncWiFiManager wifiManager(&server,&dns);
 
-bool restartEsp = false;
+bool restartESP = false;
 bool firstLoop = true;
 bool secondLoop = false;
 bool newConfigAvailable = false;
@@ -122,20 +102,6 @@ bool shouldSaveConfig = false;
 void saveConfigCallback () {
   shouldSaveConfig = true;
 }
-
-// Variables to save from html
-uint8_t zoneNumbers = 1;
-uint8_t zone0Begin = 0;
-uint8_t zone0End = 2;
-uint8_t zone1Begin = 3;
-uint8_t zone1End = 3;
-uint8_t zone2Begin = 4;
-uint8_t zone2End = 7;
-uint8_t intensity = 7;
-
-String workModeZone0 = "manualInput";
-String workModeZone1 = "manualInput";
-String workModeZone2 = "manualInput";
 
 // variables for get weather func
 static uint32_t owmLastTime = 0;
@@ -157,44 +123,44 @@ String    owmWhatToDisplayZone1;
 String    owmWhatToDisplayZone2;
 
 
-// Convert scrollAligString to scrollAlign
-textPosition_t scrollAlignStringToScrollAlign(String val) {
-  if(val == "pa_center") return PA_CENTER;
-  if(val == "pa_left") return PA_LEFT;
-  if(val == "pa_right") return PA_RIGHT;
+// Convert scrollAlig in String to textPosition_t type
+textPosition_t stringToTextPositionT(String val) {
+  if(val == "PA_CENTER") return PA_CENTER;
+  if(val == "PA_LEFT") return PA_LEFT;
+  if(val == "PA_RIGHT") return PA_RIGHT;
   return PA_LEFT;
 }
 
-textEffect_t scrollEffectStringToScrollEffect(String val) {
-  if(val == "pa_no_effect") return PA_NO_EFFECT;
-  if(val == "pa_print") return PA_PRINT;
-  if(val == "pa_scroll_up") return PA_SCROLL_UP;
-  if(val == "pa_scroll_down") return PA_SCROLL_DOWN;
-  if(val == "pa_scroll_left") return PA_SCROLL_LEFT;
-  if(val == "pa_scroll_right") return PA_SCROLL_RIGHT;
-  if(val == "pa_sprite") return PA_SPRITE;
-  if(val == "pa_slice") return PA_SLICE;
-  if(val == "pa_mesh") return PA_MESH;
-  if(val == "pa_fade") return PA_FADE;
-  if(val == "pa_dissolve") return PA_DISSOLVE;
-  if(val == "pa_blinds") return PA_BLINDS;
-  if(val == "pa_random") return PA_RANDOM;
-  if(val == "pa_wipe") return PA_WIPE;
-  if(val == "pa_wipe_cursor") return PA_WIPE_CURSOR;
-  if(val == "pa_scan_horiz") return PA_SCAN_HORIZ;
-  if(val == "pa_scan_horizx") return PA_SCAN_HORIZX;
-  if(val == "pa_scan_vert") return PA_SCAN_VERT;
-  if(val == "pa_scan_vertx") return PA_SCAN_VERTX;
-  if(val == "pa_opening") return PA_OPENING;
-  if(val == "pa_opening_cursor") return PA_OPENING_CURSOR;
-  if(val == "pa_closing") return PA_CLOSING;
-  if(val == "pa_closing_cursor") return PA_CLOSING_CURSOR;
-  if(val == "pa_scroll_up_left") return PA_SCROLL_UP_LEFT;
-  if(val == "pa_scroll_up_right") return PA_SCROLL_UP_RIGHT;
-  if(val == "pa_scroll_down_left") return PA_SCROLL_DOWN_LEFT;
-  if(val == "pa_scroll_down_right") return PA_SCROLL_DOWN_RIGHT;
-  if(val == "pa_grow_up") return PA_GROW_UP;
-  if(val == "pa_grow_down") return PA_GROW_DOWN;
+textEffect_t stringToTextEffectT(String val) {
+  if(val == "PA_NO_EFFECT") return PA_NO_EFFECT;
+  if(val == "PA_PRINT") return PA_PRINT;
+  if(val == "PA_SCROLL_UP") return PA_SCROLL_UP;
+  if(val == "PA_SCROLL_DOWN") return PA_SCROLL_DOWN;
+  if(val == "PA_SCROLL_LEFT") return PA_SCROLL_LEFT;
+  if(val == "PA_SCROLL_RIGHT") return PA_SCROLL_RIGHT;
+  if(val == "PA_SPRITE") return PA_SPRITE;
+  if(val == "PA_SLICE") return PA_SLICE;
+  if(val == "PA_MESH") return PA_MESH;
+  if(val == "PA_FADE") return PA_FADE;
+  if(val == "PA_DISSOLVE") return PA_DISSOLVE;
+  if(val == "PA_BLINDS") return PA_BLINDS;
+  if(val == "PA_RANDOM") return PA_RANDOM;
+  if(val == "PA_WIPE") return PA_WIPE;
+  if(val == "PA_WIPE_CURSOR") return PA_WIPE_CURSOR;
+  if(val == "PA_SCAN_HORIZ") return PA_SCAN_HORIZ;
+  if(val == "PA_SCAN_HORIZX") return PA_SCAN_HORIZX;
+  if(val == "PA_SCAN_VERT") return PA_SCAN_VERT;
+  if(val == "PA_SCAN_VERTX") return PA_SCAN_VERTX;
+  if(val == "PA_OPENING") return PA_OPENING;
+  if(val == "PA_OPENING_CURSOR") return PA_OPENING_CURSOR;
+  if(val == "PA_CLOSING") return PA_CLOSING;
+  if(val == "PA_CLOSING_CURSOR") return PA_CLOSING_CURSOR;
+  if(val == "PA_SCROLL_UP_LEFT") return PA_SCROLL_UP_LEFT;
+  if(val == "PA_SCROLL_UP_RIGHT") return PA_SCROLL_UP_RIGHT;
+  if(val == "PA_SCROLL_DOWN_LEFT") return PA_SCROLL_DOWN_LEFT;
+  if(val == "PA_SCROLL_DOWN_RIGHT") return PA_SCROLL_DOWN_RIGHT;
+  if(val == "PA_GROW_UP") return PA_GROW_UP;
+  if(val == "PA_GROW_DOWN") return PA_GROW_DOWN;
   return PA_SCROLL_LEFT;
 }
 
@@ -202,35 +168,35 @@ textEffect_t scrollEffectStringToScrollEffect(String val) {
 // Return values for variables in html page
 String processor(const String& var){
   char buffer [10];
-  if(var == "workModeZone0")                return workModeZone0;
-  if(var == "workModeZone1")                return workModeZone1;
-  if(var == "workModeZone2")                return workModeZone2;
+  if(var == "workModeZone0")                return zones[0].workMode;
+  if(var == "workModeZone1")                return zones[1].workMode;
+  if(var == "workModeZone2")                return zones[2].workMode;
   if(var == "zoneNumbers")                  return itoa(zoneNumbers, buffer, 10);
-  if(var == "zone0Begin")                   return itoa(zone0Begin, buffer, 10);
-  if(var == "zone0End")                     return itoa(zone0End, buffer, 10);
-  if(var == "zone1Begin")                   return itoa(zone1Begin, buffer, 10);
-  if(var == "zone1End")                     return itoa(zone1End, buffer, 10);
-  if(var == "zone2Begin")                   return itoa(zone2Begin, buffer, 10);
-  if(var == "zone2End")                     return itoa(zone2End, buffer, 10);
+  if(var == "zone0Begin")                   return itoa(zones[0].begin, buffer, 10);
+  if(var == "zone0End")                     return itoa(zones[0].end, buffer, 10);
+  if(var == "zone1Begin")                   return itoa(zones[1].begin, buffer, 10);
+  if(var == "zone1End")                     return itoa(zones[1].end, buffer, 10);
+  if(var == "zone2Begin")                   return itoa(zones[2].begin, buffer, 10);
+  if(var == "zone2End")                     return itoa(zones[2].end, buffer, 10);
   if(var == "wifiSsid")                     return WiFi.SSID();
   if(var == "wifiIp")                       return WiFi.localIP().toString();
   if(var == "wifiGateway")                  return WiFi.gatewayIP().toString();
   if(var == "intensity")                    return itoa(intensity, buffer, 10);
-  if(var == "scrollSpeedZone0")             return itoa(scrollSpeedZone0, buffer, 10);
-  if(var == "scrollSpeedZone1")             return itoa(scrollSpeedZone1, buffer, 10);
-  if(var == "scrollSpeedZone2")             return itoa(scrollSpeedZone2, buffer, 10);
-  if(var == "scrollPauseZone0")             return itoa(scrollPauseZone0, buffer, 10);
-  if(var == "scrollPauseZone1")             return itoa(scrollPauseZone1, buffer, 10);
-  if(var == "scrollPauseZone2")             return itoa(scrollPauseZone2, buffer, 10);
-  if(var == "scrollAlignStringZone0")       return scrollAlignStringZone0;
-  if(var == "scrollAlignStringZone1")       return scrollAlignStringZone1;
-  if(var == "scrollAlignStringZone2")       return scrollAlignStringZone2;
-  if(var == "scrollEffectStringZone0In")    return scrollEffectStringZone0In;
-  if(var == "scrollEffectStringZone0Out")   return scrollEffectStringZone0Out;
-  if(var == "scrollEffectStringZone1In")    return scrollEffectStringZone1In;
-  if(var == "scrollEffectStringZone1Out")   return scrollEffectStringZone1Out;
-  if(var == "scrollEffectStringZone2In")    return scrollEffectStringZone2In;
-  if(var == "scrollEffectStringZone2Out")   return scrollEffectStringZone2Out;
+  if(var == "scrollSpeedZone0")             return itoa(zones[0].scrollSpeed, buffer, 10);
+  if(var == "scrollSpeedZone1")             return itoa(zones[1].scrollSpeed, buffer, 10);
+  if(var == "scrollSpeedZone2")             return itoa(zones[2].scrollSpeed, buffer, 10);
+  if(var == "scrollPauseZone0")             return itoa(zones[0].scrollPause, buffer, 10);
+  if(var == "scrollPauseZone1")             return itoa(zones[1].scrollPause, buffer, 10);
+  if(var == "scrollPauseZone2")             return itoa(zones[2].scrollPause, buffer, 10);
+  if(var == "scrollAlignZone0")             return zones[0].scrollAlign;
+  if(var == "scrollAlignZone1")             return zones[1].scrollAlign;
+  if(var == "scrollAlignZone2")             return zones[2].scrollAlign;
+  if(var == "scrollEffectZone0In")          return zones[0].scrollEffectIn;
+  if(var == "scrollEffectZone1In")          return zones[1].scrollEffectIn;
+  if(var == "scrollEffectZone2In")          return zones[2].scrollEffectIn;
+  if(var == "scrollEffectZone0Out")         return zones[0].scrollEffectOut;
+  if(var == "scrollEffectZone1Out")         return zones[1].scrollEffectOut;
+  if(var == "scrollEffectZone2Out")         return zones[2].scrollEffectOut;
   if(var == "mqttServerAddress")            return mqttServerAddress;
   if(var == "mqttServerPort")               return itoa(mqttServerPort, buffer, 10);
   if(var == "mqttUsername")                 return mqttUsername;
@@ -252,14 +218,14 @@ String processor(const String& var){
 }
 
 
-void ConfigFile_Save_Variable(String VarName, String VarValue) {
+void writeVarToConfFile(String VarName, String VarValue, bool softReloadVars, bool hardReloadVars) {
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
     Serial.println("!!! ERROR !!! failed to open config file for writing");
     return;
   }
 
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(4096);
   deserializeJson(doc, configFile);
   configFile.close();
 
@@ -267,6 +233,9 @@ void ConfigFile_Save_Variable(String VarName, String VarValue) {
   configFile = LittleFS.open("/config.json", "w");
   serializeJson(doc, configFile);
   configFile.close();
+
+  if(softReloadVars) newConfigAvailable = true;
+  if(hardReloadVars) restartESP = true;
 }
 
 void ConfigFile_Read_Variable() {
@@ -276,66 +245,39 @@ void ConfigFile_Read_Variable() {
     return;
   }
 
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(4096);
   deserializeJson(doc, configFile);
   // print config file to serial
   serializeJsonPretty(doc, Serial);
   configFile.close();
 
   JsonObject postObj = doc.as<JsonObject>();
-  if(postObj[F("workModeZone0")])             workModeZone0 = postObj[F("workModeZone0")].as<String>();
-  if(postObj[F("workModeZone1")])             workModeZone1 = postObj[F("workModeZone1")].as<String>();
-  if(postObj[F("workModeZone2")])             workModeZone2 = postObj[F("workModeZone2")].as<String>();
+  if(postObj[F("workModeZone0")])             zones[0].workMode = postObj[F("workModeZone0")].as<String>();
+  if(postObj[F("workModeZone1")])             zones[1].workMode = postObj[F("workModeZone1")].as<String>();
+  if(postObj[F("workModeZone2")])             zones[2].workMode = postObj[F("workModeZone2")].as<String>();
   if(postObj[F("zoneNumbers")])               zoneNumbers = postObj[F("zoneNumbers")].as<uint8_t>();
-  if(postObj[F("zone0Begin")])                zone0Begin = postObj[F("zone0Begin")].as<uint8_t>();
-  if(postObj[F("zone0End")])                  zone0End = postObj[F("zone0End")].as<uint8_t>();
-  if(postObj[F("zone1Begin")])                zone1Begin = postObj[F("zone1Begin")].as<uint8_t>();
-  if(postObj[F("zone1End")])                  zone1End = postObj[F("zone1End")].as<uint8_t>();
-  if(postObj[F("zone2Begin")])                zone2Begin = postObj[F("zone2Begin")].as<uint8_t>();
-  if(postObj[F("zone2End")])                  zone2End = postObj[F("zone2End")].as<uint8_t>();
+  if(postObj[F("zone0Begin")])                zones[0].begin = postObj[F("zone0Begin")].as<uint8_t>();
+  if(postObj[F("zone0End")])                  zones[0].end = postObj[F("zone0End")].as<uint8_t>();
+  if(postObj[F("zone1Begin")])                zones[1].begin = postObj[F("zone1Begin")].as<uint8_t>();
+  if(postObj[F("zone1End")])                  zones[1].end = postObj[F("zone1End")].as<uint8_t>();
+  if(postObj[F("zone2Begin")])                zones[2].begin = postObj[F("zone2Begin")].as<uint8_t>();
+  if(postObj[F("zone2End")])                  zones[2].end = postObj[F("zone2End")].as<uint8_t>();
   if(postObj[F("intensity")])                 intensity = postObj[F("intensity")].as<uint8_t>();
-  if(postObj[F("scrollSpeedZone0")])          scrollSpeedZone0 = postObj[F("scrollSpeedZone0")].as<uint8_t>();
-  if(postObj[F("scrollSpeedZone1")])          scrollSpeedZone1 = postObj[F("scrollSpeedZone1")].as<uint8_t>();
-  if(postObj[F("scrollSpeedZone2")])          scrollSpeedZone2 = postObj[F("scrollSpeedZone2")].as<uint8_t>();
-  if(postObj[F("scrollPauseZone0")])          scrollPauseZone0 = postObj[F("scrollPauseZone0")].as<uint16_t>();
-  if(postObj[F("scrollPauseZone1")])          scrollPauseZone1 = postObj[F("scrollPauseZone1")].as<uint16_t>();
-  if(postObj[F("scrollPauseZone2")])          scrollPauseZone2 = postObj[F("scrollPauseZone2")].as<uint16_t>();
-  if(postObj[F("scrollAlignStringZone0")]) {
-                                              scrollAlignStringZone0 = postObj[F("scrollAlignStringZone0")].as<String>();
-                                              scrollAlignZone0 = scrollAlignStringToScrollAlign(scrollAlignStringZone0);
-  }
-  if(postObj[F("scrollAlignStringZone1")]) {
-                                              scrollAlignStringZone1 = postObj[F("scrollAlignStringZone1")].as<String>();
-                                              scrollAlignZone1 = scrollAlignStringToScrollAlign(scrollAlignStringZone1);
-  }
-  if(postObj[F("scrollAlignStringZone2")]) {
-                                              scrollAlignStringZone2 = postObj[F("scrollAlignStringZone2")].as<String>();
-                                              scrollAlignZone2 = scrollAlignStringToScrollAlign(scrollAlignStringZone2);
-  }
-  if(postObj[F("scrollEffectStringZone0In")]) {
-                                              scrollEffectStringZone0In = postObj[F("scrollEffectStringZone0In")].as<String>();
-                                              scrollEffectZone0In = scrollEffectStringToScrollEffect(scrollEffectStringZone0In);
-  }
-  if(postObj[F("scrollEffectStringZone0Out")]) {
-                                              scrollEffectStringZone0Out = postObj[F("scrollEffectStringZone0Out")].as<String>();
-                                              scrollEffectZone0Out = scrollEffectStringToScrollEffect(scrollEffectStringZone0Out);
-  }
-  if(postObj[F("scrollEffectStringZone1In")]) {
-                                              scrollEffectStringZone1In = postObj[F("scrollEffectStringZone1In")].as<String>();
-                                              scrollEffectZone1In = scrollEffectStringToScrollEffect(scrollEffectStringZone1In);
-  }
-  if(postObj[F("scrollEffectStringZone1Out")]) {
-                                              scrollEffectStringZone1Out = postObj[F("scrollEffectStringZone1Out")].as<String>();
-                                              scrollEffectZone1Out = scrollEffectStringToScrollEffect(scrollEffectStringZone1Out);
-  }
-  if(postObj[F("scrollEffectStringZone2In")]) {
-                                              scrollEffectStringZone2In = postObj[F("scrollEffectStringZone2In")].as<String>();
-                                              scrollEffectZone2In = scrollEffectStringToScrollEffect(scrollEffectStringZone2In);
-  }
-  if(postObj[F("scrollEffectStringZone2Out")]) {
-                                              scrollEffectStringZone2Out = postObj[F("scrollEffectStringZone2Out")].as<String>();
-                                              scrollEffectZone2Out = scrollEffectStringToScrollEffect(scrollEffectStringZone2Out);
-  } 
+  if(postObj[F("scrollSpeedZone0")])          zones[0].scrollSpeed = postObj[F("scrollSpeedZone0")].as<uint8_t>();
+  if(postObj[F("scrollSpeedZone1")])          zones[1].scrollSpeed = postObj[F("scrollSpeedZone1")].as<uint8_t>();
+  if(postObj[F("scrollSpeedZone2")])          zones[2].scrollSpeed = postObj[F("scrollSpeedZone2")].as<uint8_t>();
+  if(postObj[F("scrollPauseZone0")])          zones[0].scrollPause = postObj[F("scrollPauseZone0")].as<uint16_t>();
+  if(postObj[F("scrollPauseZone1")])          zones[1].scrollPause = postObj[F("scrollPauseZone1")].as<uint16_t>();
+  if(postObj[F("scrollPauseZone2")])          zones[2].scrollPause = postObj[F("scrollPauseZone2")].as<uint16_t>();
+  if(postObj[F("scrollAlignZone0")])          zones[0].scrollAlign = postObj[F("scrollAlignZone0")].as<String>();
+  if(postObj[F("scrollAlignZone1")])          zones[1].scrollAlign = postObj[F("scrollAlignZone1")].as<String>();
+  if(postObj[F("scrollAlignZone2")])          zones[2].scrollAlign = postObj[F("scrollAlignZone2")].as<String>();
+  if(postObj[F("scrollEffectZone0In")])       zones[0].scrollEffectIn = postObj[F("scrollEffectZone0In")].as<String>();
+  if(postObj[F("scrollEffectZone1In")])       zones[1].scrollEffectIn = postObj[F("scrollEffectZone1In")].as<String>();
+  if(postObj[F("scrollEffectZone2In")])       zones[2].scrollEffectIn = postObj[F("scrollEffectZone2In")].as<String>();
+  if(postObj[F("scrollEffectZone0Out")])      zones[0].scrollEffectOut = postObj[F("scrollEffectZone0Out")].as<String>();
+  if(postObj[F("scrollEffectZone1Out")])      zones[1].scrollEffectOut = postObj[F("scrollEffectZone1Out")].as<String>();
+  if(postObj[F("scrollEffectZone2Out")])      zones[2].scrollEffectOut = postObj[F("scrollEffectZone2Out")].as<String>();
   if(postObj[F("mqttServerAddress")])         mqttServerAddress = postObj[F("mqttServerAddress")].as<String>();
   if(postObj[F("mqttServerPort")])            mqttServerPort = postObj[F("mqttServerPort")].as<int>();
   if(postObj[F("mqttUsername")])              mqttUsername = postObj[F("mqttUsername")].as<String>();
@@ -376,19 +318,9 @@ void MQTTCallback(char* topic, byte* payload, int length) {
   Serial.printf("\nTopic: %s\n", topic);
   Serial.println(PayloadString);
 
-  if(strcmp(topic, (char*) mqttZone0Topic.c_str()) == 0) {
-    zone0MessageMQTT = PayloadString.c_str();
-    zone0newMessageAvailableMQTT = true; 
-  }
-  if(strcmp(topic, (char*) mqttZone1Topic.c_str()) == 0) {
-    zone1MessageMQTT = PayloadString.c_str();
-    zone1newMessageAvailableMQTT = true; 
-  }
-  if(strcmp(topic, (char*) mqttZone2Topic.c_str()) == 0) {
-    zone2MessageMQTT = PayloadString.c_str();
-    zone2newMessageAvailableMQTT = true; 
-  }
-
+  if(zones[0].workMode == "mqttClient" && strcmp(topic, (char*) mqttZone0Topic.c_str()) == 0) zone0NewMessage(PayloadString.c_str());
+  if(zones[1].workMode == "mqttClient" && strcmp(topic, (char*) mqttZone1Topic.c_str()) == 0) zone1NewMessage(PayloadString.c_str());
+  if(zones[2].workMode == "mqttClient" && strcmp(topic, (char*) mqttZone2Topic.c_str()) == 0) zone2NewMessage(PayloadString.c_str());
 }
 
 boolean reconnect() {
@@ -437,9 +369,9 @@ void setupLittleFS() {
 
 void wifiApWelcomeMessage(AsyncWiFiManager *wifiManager) {
   P.begin(zoneNumbers);
-  P.setZone(0, zone0Begin, zone0End);
+  P.setZone(0, zones[0].begin, zones[0].end);
   P.displayClear();
-  P.setTextAlignment(0, scrollAlignZone0);
+  P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
   P.setIntensity(7);
   P.setSpeed(0, 100);
   P.write(wifiAPname);
@@ -607,235 +539,63 @@ void setup() {
       for(int i=0;i<params;i++){
         AsyncWebParameter* p = request->getParam(i);
         if(p->isPost()){
-          if (p->name() == "workModeZone0") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "workModeZone1") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "workModeZone2") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "zoneNumbers") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
-          }          
-          if (p->name() == "zone0Begin") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
-          }
-          if (p->name() == "zone0End") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
-          }
-          if (p->name() == "zone1Begin") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
-          }
-          if (p->name() == "zone1End") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
-          }
-          if (p->name() == "zone2Begin") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
-          }
-          if (p->name() == "zone2End") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            restartEsp = true;
+          Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+          if (p->name() == "zoneNumbers")                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "zone0Begin")                  writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "zone0End")                    writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "zone1Begin")                  writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "zone1End")                    writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "zone2Begin")                  writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "zone2End")                    writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, true);
+          if (p->name() == "workModeZone0")               writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "workModeZone1")               writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "workModeZone2")               writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollSpeedZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollSpeedZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollSpeedZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollPauseZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollPauseZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollPauseZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollAlignZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollAlignZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollAlignZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollEffectZone0In")         writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollEffectZone1In")         writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollEffectZone2In")         writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollEffectZone0Out")        writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollEffectZone1Out")        writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "scrollEffectZone2Out")        writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttServerAddress")           writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttServerPort")              writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttUsername")                writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttPassword")                writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttZone0Topic")              writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttZone1Topic")              writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttZone2Topic")              writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "ntpTimeZone")                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "clockDisplayUpdateTime")      writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "clockDisplayFormat")          writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmApiToken")                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmUnitsFormat")              writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmUpdateInterval")           writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmCity")                     writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmWhatToDisplayZone0")       writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmWhatToDisplayZone1")       writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "owmWhatToDisplayZone2")       writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "intensity") {                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, false);
+            P.setIntensity((p->value()).toInt());
           }
           if (strcmp(p->name().c_str(), "messageZone0") == 0) {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
             zone0MessageManual = p->value().c_str();
             zone0newMessageAvailableManual = true;
           }
           if (strcmp(p->name().c_str(), "messageZone1") == 0) {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
             zone1MessageManual = p->value().c_str();
             zone1newMessageAvailableManual = true; 
           }
           if (strcmp(p->name().c_str(), "messageZone2") == 0) {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
             zone2MessageManual = p->value().c_str();
-            zone2newMessageAvailableManual = true; 
-          }
-          if (p->name() == "intensity") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            P.setIntensity((p->value()).toInt());
-          }
-          if (p->name() == "scrollSpeedZone0") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollSpeedZone1") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollSpeedZone2") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollPauseZone0") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollPauseZone1") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollPauseZone2") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollAlignStringZone0") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollAlignStringZone1") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollAlignStringZone2") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollEffectStringZone0In") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollEffectStringZone0Out") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollEffectStringZone1In") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollEffectStringZone1Out") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollEffectStringZone2In") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "scrollEffectStringZone2Out") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttServerAddress") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttServerPort") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttUsername") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttPassword") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttZone0Topic") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttZone1Topic") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "mqttZone2Topic") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "ntpTimeZone") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "clockDisplayUpdateTime") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "clockDisplayFormat") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmApiToken") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmUnitsFormat") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmUpdateInterval") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmCity") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmWhatToDisplayZone0") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmWhatToDisplayZone1") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
-          }
-          if (p->name() == "owmWhatToDisplayZone2") {
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            ConfigFile_Save_Variable(p->name().c_str(), p->value().c_str());
-            newConfigAvailable = true;
+            zone2newMessageAvailableManual = true;
           }
         }
       }
@@ -845,7 +605,7 @@ void setup() {
     // reboot system
     server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request){
       request->send(200, "text/plain", "200 OK");
-      restartEsp = true;
+      restartESP = true;
     });
 
   ConfigFile_Read_Variable();
@@ -853,26 +613,26 @@ void setup() {
   // Initializing display
   P.begin(zoneNumbers);
   // Zone 0 initializing
-  P.setZone(0, zone0Begin, zone0End);
-  P.setSpeed(0, scrollSpeedZone0);
-  P.setPause(0, scrollPauseZone0);
-  P.setTextEffect(0, scrollEffectZone0In, scrollEffectZone0Out);
-  P.setTextAlignment(0, scrollAlignZone0);
+  P.setZone(0, zones[0].begin, zones[0].end);
+  P.setSpeed(0, zones[0].scrollSpeed);
+  P.setPause(0, zones[0].scrollPause);
+  P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), stringToTextEffectT(zones[0].scrollEffectOut));
+  P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
   // Zone 1 initializing
   if(zoneNumbers > 1) {
-    P.setZone(1, zone1Begin, zone1End);
-    P.setSpeed(1, scrollSpeedZone1);
-    P.setPause(1, scrollPauseZone1);
-    P.setTextEffect(1, scrollEffectZone1In, scrollEffectZone1Out);
-    P.setTextAlignment(1, scrollAlignZone1);
+    P.setZone(1, zones[1].begin, zones[1].end);
+    P.setSpeed(1, zones[1].scrollSpeed);
+    P.setPause(1, zones[1].scrollPause);
+    P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
+    P.setTextAlignment(1, stringToTextPositionT(zones[1].scrollAlign));
   }
   // Zone 2 initializing
   if(zoneNumbers > 2) {
-    P.setZone(2, zone2Begin, zone2End);
-    P.setSpeed(2, scrollSpeedZone2);
-    P.setPause(2, scrollPauseZone2);
-    P.setTextEffect(2, scrollEffectZone2In, scrollEffectZone2Out);
-    P.setTextAlignment(2, scrollAlignZone2);
+    P.setZone(2, zones[2].begin, zones[2].end);
+    P.setSpeed(2, zones[2].scrollSpeed);
+    P.setPause(2, zones[2].scrollPause);
+    P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
+    P.setTextAlignment(2, stringToTextPositionT(zones[2].scrollAlign));
   }
   P.displayClear();
   P.setIntensity(intensity);
@@ -897,7 +657,7 @@ void loop() {
   if (secondLoop && P.getZoneStatus(0)) {
     P.displayClear();
     newConfigAvailable = true;
-    if (workModeZone0 == "") workModeZone0 = "manualInput";
+    if (zones[0].workMode == "") zones[0].workMode = "manualInput";
     secondLoop = false;
     //lastTime = -100000;
     //owmLastTime = -1000000;
@@ -905,12 +665,12 @@ void loop() {
   if (firstLoop) {
     P.setSpeed(0, 80);
     P.setTextEffect(0, PA_SCROLL_LEFT, PA_NO_EFFECT);
-    workModeZone0 = "firstLoop";
+    zones[0].workMode = "firstLoop";
     zone0NewMessage("ip: " + WiFi.localIP().toString());
     firstLoop = false;
     secondLoop = true;
   }
-  if (restartEsp) {
+  if (restartESP) {
     Serial.println("Rebooting...");
     delay(100);
     ESP.restart();
@@ -919,69 +679,69 @@ void loop() {
     newConfigAvailable = false;
     ConfigFile_Read_Variable();
 
-    P.setSpeed(0, scrollSpeedZone0);
-    P.setPause(0, scrollPauseZone0);
-    P.setTextAlignment(0, scrollAlignZone0);
-    P.setTextEffect(0, scrollEffectZone0In, scrollEffectZone0Out);
+    P.setSpeed(0, zones[0].scrollSpeed);
+    P.setPause(0, zones[0].scrollPause);
+    P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
+    P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), stringToTextEffectT(zones[0].scrollEffectOut));
     if(zoneNumbers > 1) {
-      P.setSpeed(1, scrollSpeedZone1);
-      P.setPause(1, scrollPauseZone1);
-      P.setTextAlignment(1, scrollAlignZone1);
-      P.setTextEffect(1, scrollEffectZone1In, scrollEffectZone1Out);
+      P.setSpeed(1, zones[1].scrollSpeed);
+      P.setPause(1, zones[1].scrollPause);
+      P.setTextAlignment(1, stringToTextPositionT(zones[1].scrollAlign));
+      P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
     }
     if(zoneNumbers > 2) {
-      P.setSpeed(2, scrollSpeedZone2);
-      P.setPause(2, scrollPauseZone2);
-      P.setTextAlignment(2, scrollAlignZone2);
-      P.setTextEffect(2, scrollEffectZone2In, scrollEffectZone2Out);
+      P.setSpeed(2, zones[2].scrollSpeed);
+      P.setPause(2, zones[2].scrollPause);
+      P.setTextAlignment(2, stringToTextPositionT(zones[2].scrollAlign));
+      P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
     }
     P.setIntensity(intensity);
 
-    if (workModeZone0 == "manualInput") zone0NewMessage("Manual");
-    if (workModeZone1 == "manualInput") zone1NewMessage("Manual");
-    if (workModeZone2 == "manualInput") zone1NewMessage("Manual");
+    if (zones[0].workMode == "manualInput") zone0NewMessage("Manual");
+    if (zones[1].workMode == "manualInput") zone1NewMessage("Manual");
+    if (zones[2].workMode == "manualInput") zone2NewMessage("Manual");
 
-    if (workModeZone0 == "wallClock" || workModeZone1 == "wallClock" || workModeZone2 == "wallClock") {
+    if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
       timeClient.setTimeOffset(ntpTimeZone * 3600);
       lastTime = 0;
-      if (workModeZone0 == "wallClock")   zone1NewMessage(getCurTime().c_str());
-      if (workModeZone1 == "wallClock")   zone1NewMessage(getCurTime().c_str());
-      if (workModeZone2 == "wallClock")   zone1NewMessage(getCurTime().c_str());
+      if (zones[0].workMode == "wallClock")   zone0NewMessage(getCurTime().c_str());
+      if (zones[1].workMode == "wallClock")   zone1NewMessage(getCurTime().c_str());
+      if (zones[2].workMode == "wallClock")   zone2NewMessage(getCurTime().c_str());
     }
-    if (workModeZone0 == "mqttClient" || workModeZone1 == "mqttClient" || workModeZone2 == "mqttClient") {
+    if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient") {
       mqttClient.disconnect();
-      if (workModeZone0 == "mqttClient")  zone0NewMessage("MQTT");
-      if (workModeZone1 == "mqttClient")  zone1NewMessage("MQTT");
-      if (workModeZone2 == "mqttClient")  zone1NewMessage("MQTT");
+      if (zones[0].workMode == "mqttClient")  zone0NewMessage("MQTT");
+      if (zones[1].workMode == "mqttClient")  zone1NewMessage("MQTT");
+      if (zones[2].workMode == "mqttClient")  zone2NewMessage("MQTT");
     }
     
-    if (workModeZone0 == "owmWeather") {
+    if (zones[0].workMode == "owmWeather") {
       owmLastTime = -1000000;
       if(owmWhatToDisplayZone0 == "owmWeatherIcon") {
         P.setFont(0, wledSymbolFont);
-        P.setTextEffect(0, scrollEffectZone0In, PA_NO_EFFECT);
+        P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
       }
       zone0NewMessage("OWM");
     }
-    if (workModeZone1 == "owmWeather") {
+    if (zones[1].workMode == "owmWeather") {
       owmLastTime = -1000000;
       if(owmWhatToDisplayZone1 == "owmWeatherIcon") {
         P.setFont(1, wledSymbolFont);
-        P.setTextEffect(1, scrollEffectZone1In, PA_NO_EFFECT);
+        P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
       }
       zone1NewMessage("OWM");
     }
-    if (workModeZone2 == "owmWeather") {
+    if (zones[2].workMode == "owmWeather") {
       owmLastTime = -1000000;
       if(owmWhatToDisplayZone2 == "owmWeatherIcon") {
         P.setFont(2, wledSymbolFont);
-        P.setTextEffect(2, scrollEffectZone2In, PA_NO_EFFECT);
+        P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
       }
-      zone1NewMessage("OWM");
+      zone2NewMessage("OWM");
     }
   } else {
 
-    if (workModeZone0 == "mqttClient" || workModeZone1 == "mqttClient" || workModeZone2 == "mqttClient" ){
+    if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient" ){
       if (!mqttClient.connected()) {
         long now = millis();
         if (now - lastReconnectAttempt > 5000) {
@@ -996,39 +756,39 @@ void loop() {
     }
 
     // MQTT message work mode handler
-    if (workModeZone0 == "mqttClient" && zone0newMessageAvailableMQTT) {
-      zone0newMessageAvailableMQTT = false;
-      zone0NewMessage(zone0MessageMQTT.c_str());
-    }
-    if (workModeZone1 == "mqttClient" && zone1newMessageAvailableMQTT) {
-      zone1newMessageAvailableMQTT = false;
-      zone1NewMessage(zone1MessageMQTT.c_str());
-    }
-    if (workModeZone2 == "mqttClient" && zone2newMessageAvailableMQTT) {
-      zone2newMessageAvailableMQTT = false;
-      zone2NewMessage(zone2MessageMQTT.c_str());
-    }
+    //if (zones[0].workMode == "mqttClient" && zone0newMessageAvailableMQTT) {
+    //  zone0newMessageAvailableMQTT = false;
+    //  zone0NewMessage(zone0MessageMQTT.c_str());
+    //}
+    //if (zones[1].workMode == "mqttClient" && zone1newMessageAvailableMQTT) {
+    //  zone1newMessageAvailableMQTT = false;
+    //  zone1NewMessage(zone1MessageMQTT.c_str());
+    //}
+    //if (zones[2].workMode == "mqttClient" && zone2newMessageAvailableMQTT) {
+    //  zone2newMessageAvailableMQTT = false;
+    //  zone2NewMessage(zone2MessageMQTT.c_str());
+    //}
 
     // Manual message work mode handler
-    if (workModeZone0 == "manualInput" && zone0newMessageAvailableManual) {
+    if (zones[0].workMode == "manualInput" && zone0newMessageAvailableManual) {
       zone0newMessageAvailableManual = false;
       zone0NewMessage(zone0MessageManual.c_str());
     }
-    if (workModeZone1 == "manualInput" && zone1newMessageAvailableManual) {
+    if (zones[1].workMode == "manualInput" && zone1newMessageAvailableManual) {
       zone1newMessageAvailableManual = false;
       zone1NewMessage(zone1MessageManual.c_str());
     }
-    if (workModeZone2 == "manualInput" && zone2newMessageAvailableManual) {
+    if (zones[2].workMode == "manualInput" && zone2newMessageAvailableManual) {
       zone2newMessageAvailableManual = false;
       zone2NewMessage(zone2MessageManual.c_str());
     }
 
     // Wall clock work mode handler
-    if (workModeZone0 == "wallClock" || workModeZone1 == "wallClock" || workModeZone2 == "wallClock") {
+    if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
       timeClient.update();
       int lastUpdateIntevar = millis() - lastTime;
 
-      if (workModeZone0 == "wallClock" && P.getZoneStatus(0)) {
+      if (zones[0].workMode == "wallClock" && P.getZoneStatus(0)) {
         if (!(lastUpdateIntevar % 1000)) {
           curTime = flashClockDots(curTime);
           P.setPause(0, 1);
@@ -1038,18 +798,18 @@ void loop() {
 
         if (lastUpdateIntevar >= clockDisplayUpdateTime * 1000) {
           if (i == 0) {
-            P.setTextEffect(0, PA_NO_EFFECT, scrollEffectZone0Out);
+            P.setTextEffect(0, PA_NO_EFFECT, stringToTextEffectT(zones[0].scrollEffectOut));
             i++;
           } else {
             curTime = getCurTime();
-            P.setTextEffect(0, scrollEffectZone0In, PA_NO_EFFECT);
+            P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
             i = 0;
           }
           zone0NewMessage(curTime.c_str());
         }
       }
 
-      if (workModeZone1 == "wallClock" && P.getZoneStatus(1)) {
+      if (zones[1].workMode == "wallClock" && P.getZoneStatus(1)) {
         if (!(lastUpdateIntevar % 1000)) {
           curTime = flashClockDots(curTime);
           P.setPause(1, 1);
@@ -1059,18 +819,18 @@ void loop() {
 
         if (lastUpdateIntevar >= clockDisplayUpdateTime * 1000) {
           if (i == 0) {
-            P.setTextEffect(1, PA_NO_EFFECT, scrollEffectZone1Out);
+            P.setTextEffect(1, PA_NO_EFFECT, stringToTextEffectT(zones[1].scrollEffectOut));
             i++;
           } else {
             curTime = getCurTime();
-            P.setTextEffect(1, scrollEffectZone1In, PA_NO_EFFECT);
+            P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
             i = 0;
           }
           zone1NewMessage(curTime.c_str());
         }
       }
 
-      if (workModeZone2 == "wallClock" && P.getZoneStatus(2)) {
+      if (zones[2].workMode == "wallClock" && P.getZoneStatus(2)) {
         if (!(lastUpdateIntevar % 1000)) {
           curTime = flashClockDots(curTime);
           P.setPause(2, 1);
@@ -1080,11 +840,11 @@ void loop() {
 
         if (lastUpdateIntevar >= clockDisplayUpdateTime * 1000) {
           if (i == 0) {
-            P.setTextEffect(2, PA_NO_EFFECT, scrollEffectZone2Out);
+            P.setTextEffect(2, PA_NO_EFFECT, stringToTextEffectT(zones[2].scrollEffectOut));
             i++;
           } else {
             curTime = getCurTime();
-            P.setTextEffect(2, scrollEffectZone2In, PA_NO_EFFECT);
+            P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
             i = 0;
           }
           zone2NewMessage(curTime.c_str());
@@ -1093,26 +853,24 @@ void loop() {
     }
 
 
-    if (workModeZone0 == "owmWeather" || workModeZone1 == "owmWeather" || workModeZone2 == "owmWeather") {
+    if (zones[0].workMode == "owmWeather" || zones[1].workMode == "owmWeather" || zones[2].workMode == "owmWeather") {
       if (millis() - owmLastTime >= (unsigned)owmUpdateInterval * 1000) {
         if (openWetherMapGetWeather() == 0) {
-          //if (workModeZone0 == "owmWeather" && P.getZoneStatus(0)) {
-          if (workModeZone0 == "owmWeather") {
+          if (zones[0].workMode == "owmWeather") {
             if (owmWhatToDisplayZone0 == "owmTemperature")  zone0NewMessage(owmTemp);
             if (owmWhatToDisplayZone0 == "owmHumidity")     zone0NewMessage(owmHumidity);
             if (owmWhatToDisplayZone0 == "owmPressure")     zone0NewMessage(owmPressure);
             if (owmWhatToDisplayZone0 == "owmWindSpeed")    zone0NewMessage(owmWindSpeed);
             if (owmWhatToDisplayZone0 == "owmWeatherIcon")  zone0NewMessage(owmWeatherIcon);
           }
-          //if (workModeZone1 == "owmWeather" && P.getZoneStatus(1)) {
-          if (workModeZone1 == "owmWeather") {
+          if (zones[1].workMode == "owmWeather") {
             if (owmWhatToDisplayZone1 == "owmTemperature")  zone1NewMessage(owmTemp);
             if (owmWhatToDisplayZone1 == "owmHumidity")     zone1NewMessage(owmHumidity);
             if (owmWhatToDisplayZone1 == "owmPressure")     zone1NewMessage(owmPressure);
             if (owmWhatToDisplayZone1 == "owmWindSpeed")    zone1NewMessage(owmWindSpeed);
             if (owmWhatToDisplayZone1 == "owmWeatherIcon")  zone1NewMessage(owmWeatherIcon);
           }
-          if (workModeZone2 == "owmWeather") {
+          if (zones[2].workMode == "owmWeather") {
             if (owmWhatToDisplayZone2 == "owmTemperature")  zone2NewMessage(owmTemp);
             if (owmWhatToDisplayZone2 == "owmHumidity")     zone2NewMessage(owmHumidity);
             if (owmWhatToDisplayZone2 == "owmPressure")     zone2NewMessage(owmPressure);
