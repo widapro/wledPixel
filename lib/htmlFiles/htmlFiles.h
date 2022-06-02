@@ -389,10 +389,13 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
       
                   <div class="col-6">
-                    <label for="scrollSpeedZone0" class="form-label">Scroll speed</label>
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="scrollSpeedZone0" value="%scrollSpeedZone0%">
-                        <span class="input-group-text">ms</span>
+                    <div class="form-group">
+                      <label for="scrollSpeedZone0" class="form-label">Scroll speed</label>
+                      <div class="input-group mb-3">
+                          <input type="text" class="form-control" id="scrollSpeedZone0" value="%scrollSpeedZone0%" aria-describedby="scrollSpeedZone0Help">
+                          <span class="input-group-text">ms</span>
+                      </div>
+                      <small id="scrollSpeedZone0Help" class="form-text text-muted">Value between 1-255</small>
                     </div>
                   </div>
 
@@ -408,11 +411,11 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollAlignStringZone0" class="form-label">Alignment</label>
-                    <select id="scrollAlignStringZone0" class="form-select">
-                        <option value="pa_left">Left</option>
-                        <option value="pa_center">Center</option>
-                        <option value="pa_right">Right</option>
+                    <label for="scrollAlignZone0" class="form-label">Alignment</label>
+                    <select id="scrollAlignZone0" class="form-select">
+                        <option value="PA_LEFT">Left</option>
+                        <option value="PA_CENTER">Center</option>
+                        <option value="PA_RIGHT">Right</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -420,35 +423,35 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollEffectStringZone0In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
-                    <select id="scrollEffectStringZone0In" class="form-select">
-                        <option value="pa_no_effect">NO_EFFECT</option>
-                        <option value="pa_print">PRINT</option>
-                        <option value="pa_scroll_up">SCROLL_UP</option>
-                        <option value="pa_scroll_down">SCROLL_DOWN</option>
-                        <option value="pa_scroll_left" >SCROLL_LEFT</option>
-                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
-                        <option value="pa_sprite">SPRITE</option>
-                        <option value="pa_slice">SLICE</option>
-                        <option value="pa_mesh">MESH</option>
-                        <option value="pa_fade">FADE</option>
-                        <option value="pa_dissolve">DISSOLVE</option>
-                        <option value="pa_blinds">BLINDS</option>
-                        <option value="pa_random">RANDOM</option>
-                        <option value="pa_wipe">WIPE</option>
-                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
-                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
-                        <option value="pa_scan_vert">SCAN_VERT</option>
-                        <option value="pa_opening">OPENING</option>
-                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
-                        <option value="pa_closing">CLOSING</option>
-                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
-                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
-                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
-                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
-                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
-                        <option value="pa_grow_up">GROW_UP</option>
-                        <option value="pa_grow_down">GROW_DOWN</option>
+                    <label for="scrollEffectZone0In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
+                    <select id="scrollEffectZone0In" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -467,35 +470,35 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollEffectStringZone0Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
-                    <select id="scrollEffectStringZone0Out" class="form-select">
-                        <option value="pa_no_effect">NO_EFFECT</option>
-                        <option value="pa_print">PRINT</option>
-                        <option value="pa_scroll_up">SCROLL_UP</option>
-                        <option value="pa_scroll_down">SCROLL_DOWN</option>
-                        <option value="pa_scroll_left" selected>SCROLL_LEFT</option>
-                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
-                        <option value="pa_sprite">SPRITE</option>
-                        <option value="pa_slice">SLICE</option>
-                        <option value="pa_mesh">MESH</option>
-                        <option value="pa_fade">FADE</option>
-                        <option value="pa_dissolve">DISSOLVE</option>
-                        <option value="pa_blinds">BLINDS</option>
-                        <option value="pa_random">RANDOM</option>
-                        <option value="pa_wipe">WIPE</option>
-                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
-                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
-                        <option value="pa_scan_vert">SCAN_VERT</option>
-                        <option value="pa_opening">OPENING</option>
-                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
-                        <option value="pa_closing">CLOSING</option>
-                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
-                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
-                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
-                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
-                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
-                        <option value="pa_grow_up">GROW_UP</option>
-                        <option value="pa_grow_down">GROW_DOWN</option>
+                    <label for="scrollEffectZone0Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
+                    <select id="scrollEffectZone0Out" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -537,11 +540,11 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollAlignStringZone1" class="form-label">Alignment</label>
-                    <select id="scrollAlignStringZone1" class="form-select">
-                        <option value="pa_left">Left</option>
-                        <option value="pa_center">Center</option>
-                        <option value="pa_right">Right</option>
+                    <label for="scrollAlignZone1" class="form-label">Alignment</label>
+                    <select id="scrollAlignZone1" class="form-select">
+                        <option value="PA_LEFT">Left</option>
+                        <option value="PA_CENTER">Center</option>
+                        <option value="PA_RIGHT">Right</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -549,35 +552,35 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollEffectStringZone1In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
-                    <select id="scrollEffectStringZone1In" class="form-select">
-                        <option value="pa_no_effect">NO_EFFECT</option>
-                        <option value="pa_print">PRINT</option>
-                        <option value="pa_scroll_up">SCROLL_UP</option>
-                        <option value="pa_scroll_down">SCROLL_DOWN</option>
-                        <option value="pa_scroll_left" >SCROLL_LEFT</option>
-                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
-                        <option value="pa_sprite">SPRITE</option>
-                        <option value="pa_slice">SLICE</option>
-                        <option value="pa_mesh">MESH</option>
-                        <option value="pa_fade">FADE</option>
-                        <option value="pa_dissolve">DISSOLVE</option>
-                        <option value="pa_blinds">BLINDS</option>
-                        <option value="pa_random">RANDOM</option>
-                        <option value="pa_wipe">WIPE</option>
-                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
-                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
-                        <option value="pa_scan_vert">SCAN_VERT</option>
-                        <option value="pa_opening">OPENING</option>
-                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
-                        <option value="pa_closing">CLOSING</option>
-                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
-                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
-                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
-                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
-                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
-                        <option value="pa_grow_up">GROW_UP</option>
-                        <option value="pa_grow_down">GROW_DOWN</option>
+                    <label for="scrollEffectZone1In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
+                    <select id="scrollEffectZone1In" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -596,35 +599,35 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollEffectStringZone1Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
-                    <select id="scrollEffectStringZone1Out" class="form-select">
-                        <option value="pa_no_effect">NO_EFFECT</option>
-                        <option value="pa_print">PRINT</option>
-                        <option value="pa_scroll_up">SCROLL_UP</option>
-                        <option value="pa_scroll_down">SCROLL_DOWN</option>
-                        <option value="pa_scroll_left" selected>SCROLL_LEFT</option>
-                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
-                        <option value="pa_sprite">SPRITE</option>
-                        <option value="pa_slice">SLICE</option>
-                        <option value="pa_mesh">MESH</option>
-                        <option value="pa_fade">FADE</option>
-                        <option value="pa_dissolve">DISSOLVE</option>
-                        <option value="pa_blinds">BLINDS</option>
-                        <option value="pa_random">RANDOM</option>
-                        <option value="pa_wipe">WIPE</option>
-                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
-                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
-                        <option value="pa_scan_vert">SCAN_VERT</option>
-                        <option value="pa_opening">OPENING</option>
-                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
-                        <option value="pa_closing">CLOSING</option>
-                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
-                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
-                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
-                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
-                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
-                        <option value="pa_grow_up">GROW_UP</option>
-                        <option value="pa_grow_down">GROW_DOWN</option>
+                    <label for="scrollEffectZone1Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
+                    <select id="scrollEffectZone1Out" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -667,11 +670,11 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollAlignStringZone2" class="form-label">Alignment</label>
-                    <select id="scrollAlignStringZone2" class="form-select">
-                        <option value="pa_left">Left</option>
-                        <option value="pa_center">Center</option>
-                        <option value="pa_right">Right</option>
+                    <label for="scrollAlignZone2" class="form-label">Alignment</label>
+                    <select id="scrollAlignZone2" class="form-select">
+                        <option value="PA_LEFT">Left</option>
+                        <option value="PA_CENTER">Center</option>
+                        <option value="PA_RIGHT">Right</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -679,35 +682,35 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollEffectStringZone2In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
-                    <select id="scrollEffectStringZone2In" class="form-select">
-                        <option value="pa_no_effect">NO_EFFECT</option>
-                        <option value="pa_print">PRINT</option>
-                        <option value="pa_scroll_up">SCROLL_UP</option>
-                        <option value="pa_scroll_down">SCROLL_DOWN</option>
-                        <option value="pa_scroll_left" >SCROLL_LEFT</option>
-                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
-                        <option value="pa_sprite">SPRITE</option>
-                        <option value="pa_slice">SLICE</option>
-                        <option value="pa_mesh">MESH</option>
-                        <option value="pa_fade">FADE</option>
-                        <option value="pa_dissolve">DISSOLVE</option>
-                        <option value="pa_blinds">BLINDS</option>
-                        <option value="pa_random">RANDOM</option>
-                        <option value="pa_wipe">WIPE</option>
-                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
-                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
-                        <option value="pa_scan_vert">SCAN_VERT</option>
-                        <option value="pa_opening">OPENING</option>
-                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
-                        <option value="pa_closing">CLOSING</option>
-                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
-                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
-                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
-                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
-                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
-                        <option value="pa_grow_up">GROW_UP</option>
-                        <option value="pa_grow_down">GROW_DOWN</option>
+                    <label for="scrollEffectZone2In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
+                    <select id="scrollEffectZone2In" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -726,35 +729,35 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
 
                   <div class="col-6">
-                    <label for="scrollEffectStringZone2Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
-                    <select id="scrollEffectStringZone2Out" class="form-select">
-                        <option value="pa_no_effect">NO_EFFECT</option>
-                        <option value="pa_print">PRINT</option>
-                        <option value="pa_scroll_up">SCROLL_UP</option>
-                        <option value="pa_scroll_down">SCROLL_DOWN</option>
-                        <option value="pa_scroll_left" selected>SCROLL_LEFT</option>
-                        <option value="pa_scroll_right">SCROLL_RIGHT</option>
-                        <option value="pa_sprite">SPRITE</option>
-                        <option value="pa_slice">SLICE</option>
-                        <option value="pa_mesh">MESH</option>
-                        <option value="pa_fade">FADE</option>
-                        <option value="pa_dissolve">DISSOLVE</option>
-                        <option value="pa_blinds">BLINDS</option>
-                        <option value="pa_random">RANDOM</option>
-                        <option value="pa_wipe">WIPE</option>
-                        <option value="pa_wipe_cursor">WIPE_CURSOR</option>
-                        <option value="pa_scan_horiz">SCAN_HORIZ</option>
-                        <option value="pa_scan_vert">SCAN_VERT</option>
-                        <option value="pa_opening">OPENING</option>
-                        <option value="pa_opening_cursor">OPENING_CURSOR</option>
-                        <option value="pa_closing">CLOSING</option>
-                        <option value="pa_closing_cursor">CLOSING_CURSOR</option>
-                        <option value="pa_scroll_up_left">SCROLL_UP_LEFT</option>
-                        <option value="pa_scroll_up_right">SCROLL_UP_RIGHT</option>
-                        <option value="pa_scroll_down_left">SCROLL_DOWN_LEFT</option>
-                        <option value="pa_scroll_down_right">SCROLL_DOWN_RIGHT</option>
-                        <option value="pa_grow_up">GROW_UP</option>
-                        <option value="pa_grow_down">GROW_DOWN</option>
+                    <label for="scrollEffectZone2Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
+                    <select id="scrollEffectZone2Out" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                     <div class="invalid-feedback">
                       Please enter a numbers only.
@@ -944,16 +947,16 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
     window.onload = document.getElementById("scrollPauseZone0").value = "%scrollPauseZone0%";
     window.onload = document.getElementById("scrollPauseZone1").value = "%scrollPauseZone1%";
     window.onload = document.getElementById("scrollPauseZone2").value = "%scrollPauseZone2%";
-    window.onload = document.getElementById("scrollAlignStringZone0").value = "%scrollAlignStringZone0%";
-    window.onload = document.getElementById("scrollAlignStringZone1").value = "%scrollAlignStringZone1%";
-    window.onload = document.getElementById("scrollAlignStringZone2").value = "%scrollAlignStringZone2%";
+    window.onload = document.getElementById("scrollAlignZone0").value = "%scrollAlignZone0%";
+    window.onload = document.getElementById("scrollAlignZone1").value = "%scrollAlignZone1%";
+    window.onload = document.getElementById("scrollAlignZone2").value = "%scrollAlignZone2%";
     
-    window.onload = document.getElementById("scrollEffectStringZone0In").value = "%scrollEffectStringZone0In%";
-    window.onload = document.getElementById("scrollEffectStringZone0Out").value = "%scrollEffectStringZone0Out%";
-    window.onload = document.getElementById("scrollEffectStringZone1In").value = "%scrollEffectStringZone1In%";
-    window.onload = document.getElementById("scrollEffectStringZone1Out").value = "%scrollEffectStringZone1Out%";
-    window.onload = document.getElementById("scrollEffectStringZone2In").value = "%scrollEffectStringZone2In%";
-    window.onload = document.getElementById("scrollEffectStringZone2Out").value = "%scrollEffectStringZone2Out%";
+    window.onload = document.getElementById("scrollEffectZone0In").value = "%scrollEffectZone0In%";
+    window.onload = document.getElementById("scrollEffectZone0Out").value = "%scrollEffectZone0Out%";
+    window.onload = document.getElementById("scrollEffectZone1In").value = "%scrollEffectZone1In%";
+    window.onload = document.getElementById("scrollEffectZone1Out").value = "%scrollEffectZone1Out%";
+    window.onload = document.getElementById("scrollEffectZone2In").value = "%scrollEffectZone2In%";
+    window.onload = document.getElementById("scrollEffectZone2Out").value = "%scrollEffectZone2Out%";
 
     window.onload = document.getElementById("mqttServerAddress").value = "%mqttServerAddress%";
     window.onload = document.getElementById("mqttServerPort").value = "%mqttServerPort%";
@@ -1090,9 +1093,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 workModeZone0:              document.getElementById("workModeZone0").value,
                 scrollSpeedZone0:           document.getElementById("scrollSpeedZone0").value,
                 scrollPauseZone0:           document.getElementById("scrollPauseZone0").value,
-                scrollAlignStringZone0:     document.getElementById("scrollAlignStringZone0").value,
-                scrollEffectStringZone0In:  document.getElementById("scrollEffectStringZone0In").value,
-                scrollEffectStringZone0Out: document.getElementById("scrollEffectStringZone0Out").value,
+                scrollAlignZone0:           document.getElementById("scrollAlignZone0").value,
+                scrollEffectZone0In:        document.getElementById("scrollEffectZone0In").value,
+                scrollEffectZone0Out:       document.getElementById("scrollEffectZone0Out").value,
                 owmWhatToDisplayZone0:      document.getElementById("owmWhatToDisplayZone0").value
             }
             sendPost(data);
@@ -1103,9 +1106,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 workModeZone1:              document.getElementById("workModeZone1").value,
                 scrollSpeedZone1:           document.getElementById("scrollSpeedZone1").value,
                 scrollPauseZone1:           document.getElementById("scrollPauseZone1").value,
-                scrollAlignStringZone1:     document.getElementById("scrollAlignStringZone1").value,
-                scrollEffectStringZone1In:  document.getElementById("scrollEffectStringZone1In").value,
-                scrollEffectStringZone1Out: document.getElementById("scrollEffectStringZone1Out").value,
+                scrollAlignZone1:           document.getElementById("scrollAlignZone1").value,
+                scrollEffectZone1In:        document.getElementById("scrollEffectZone1In").value,
+                scrollEffectZone1Out:       document.getElementById("scrollEffectZone1Out").value,
                 owmWhatToDisplayZone1:      document.getElementById("owmWhatToDisplayZone1").value
             }
             sendPost(data);
@@ -1116,9 +1119,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 workModeZone2:              document.getElementById("workModeZone2").value,
                 scrollSpeedZone2:           document.getElementById("scrollSpeedZone2").value,
                 scrollPauseZone2:           document.getElementById("scrollPauseZone2").value,
-                scrollAlignStringZone2:     document.getElementById("scrollAlignStringZone2").value,
-                scrollEffectStringZone2In:  document.getElementById("scrollEffectStringZone2In").value,
-                scrollEffectStringZone2Out: document.getElementById("scrollEffectStringZone2Out").value,
+                scrollAlignZone2:           document.getElementById("scrollAlignZone2").value,
+                scrollEffectZone2In:        document.getElementById("scrollEffectZone2In").value,
+                scrollEffectZone2Out:       document.getElementById("scrollEffectZone2Out").value,
                 owmWhatToDisplayZone2:      document.getElementById("owmWhatToDisplayZone2").value
             }
             sendPost(data);
