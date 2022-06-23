@@ -31,13 +31,13 @@ long lastReconnectAttempt = 0;
 String MQTTGlobalPrefix = WiFi.macAddress().substring(12, 14) + WiFi.macAddress().substring(15);    // This sets  the topic prefix to the last five chars of the MAC, ie: C0A4
 
 typedef struct {
-  String    message, scrollEffect, effectWithoutExit, scrollSpeed, scrollPause, scrollAllign, charSpasing;
+  String    message, scrollEffect, effectWithoutExit, scrollSpeed, scrollPause, scrollAllign, charspacing;
 } MQTTZoneData;
 
 MQTTZoneData MQTTZones[] = {
-  {MQTTGlobalPrefix + "/zone0/text", MQTTGlobalPrefix + "/zone0/scrolleffect", MQTTGlobalPrefix + "/zone0/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone0/scrollspeed", MQTTGlobalPrefix + "/zone0/scrollpause", MQTTGlobalPrefix + "/zone0/scrollalign", MQTTGlobalPrefix + "/zone0/charspasing"},
-  {MQTTGlobalPrefix + "/zone1/text", MQTTGlobalPrefix + "/zone1/scrolleffect", MQTTGlobalPrefix + "/zone1/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone1/scrollspeed", MQTTGlobalPrefix + "/zone1/scrollpause", MQTTGlobalPrefix + "/zone1/scrollalign", MQTTGlobalPrefix + "/zone1/charspasing"},
-  {MQTTGlobalPrefix + "/zone2/text", MQTTGlobalPrefix + "/zone2/scrolleffect", MQTTGlobalPrefix + "/zone2/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone2/scrollspeed", MQTTGlobalPrefix + "/zone2/scrollpause", MQTTGlobalPrefix + "/zone2/scrollalign", MQTTGlobalPrefix + "/zone2/charspasing"},
+  {MQTTGlobalPrefix + "/zone0/text", MQTTGlobalPrefix + "/zone0/scrolleffect", MQTTGlobalPrefix + "/zone0/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone0/scrollspeed", MQTTGlobalPrefix + "/zone0/scrollpause", MQTTGlobalPrefix + "/zone0/scrollalign", MQTTGlobalPrefix + "/zone0/charspacing"},
+  {MQTTGlobalPrefix + "/zone1/text", MQTTGlobalPrefix + "/zone1/scrolleffect", MQTTGlobalPrefix + "/zone1/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone1/scrollspeed", MQTTGlobalPrefix + "/zone1/scrollpause", MQTTGlobalPrefix + "/zone1/scrollalign", MQTTGlobalPrefix + "/zone1/charspacing"},
+  {MQTTGlobalPrefix + "/zone2/text", MQTTGlobalPrefix + "/zone2/scrolleffect", MQTTGlobalPrefix + "/zone2/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone2/scrollspeed", MQTTGlobalPrefix + "/zone2/scrollpause", MQTTGlobalPrefix + "/zone2/scrollalign", MQTTGlobalPrefix + "/zone2/charspacing"},
 };
 String MQTTIntensity = MQTTGlobalPrefix + "/intensity";
 String MQTTPower = MQTTGlobalPrefix + "/power";
@@ -55,7 +55,7 @@ MD_Parola P = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
 typedef struct {
     uint8_t   begin, end;
-    uint8_t   scrollSpeed, charSpasing;
+    uint8_t   scrollSpeed, charspacing;
     uint16_t  scrollPause;
     String    scrollAlign, scrollEffectIn, scrollEffectOut, font, workMode, clockDisplayFormat, haSensorId, haSensorPostfix, owmWhatToDisplay;
 } ZoneData;
@@ -134,6 +134,7 @@ void applyZoneFont(int zone, String font) {
   if(font == "default") P.setFont(zone, nullptr);
   if(font == "wledFont") P.setFont(zone, wledFont);
   if(font == "wledFont_cyrillic") P.setFont(zone, wledFont_cyrillic);
+  if(font == "wledSymbolFont") P.setFont(zone, wledSymbolFont);
 }
 
 textEffect_t stringToTextEffectT(String val) {
@@ -231,9 +232,9 @@ String processor(const String& var){
   if(var == "haSensorPostfixZone1")         return zones[1].haSensorPostfix;
   if(var == "haSensorPostfixZone2")         return zones[2].haSensorPostfix;
   if(var == "haUpdateInterval")             return itoa(haUpdateInterval, buffer, 10);
-  if(var == "charSpasingZone0")             return itoa(zones[0].charSpasing, buffer, 10);
-  if(var == "charSpasingZone1")             return itoa(zones[1].charSpasing, buffer, 10);
-  if(var == "charSpasingZone2")             return itoa(zones[2].charSpasing, buffer, 10);
+  if(var == "charspacingZone0")             return itoa(zones[0].charspacing, buffer, 10);
+  if(var == "charspacingZone1")             return itoa(zones[1].charspacing, buffer, 10);
+  if(var == "charspacingZone2")             return itoa(zones[2].charspacing, buffer, 10);
   return String();
 }
 
@@ -326,9 +327,9 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("haSensorPostfixZone1")])      zones[1].haSensorPostfix = postObj[F("haSensorPostfixZone1")].as<String>();
   if(postObj[F("haSensorPostfixZone2")])      zones[2].haSensorPostfix = postObj[F("haSensorPostfixZone2")].as<String>();
   if(postObj[F("haUpdateInterval")])          haUpdateInterval = postObj[F("haUpdateInterval")].as<int>();
-  if(postObj[F("charSpasingZone0")])          zones[0].charSpasing = postObj[F("charSpasingZone0")].as<int>();
-  if(postObj[F("charSpasingZone1")])          zones[1].charSpasing = postObj[F("charSpasingZone1")].as<int>();
-  if(postObj[F("charSpasingZone2")])          zones[2].charSpasing = postObj[F("charSpasingZone2")].as<int>();
+  if(postObj[F("charspacingZone0")])          zones[0].charspacing = postObj[F("charspacingZone0")].as<int>();
+  if(postObj[F("charspacingZone1")])          zones[1].charspacing = postObj[F("charspacingZone1")].as<int>();
+  if(postObj[F("charspacingZone2")])          zones[2].charspacing = postObj[F("charspacingZone2")].as<int>();
 }
 
 void zone0NewMessage(String newMessage) {
@@ -388,8 +389,8 @@ void MQTTCallback(char* topic, byte* payload, int length) {
     if (strcmp(topic, (char*) MQTTZones[0].scrollAllign.c_str()) == 0) {
       writeVarToConfFile("scrollAlignZone0", PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[0].charSpasing.c_str()) == 0) {
-      writeVarToConfFile("charSpasingZone0", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[0].charspacing.c_str()) == 0) {
+      writeVarToConfFile("charspacingZone0", PayloadString.c_str(), true, false);
     }
   } 
 
@@ -414,8 +415,8 @@ void MQTTCallback(char* topic, byte* payload, int length) {
     if (strcmp(topic, (char*) MQTTZones[1].scrollAllign.c_str()) == 0) {
       writeVarToConfFile("scrollAlignZone1", PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].charSpasing.c_str()) == 0) {
-      writeVarToConfFile("charSpasingZone1", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[1].charspacing.c_str()) == 0) {
+      writeVarToConfFile("charspacingZone1", PayloadString.c_str(), true, false);
     }
   } 
 
@@ -440,8 +441,8 @@ void MQTTCallback(char* topic, byte* payload, int length) {
     if (strcmp(topic, (char*) MQTTZones[2].scrollAllign.c_str()) == 0) {
       writeVarToConfFile("scrollAlignZone2", PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[2].charSpasing.c_str()) == 0) {
-      writeVarToConfFile("charSpasingZone2", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[2].charspacing.c_str()) == 0) {
+      writeVarToConfFile("charspacingZone2", PayloadString.c_str(), true, false);
     }
   } 
 }
@@ -466,7 +467,7 @@ boolean reconnect() {
       mqttClient.subscribe((char*) MQTTZones[n].scrollSpeed.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollPause.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollAllign.c_str());
-      mqttClient.subscribe((char*) MQTTZones[n].charSpasing.c_str());
+      mqttClient.subscribe((char*) MQTTZones[n].charspacing.c_str());
     }
   }
   else
@@ -759,9 +760,9 @@ void setup() {
           if (p->name() == "haSensorPostfixZone1")        writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "haSensorPostfixZone2")        writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "haUpdateInterval")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
-          if (p->name() == "charSpasingZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
-          if (p->name() == "charSpasingZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
-          if (p->name() == "charSpasingZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "charspacingZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "charspacingZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "charspacingZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "intensity") {                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, false);
                                                           P.setIntensity((p->value()).toInt());
           }
@@ -783,7 +784,7 @@ void setup() {
   P.setPause(0, zones[0].scrollPause);
   P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), stringToTextEffectT(zones[0].scrollEffectOut));
   P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
-  P.setCharSpacing(0, zones[0].charSpasing);
+  P.setCharSpacing(0, zones[0].charspacing);
   applyZoneFont(0, zones[0].font);
   // Zone 1 initializing
   if(zoneNumbers > 1) {
@@ -792,7 +793,7 @@ void setup() {
     P.setPause(1, zones[1].scrollPause);
     P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
     P.setTextAlignment(1, stringToTextPositionT(zones[1].scrollAlign));
-    P.setCharSpacing(1, zones[1].charSpasing);
+    P.setCharSpacing(1, zones[1].charspacing);
     applyZoneFont(1, zones[1].font);
   }
   // Zone 2 initializing
@@ -802,7 +803,7 @@ void setup() {
     P.setPause(2, zones[2].scrollPause);
     P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
     P.setTextAlignment(2, stringToTextPositionT(zones[2].scrollAlign));
-    P.setCharSpacing(2, zones[2].charSpasing);
+    P.setCharSpacing(2, zones[2].charspacing);
     applyZoneFont(2, zones[2].font);
   }
   P.displayClear();
@@ -844,12 +845,12 @@ void loop() {
   if (newConfigAvailable) {
     newConfigAvailable = false;
     ConfigFile_Read_Variable();
-
+    
     P.setSpeed(0, zones[0].scrollSpeed);
     P.setPause(0, zones[0].scrollPause);
     P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
     P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), stringToTextEffectT(zones[0].scrollEffectOut));
-    P.setCharSpacing(0, zones[0].charSpasing);
+    P.setCharSpacing(0, zones[0].charspacing);
     applyZoneFont(0, zones[0].font);
 
     if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
@@ -874,7 +875,7 @@ void loop() {
       P.setPause(1, zones[1].scrollPause);
       P.setTextAlignment(1, stringToTextPositionT(zones[1].scrollAlign));
       P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
-      P.setCharSpacing(1, zones[1].charSpasing);
+      P.setCharSpacing(1, zones[1].charspacing);
       applyZoneFont(1, zones[1].font);
       if (zones[1].workMode == "mqttClient")  zone1NewMessage("MQTT");
       if (zones[1].workMode == "manualInput") zone1NewMessage("Manual");
@@ -890,7 +891,7 @@ void loop() {
       P.setPause(2, zones[2].scrollPause);
       P.setTextAlignment(2, stringToTextPositionT(zones[2].scrollAlign));
       P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
-      P.setCharSpacing(2, zones[2].charSpasing);
+      P.setCharSpacing(2, zones[2].charspacing);
       applyZoneFont(2, zones[2].font);
       if (zones[2].workMode == "mqttClient")  zone2NewMessage("MQTT");
       if (zones[2].workMode == "manualInput") zone2NewMessage("Manual");
