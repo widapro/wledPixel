@@ -344,7 +344,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
               </div>
               <hr>
               <div>
-                    <h6 class="my-2">Character spasing</h6>
+                    <h6 class="my-2">Character spacing</h6>
                     <small class="text-muted">Distance between characters on the display. The default is exactly 1. It is useful to set 0 if you need to fit a lot of text on the display or you can use the Cyrillic font.</small>
               </div>
               <hr>
@@ -386,9 +386,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     <li><b>devicePrefix/zone<i>N</i>/scrollspeed</b> - scroll speed</li>
                     <li><b>devicePrefix/zone<i>N</i>/scrollpause</b> - scroll pause</li>
                     <li><b>devicePrefix/zone<i>N</i>/scrollalign</b> - scroll alignment</li>
-                    <li><b>devicePrefix/zone<i>N</i>/charspasing</b> - character spasing</li>
-                    <li><b>devicePrefix/zone<i>N</i>/intensity</b> - brightness</li>
-                    <li><b>devicePrefix/zone<i>N</i>/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
+                    <li><b>devicePrefix/zone<i>N</i>/charspacing</b> - character spacing</li>
+                    <li><b>devicePrefix//intensity</b> - brightness</li>
+                    <li><b>devicePrefix/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
                   </ul>
                     where <b>devicePrefix</b> = %mqttDevicePrefix%
                     <br><b>zoneN</b> = zone number (e.g. Zone0)
@@ -507,11 +507,12 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="default">Default</option>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
+                        <option value="wledSymbolFont">Wled Symbol Font</option>
                     </select>
                   </div>
                   <div class="col-6">
-                    <label for="charSpasingZone0" class="form-label">Character spasing</label>
-                    <select id="charSpasingZone0" class="form-select">
+                    <label for="charspacingZone0" class="form-label">Character spacing</label>
+                    <select id="charspacingZone0" class="form-select">
                         <option value="0">0</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -669,11 +670,12 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="default">Default</option>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
+                        <option value="wledSymbolFont">Wled Symbol Font</option>
                     </select>
                   </div>
                   <div class="col-6">
-                    <label for="charSpasingZone1" class="form-label">Character spasing</label>
-                    <select id="charSpasingZone1" class="form-select">
+                    <label for="charspacingZone1" class="form-label">Character spacing</label>
+                    <select id="charspacingZone1" class="form-select">
                         <option value="0">0</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -832,11 +834,12 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="default">Default</option>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
+                        <option value="wledSymbolFont">Wled Symbol Font</option>
                     </select>
                   </div>
                   <div class="col-6">
-                    <label for="charSpasingZone2" class="form-label">Character spasing</label>
-                    <select id="charSpasingZone2" class="form-select">
+                    <label for="charspacingZone2" class="form-label">Character spacing</label>
+                    <select id="charspacingZone2" class="form-select">
                         <option value="0">0</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -1157,9 +1160,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("haSensorPostfixZone0").value = "%haSensorPostfixZone0%";
      document.getElementById("haSensorPostfixZone1").value = "%haSensorPostfixZone1%";
      document.getElementById("haSensorPostfixZone2").value = "%haSensorPostfixZone2%";
-     document.getElementById("charSpasingZone0").value = "%charSpasingZone0%";
-     document.getElementById("charSpasingZone1").value = "%charSpasingZone1%";
-     document.getElementById("charSpasingZone2").value = "%charSpasingZone2%";
+     document.getElementById("charspacingZone0").value = "%charspacingZone0%";
+     document.getElementById("charspacingZone1").value = "%charspacingZone1%";
+     document.getElementById("charspacingZone2").value = "%charspacingZone2%";
      
      //const ZoneNumbersFirstValue = "%zoneNumbers%";
      //if (ZoneNumbersFirstValue == "1") {
@@ -1388,7 +1391,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 scrollEffectZone0In:        document.getElementById("scrollEffectZone0In").value,
                 scrollEffectZone0Out:       document.getElementById("scrollEffectZone0Out").value,
                 fontZone0:                  document.getElementById("fontZone0").value,
-                charSpasingZone0:           document.getElementById("charSpasingZone0").value
+                charspacingZone0:           document.getElementById("charspacingZone0").value
                 
             }
             sendPost(data);
@@ -1407,7 +1410,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 scrollEffectZone1In:        document.getElementById("scrollEffectZone1In").value,
                 scrollEffectZone1Out:       document.getElementById("scrollEffectZone1Out").value,
                 fontZone1:                  document.getElementById("fontZone1").value,
-                charSpasingZone1:           document.getElementById("charSpasingZone1").value
+                charspacingZone1:           document.getElementById("charspacingZone1").value
             }
             sendPost(data);
         }
@@ -1425,7 +1428,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 scrollEffectZone2In:        document.getElementById("scrollEffectZone2In").value,
                 scrollEffectZone2Out:       document.getElementById("scrollEffectZone2Out").value,
                 fontZone2:                  document.getElementById("fontZone2").value,
-                charSpasingZone2:           document.getElementById("charSpasingZone2").value
+                charspacingZone2:           document.getElementById("charspacingZone2").value
             }
             sendPost(data);
         }
