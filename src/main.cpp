@@ -21,14 +21,15 @@
 WiFiClient espClient;
 
 //// MQTT settings ////
-String mqttServerAddress = "";
-int mqttServerPort = 1883;
-String mqttUsername = "";
-String mqttPassword = "";
-PubSubClient mqttClient(espClient);
+String mqttServerAddress  = "";
+int mqttServerPort        = 1883;
+String mqttUsername       = "";
+String mqttPassword       = "";
 long lastReconnectAttempt = 0;
+PubSubClient mqttClient(espClient);
 
-String MQTTGlobalPrefix = WiFi.macAddress().substring(12, 14) + WiFi.macAddress().substring(15);    // This sets  the topic prefix to the last five chars of the MAC, ie: C0A4
+String MQTTGlobalPrefix = WiFi.macAddress().substring(12, 14) + WiFi.macAddress().substring(15);    // This sets the topic prefix to the last five chars of the MAC, ie: C0A4
+String hostName = "wled-pixel-" + MQTTGlobalPrefix;
 
 typedef struct {
   String    message, scrollEffect, effectWithoutExit, scrollSpeed, scrollPause, scrollAllign, charspacing;
@@ -68,23 +69,24 @@ ZoneData zones[] = {
 };
 
 uint8_t zoneNumbers = 1;
-uint8_t intensity = 7;
+uint8_t intensity   = 7;
 
 char zone0Message[50] = "zone0";
 char zone1Message[50] = "zone1";
 char zone2Message[50] = "zone2";
+
 bool zone0newMessageAvailable = false;
 bool zone1newMessageAvailable = false;
 bool zone2newMessageAvailable = false;
 
-char const *wifiAPname = "wled-AP";
-char const *wifiAPpassword = "12345678";
+char const *wifiAPname      = "wled-AP";
+char const *wifiAPpassword  = "12345678";
 
 unsigned long previousMillis = 0; 
 String curTimeZone0 = "00:00";
 String curTimeZone1 = "00:00";
 String curTimeZone2 = "00:00";
-int i = 0;
+//int i = 0;
 
 // Initialize NTP
 String ntpServerAddress = "pool.ntp.org";
@@ -96,30 +98,34 @@ AsyncWebServer server(80);
 DNSServer dns;
 AsyncWiFiManager wifiManager(&server,&dns);
 
-bool restartESP = false;
-bool firstLoop = true;
-bool secondLoop = false;
+bool restartESP         = false;
+
+bool zone0Test          = true;
+bool zone1Test          = true;
+bool zone2Test          = true;
+bool allTestsFinish     = false;
+
 bool newConfigAvailable = false;
 
 //flag for saving data
-bool shouldSaveConfig = false;
+bool shouldSaveConfig   = false;
 //callback notifying us of the need to save config
 void saveConfigCallback () {
-  shouldSaveConfig = true;
+  shouldSaveConfig      = true;
 }
 
 // variables for get weather func
 static uint32_t owmLastTime = 0;
-int owmUpdateInterval = 60;
-String    owmApiToken;
-String    owmUnitsFormat;
-String    owmCity;
+int             owmUpdateInterval = 60;
+String          owmApiToken;
+String          owmUnitsFormat;
+String          owmCity;
 
 // Home Assistant client variables
 String haAddr, haApiHttpType, haApiToken;
-int haUpdateInterval = 60;
-int haApiPort = 8123;
-static uint32_t haLastTime = 0;
+int haUpdateInterval        = 60;
+int haApiPort               = 8123;
+static uint32_t haLastTime  = 0;
 
 
 // Convert scrollAlig in String to textPosition_t type
@@ -566,21 +572,21 @@ String flashClockDots(String t) {
 
 void displayAnimation() {
   if (P.displayAnimate()) {
-    if (zone0newMessageAvailable) {
+    if (zone0newMessageAvailable && P.getZoneStatus(0)) {
         Serial.printf("\nzone0Message availabel: %s", zone0Message);
         zone0newMessageAvailable = false;
         P.setTextBuffer(0, zone0Message);
         P.displayReset(0);
     }
 
-    if (zone1newMessageAvailable) {
+    if (zone1newMessageAvailable && P.getZoneStatus(1)) {
         Serial.printf("\nzone1Message availabel: %s", zone1Message);
         zone1newMessageAvailable = false;
         P.setTextBuffer(1, zone1Message);
         P.displayReset(1);
     }
 
-    if (zone2newMessageAvailable) {
+    if (zone2newMessageAvailable && P.getZoneStatus(2)) {
         Serial.printf("\nzone2Message availabel: %s", zone2Message);
         zone2newMessageAvailable = false;
         P.setTextBuffer(2, zone2Message);
@@ -678,16 +684,16 @@ void setup() {
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setAPCallback(wifiApWelcomeMessage);
   wifiManager.autoConnect(wifiAPname, wifiAPpassword);
+  WiFi.hostname(hostName.c_str());
   Serial.println("");
   Serial.printf("Wifi connected to SSID: %s\n", WiFi.SSID().c_str());
   Serial.printf("Local ip: %s\n", WiFi.localIP().toString().c_str());
   Serial.printf("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
   Serial.printf("Subnet: %s\n", WiFi.subnetMask().toString().c_str());
   Serial.printf("DNS: %s\n", WiFi.dnsIP().toString().c_str());
-
+  Serial.printf("HostName: %s\n", hostName.c_str());
   
-  Serial.printf("MQTT Device Prefix: ");
-  Serial.println(MQTTGlobalPrefix);
+  Serial.printf("MQTT Device Prefix: %s\n", MQTTGlobalPrefix.c_str());
 
   // Web server routings
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -778,35 +784,9 @@ void setup() {
 
   // Initializing display
   P.begin(zoneNumbers);
-  // Zone 0 initializing
   P.setZone(0, zones[0].begin, zones[0].end);
-  P.setSpeed(0, zones[0].scrollSpeed);
-  P.setPause(0, zones[0].scrollPause);
-  P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), stringToTextEffectT(zones[0].scrollEffectOut));
-  P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
-  P.setCharSpacing(0, zones[0].charspacing);
-  applyZoneFont(0, zones[0].font);
-  // Zone 1 initializing
-  if(zoneNumbers > 1) {
-    P.setZone(1, zones[1].begin, zones[1].end);
-    P.setSpeed(1, zones[1].scrollSpeed);
-    P.setPause(1, zones[1].scrollPause);
-    P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
-    P.setTextAlignment(1, stringToTextPositionT(zones[1].scrollAlign));
-    P.setCharSpacing(1, zones[1].charspacing);
-    applyZoneFont(1, zones[1].font);
-  }
-  // Zone 2 initializing
-  if(zoneNumbers > 2) {
-    P.setZone(2, zones[2].begin, zones[2].end);
-    P.setSpeed(2, zones[2].scrollSpeed);
-    P.setPause(2, zones[2].scrollPause);
-    P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
-    P.setTextAlignment(2, stringToTextPositionT(zones[2].scrollAlign));
-    P.setCharSpacing(2, zones[2].charspacing);
-    applyZoneFont(2, zones[2].font);
-  }
-  P.displayClear();
+  if(zoneNumbers > 1) P.setZone(1, zones[1].begin, zones[1].end);
+  if(zoneNumbers > 2) P.setZone(2, zones[2].begin, zones[2].end);
   P.setIntensity(intensity);
 
   // Start MQTT client
@@ -823,25 +803,62 @@ void setup() {
   timeClient.update();
 }
 
-
 void loop() {
-  if (secondLoop && P.getZoneStatus(0)) {
-    P.displayClear();
-    newConfigAvailable = true;
-    secondLoop = false;
+
+  if (!zone2Test && P.getZoneStatus(2) && !allTestsFinish) {
+    allTestsFinish      = true;
+    newConfigAvailable  = true;
   }
-  if (firstLoop) {
-    P.setSpeed(0, 80);
-    P.setTextEffect(0, PA_SCROLL_LEFT, PA_NO_EFFECT);
-    zone0NewMessage("ip: " + WiFi.localIP().toString());
-    firstLoop = false;
-    secondLoop = true;
+  
+  if (!zone1Test && zone2Test) {
+    if (P.getZoneStatus(1)) {
+      P.displayClear();
+      P.setFont(2, wledSymbolFont);
+      P.setTextEffect(2, PA_GROW_UP, PA_NO_EFFECT);
+      P.setCharSpacing(2,0);
+      P.setPause(2, 500);
+      P.setSpeed(2, 50);
+      String testMessage = "8";
+      for ( int i = 0; i < int(zones[2].end - zones[2].begin); i++) testMessage += 8;
+      zone2NewMessage(testMessage);
+      zone2Test = false;
+      
+    }      
   }
+
+  if (!zone0Test && zone1Test) {
+    if (P.getZoneStatus(0)) {
+      P.displayClear();
+      P.setFont(1, wledSymbolFont);
+      P.setTextEffect(1, PA_GROW_UP, PA_NO_EFFECT);
+      P.setCharSpacing(1,0);
+      P.setPause(1, 500);
+      P.setSpeed(1, 50);
+      String testMessage = "8";
+      for ( int i = 0; i < int(zones[1].end - zones[1].begin); i++) testMessage += 8;
+      zone1NewMessage(testMessage);
+      zone1Test = false;
+    }      
+  }
+
+  if (zone0Test) {
+    P.setFont(0, wledSymbolFont);
+    P.setTextEffect(0, PA_GROW_UP, PA_NO_EFFECT);
+    P.setCharSpacing(0,0);
+    P.setPause(0, 500);
+    P.setSpeed(0, 50);
+    String testMessage = "8";
+    for ( int i = 0; i < int(zones[0].end - zones[0].begin); i++) testMessage += 8;
+    zone0NewMessage(testMessage);
+    zone0Test = false;
+  }
+
   if (restartESP) {
     Serial.println("Rebooting...");
     delay(100);
     ESP.restart();
   }
+
   if (newConfigAvailable) {
     newConfigAvailable = false;
     ConfigFile_Read_Variable();
@@ -860,6 +877,7 @@ void loop() {
       curTimeZone1 = "0";
       curTimeZone2 = "0";
     }
+
     if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient") mqttClient.disconnect();
     if (zones[0].workMode == "mqttClient")  zone0NewMessage("MQTT");
     if (zones[0].workMode == "manualInput") zone0NewMessage("Manual");
@@ -886,6 +904,7 @@ void loop() {
         }
       }
     }
+
     if(zoneNumbers > 2) {
       P.setSpeed(2, zones[2].scrollSpeed);
       P.setPause(2, zones[2].scrollPause);
@@ -907,9 +926,9 @@ void loop() {
 
     if (zones[0].workMode == "owmWeather" || zones[1].workMode == "owmWeather" || zones[2].workMode == "owmWeather") owmLastTime = -1000000;
     if (zones[0].workMode == "haClient" || zones[1].workMode == "haClient" || zones[2].workMode == "haClient") haLastTime = -1000000;
-
-  } else if (!firstLoop && !secondLoop) {
-
+  }
+  
+  if (allTestsFinish) {
     if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient" ){
       if (!mqttClient.connected()) {
         long now = millis();
@@ -924,13 +943,13 @@ void loop() {
       }
     }
 
-    
     if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
       unsigned long currentMillis = millis();
       if (currentMillis - previousMillis >= 1000) {
         previousMillis = currentMillis;
         timeClient.update();
         if (zones[0].workMode == "wallClock") {
+          P.setPause(0,100);
           String curTimeZone0New = getCurTime(zones[0].font, zones[0].clockDisplayFormat);
           if (curTimeZone0 == curTimeZone0New || curTimeZone0 == flashClockDots(curTimeZone0New)) {
             if (zones[0].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ){
@@ -948,6 +967,7 @@ void loop() {
         }
 
         if (zones[1].workMode == "wallClock" && zoneNumbers > 1) {
+          P.setPause(1,100);
           String curTimeZone1New = getCurTime(zones[1].font, zones[1].clockDisplayFormat);
           if (curTimeZone1 == curTimeZone1New || curTimeZone1 == flashClockDots(curTimeZone1New)) {
             if (zones[1].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ) {
@@ -966,6 +986,7 @@ void loop() {
         }
 
         if (zones[2].workMode == "wallClock" && zoneNumbers > 2) {
+          P.setPause(2,100);
           String curTimeZone2New = getCurTime(zones[2].font, zones[2].clockDisplayFormat);
           if (curTimeZone2 == curTimeZone2New || curTimeZone2 == flashClockDots(curTimeZone2New)) {
             if (zones[2].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ) {
@@ -1004,5 +1025,6 @@ void loop() {
     }
 
   }
+  
   displayAnimation();
 }
