@@ -17,7 +17,7 @@ Dot matrix wled panel management
 10. Support 12 display segments in the same time
 11. Included 3 different fonts
 
-First boot:
+## First boot:
 > - Device will boot in wifi access point mode and write the wifi name and password on the display.
 > - AP wifi name: **wled-AP**
 > - AP wifi password: **12345678**
@@ -25,7 +25,7 @@ First boot:
 > - When the device connects to the WIFI network, the device's IP address will be displayed on the zone0
 > - Open the browser and go to the device IP address
 
-Firmware compiled with next parameters:
+## Firmware compiled with next parameters:
 ```
 // Display pinout
 #define DATA_PIN  D7                     // WeMos D1 mini GPIO13
@@ -33,7 +33,7 @@ Firmware compiled with next parameters:
 #define CLK_PIN   D5                     // WeMos D1 mini GPIO14
 ```
 
-Icons in Wled symbol font:
+## Icons in Wled symbol font:
 <img width="898" alt="Screen Shot 2022-07-14 at 23 09 11" src="https://user-images.githubusercontent.com/6948905/179143312-908f9cda-a766-4928-9fb2-5f4c08b55dbc.png">
 
 ```
