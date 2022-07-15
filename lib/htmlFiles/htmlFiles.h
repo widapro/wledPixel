@@ -59,7 +59,7 @@ const char PAGE_index[] PROGMEM = R"=====(<!doctype html>
                     <h6 class="my-0">Wled Pixel</h6>
                     <small class="text-muted">Wled pixel dot led Display</small>
                   </div>
-                  <span class="text-muted">v2</span>
+                  <span class="text-muted">v2.2.2</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
@@ -307,7 +307,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     <h6 class="my-0">Wled Pixel</h6>
                     <small class="text-muted">Wled pixel dot led Display</small>
                   </div>
-                  <span class="text-muted">v2</span>
+                  <span class="text-muted">v2.2.2</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
