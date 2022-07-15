@@ -1,23 +1,21 @@
 # wled-pixel-v2
-Dot matrix panel management
+Dot matrix wled panel management
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/main.jpg)
 
 [The latest firmware version can be found in Releases](https://github.com/widapro/wled-pixel-v2/releases)
 
-What's new:
-
-```
-1. Fully rewritten code, fixed WDT errors
-2. Web UI for Wifi configuration (all settings in UI)
-3. Web UI for configuration
-4. 4 work modes: 
-4.1 MQTT client
-4.2 Wall clock
-4.3 Open Weather Map client
-4.4 Manual send text
-5. Support 12 segments of display (3 panels by 4 segment each)
-6. Support 3 separated work zones
-```
+## Supported features:
+1. **Home Assistant client** [display sensor values]
+2. **OpenWeatherMap client** [display: temperature (C/F), humidity, pressure, wind speed, weather icon]
+3. **MQTT client** [each display zone support own topic]
+4. **Wall NTP clock** [NTP sync clock]
+5. Manual input
+6. Full controll through **web UI**
+7. Initial setup through wifi AP and web UI
+8. Controll through MQTT
+9. Support 3 separated display zones
+10. Support 12 display segments in the same time
+11. Included 3 different fonts
 
 First boot:
 > - Device will boot in wifi access point mode and write the wifi name and password on the display.
@@ -33,4 +31,40 @@ Firmware compiled with next parameters:
 #define DATA_PIN  D7                     // WeMos D1 mini GPIO13
 #define CS_PIN    D6                     // WeMos D1 mini GPIO12
 #define CLK_PIN   D5                     // WeMos D1 mini GPIO14
+```
+
+Icons in Wled symbol font:
+<img width="898" alt="Screen Shot 2022-07-14 at 23 09 11" src="https://user-images.githubusercontent.com/6948905/179143312-908f9cda-a766-4928-9fb2-5f4c08b55dbc.png">
+
+```
+1 - "X"
+2 - "stop"
+3 - "rain"
+4 - "ip:"
+8 - "full light segment"
+A - "calendar"
+B - "windows"
+C - "clouds"
+D - "door"
+E - "female"
+F - "snowflake"
+G - "key"
+H - "male"
+I - "alarm"
+J - "clock"
+K - "garbage"
+L - "info"
+M - "moon"
+N - "message"
+O - "reminder"
+P - "wifi"
+R - "huge rain"
+S - "sun"
+T - "thunderstorm"
+c - "cloud"
+f - "fog"
+m - "cloud and moon"
+r - "rain"
+s - "sun and cloud"
+° - "degree symbol"
 ```
