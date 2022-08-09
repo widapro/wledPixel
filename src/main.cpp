@@ -19,6 +19,10 @@
 #include <wledFont.h>
 
 WiFiClient espClient;
+WiFiClient mqttEspClient;
+
+/// GLOBAL ///
+const char* firmwareVer = "2.2.3";
 
 //// MQTT settings ////
 String mqttServerAddress  = "";
@@ -26,22 +30,23 @@ int mqttServerPort        = 1883;
 String mqttUsername       = "";
 String mqttPassword       = "";
 long lastReconnectAttempt = 0;
-PubSubClient mqttClient(espClient);
+PubSubClient mqttClient(mqttEspClient);
 
-String MQTTGlobalPrefix = WiFi.macAddress().substring(12, 14) + WiFi.macAddress().substring(15);    // This sets the topic prefix to the last five chars of the MAC, ie: C0A4
-String hostName = "wled-pixel-" + MQTTGlobalPrefix;
+String shortMACaddr = WiFi.macAddress().substring(12, 14) + WiFi.macAddress().substring(15); // last five chars of the MAC, ie: C0A4;
+String MQTTGlobalPrefix = "wledPixel-" + shortMACaddr;
 
 typedef struct {
-  String    message, scrollEffect, effectWithoutExit, scrollSpeed, scrollPause, scrollAllign, charspacing;
+  String    message, scrollEffectIn, scrollEffectOut, scrollSpeed, scrollPause, scrollAllign, charspacing, workMode;
 } MQTTZoneData;
 
 MQTTZoneData MQTTZones[] = {
-  {MQTTGlobalPrefix + "/zone0/text", MQTTGlobalPrefix + "/zone0/scrolleffect", MQTTGlobalPrefix + "/zone0/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone0/scrollspeed", MQTTGlobalPrefix + "/zone0/scrollpause", MQTTGlobalPrefix + "/zone0/scrollalign", MQTTGlobalPrefix + "/zone0/charspacing"},
-  {MQTTGlobalPrefix + "/zone1/text", MQTTGlobalPrefix + "/zone1/scrolleffect", MQTTGlobalPrefix + "/zone1/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone1/scrollspeed", MQTTGlobalPrefix + "/zone1/scrollpause", MQTTGlobalPrefix + "/zone1/scrollalign", MQTTGlobalPrefix + "/zone1/charspacing"},
-  {MQTTGlobalPrefix + "/zone2/text", MQTTGlobalPrefix + "/zone2/scrolleffect", MQTTGlobalPrefix + "/zone2/scrolleffect_without_exit", MQTTGlobalPrefix + "/zone2/scrollspeed", MQTTGlobalPrefix + "/zone2/scrollpause", MQTTGlobalPrefix + "/zone2/scrollalign", MQTTGlobalPrefix + "/zone2/charspacing"},
+  {MQTTGlobalPrefix + "/zone0/text", MQTTGlobalPrefix + "/zone0/scrolleffectIn", MQTTGlobalPrefix + "/zone0/scrolleffectOut", MQTTGlobalPrefix + "/zone0/scrollspeed", MQTTGlobalPrefix + "/zone0/scrollpause", MQTTGlobalPrefix + "/zone0/scrollalign", MQTTGlobalPrefix + "/zone0/charspacing", MQTTGlobalPrefix + "/zone0/workmode"},
+  {MQTTGlobalPrefix + "/zone1/text", MQTTGlobalPrefix + "/zone1/scrolleffectIn", MQTTGlobalPrefix + "/zone1/scrolleffectOut", MQTTGlobalPrefix + "/zone1/scrollspeed", MQTTGlobalPrefix + "/zone1/scrollpause", MQTTGlobalPrefix + "/zone1/scrollalign", MQTTGlobalPrefix + "/zone1/charspacing", MQTTGlobalPrefix + "/zone1/workmode"},
+  {MQTTGlobalPrefix + "/zone2/text", MQTTGlobalPrefix + "/zone2/scrolleffectIn", MQTTGlobalPrefix + "/zone2/scrolleffectOut", MQTTGlobalPrefix + "/zone2/scrollspeed", MQTTGlobalPrefix + "/zone2/scrollpause", MQTTGlobalPrefix + "/zone2/scrollalign", MQTTGlobalPrefix + "/zone2/charspacing", MQTTGlobalPrefix + "/zone2/workmode"},
 };
 String MQTTIntensity = MQTTGlobalPrefix + "/intensity";
 String MQTTPower = MQTTGlobalPrefix + "/power";
+String MQTTStateTopic = MQTTGlobalPrefix + "/state";
 //// MQTT settings ////
 
 
@@ -58,18 +63,19 @@ typedef struct {
     uint8_t   begin, end;
     uint8_t   scrollSpeed, charspacing;
     uint16_t  scrollPause;
-    String    scrollAlign, scrollEffectIn, scrollEffectOut, font, workMode, clockDisplayFormat, haSensorId, haSensorPostfix, owmWhatToDisplay;
+    String    scrollAlign, scrollEffectIn, scrollEffectOut, font, workMode, clockDisplayFormat, haSensorId, haSensorPostfix, owmWhatToDisplay, mqttPostfix;
 } ZoneData;
 
 // structure:
 ZoneData zones[] = {
-  {0, 3, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature"},
-  {4, 5, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature"},
-  {6, 7, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature"},
+  {0, 3, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", ""},
+  {4, 5, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", ""},
+  {6, 7, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", ""},
 };
 
 uint8_t zoneNumbers = 1;
 uint8_t intensity   = 7;
+String power = "ON";
 
 char zone0Message[50] = "zone0";
 char zone1Message[50] = "zone1";
@@ -79,7 +85,7 @@ bool zone0newMessageAvailable = false;
 bool zone1newMessageAvailable = false;
 bool zone2newMessageAvailable = false;
 
-char const *wifiAPname      = "wled-AP";
+//char const *wifiAPname      = "wled-AP";
 char const *wifiAPpassword  = "12345678";
 
 unsigned long previousMillis = 0; 
@@ -103,6 +109,7 @@ bool restartESP         = false;
 bool zone0Test          = true;
 bool zone1Test          = true;
 bool zone2Test          = true;
+bool ipInfo             = true;
 bool allTestsFinish     = false;
 
 bool newConfigAvailable = false;
@@ -192,7 +199,7 @@ String processor(const String& var){
   if(var == "wifiSsid")                     return WiFi.SSID();
   if(var == "wifiIp")                       return WiFi.localIP().toString();
   if(var == "wifiGateway")                  return WiFi.gatewayIP().toString();
-  if(var == "intensity")                    return itoa(intensity, buffer, 10);
+  if(var == "intensity")                    return itoa(intensity + 1, buffer, 10);
   if(var == "scrollSpeedZone0")             return itoa(zones[0].scrollSpeed, buffer, 10);
   if(var == "scrollSpeedZone1")             return itoa(zones[1].scrollSpeed, buffer, 10);
   if(var == "scrollSpeedZone2")             return itoa(zones[2].scrollSpeed, buffer, 10);
@@ -213,6 +220,12 @@ String processor(const String& var){
   if(var == "mqttUsername")                 return mqttUsername;
   if(var == "mqttPassword")                 return mqttPassword;
   if(var == "mqttDevicePrefix")             return MQTTGlobalPrefix;
+  if(var == "mqttTextTopicZone0")           return MQTTZones[0].message;
+  if(var == "mqttTextTopicZone1")           return MQTTZones[1].message;
+  if(var == "mqttTextTopicZone2")           return MQTTZones[2].message;
+  if(var == "mqttPostfixZone0")             return zones[0].mqttPostfix;
+  if(var == "mqttPostfixZone1")             return zones[1].mqttPostfix;
+  if(var == "mqttPostfixZone2")             return zones[2].mqttPostfix;
   if(var == "ntpTimeZone")                  return itoa(ntpTimeZone, buffer, 10);
   if(var == "clockDisplayFormatZone0")      return zones[0].clockDisplayFormat;
   if(var == "clockDisplayFormatZone1")      return zones[1].clockDisplayFormat;
@@ -241,9 +254,232 @@ String processor(const String& var){
   if(var == "charspacingZone0")             return itoa(zones[0].charspacing, buffer, 10);
   if(var == "charspacingZone1")             return itoa(zones[1].charspacing, buffer, 10);
   if(var == "charspacingZone2")             return itoa(zones[2].charspacing, buffer, 10);
+  if(var == "firmwareVer")                  return firmwareVer;
   return String();
 }
 
+void MQTTPublishHADiscovry(String zone, String device_type) {
+  DynamicJsonDocument  root(2048);
+  char topic_config[100];
+  //char buffer[1024];
+  boolean result;
+
+  // device block
+  JsonObject device                 = root.createNestedObject("dev");
+  JsonArray arrDevice               = device.createNestedArray("ids"); 
+  arrDevice.add(MQTTGlobalPrefix); 
+  device["mf"]                      = "widapro";
+  device["mdl"]                     = "wledPixel-v2"; 
+  device["name"]                    = MQTTGlobalPrefix;
+  device["sw"]                      = firmwareVer;
+
+  // availability block
+  JsonArray arrAvailability         = root.createNestedArray("availability");
+  JsonObject availability           = arrAvailability.createNestedObject();
+  availability["topic"]             = MQTTGlobalPrefix + "/state";
+  availability["value_template"]    = "{{ value_json.status }}";
+
+  // light block
+  if (device_type == "light") {
+    sprintf( topic_config,  "homeassistant/light/%s/config", shortMACaddr.c_str() );
+    root["name"]         = MQTTGlobalPrefix;
+    root["uniq_id"]      = "wledPixelLight-" + shortMACaddr;
+    root["cmd_t"]        = "wledPixel-" + shortMACaddr + "/power";
+    root["pl_off"]       = "OFF";
+    root["pl_on"]        = "ON";
+    root["brightness"]   = "true";
+    root["bri_stat_t"]   = "wledPixel-" + shortMACaddr + "/state";
+    root["bri_val_tpl"]  = "{{ value_json['brightness'] }}";
+    root["bri_cmd_t"]    = "wledPixel-" + shortMACaddr + "/intensity";
+    root["bri_scl"]      = 16;
+    root["stat_t"]       = "wledPixel-" + shortMACaddr + "/state";
+    root["stat_val_tpl"] = "{{ value_json.power }}";
+    root["json_attr_t"]  = "wledPixel-" + shortMACaddr + "/state";
+    root["qos"]          = 1;
+    root["opt"]          = true;
+    root["ret"]          = true;
+    root["ic"]           = "mdi:view-comfy";
+  }
+
+  if (device_type == "workMode") {
+    sprintf( topic_config,  "homeassistant/select/%s/zone%sWorkMode/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " work mode";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "WorkMode";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/workmode";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['workMode'] }}";
+    root["entity_category"] = "config";
+    JsonArray arrOptions    = root.createNestedArray("options"); 
+    arrOptions.add("mqttClient"); 
+    arrOptions.add("manualInput"); 
+    arrOptions.add("wallClock"); 
+    arrOptions.add("owmWeather"); 
+    arrOptions.add("haClient"); 
+  }
+
+  if (device_type == "scrollAlign") {
+    sprintf( topic_config,  "homeassistant/select/%s/zone%sScrollAlign/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " scroll align";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "ScrollAlign";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/scrollalign";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['scrollAlign'] }}";
+    root["entity_category"] = "config";
+    JsonArray arrOptions    = root.createNestedArray("options"); 
+    arrOptions.add("PA_LEFT"); 
+    arrOptions.add("PA_RIGHT"); 
+    arrOptions.add("PA_CENTER"); 
+  }
+
+  if (device_type == "scrollEffectIn") {
+    sprintf( topic_config,  "homeassistant/select/%s/zone%sScrollEffectIn/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " scroll effect IN";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "ScrollEffectIn";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/scrolleffectIn";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['scrollEffectIn'] }}";
+    root["entity_category"] = "config";
+    JsonArray arrOptions    = root.createNestedArray("options"); 
+    arrOptions.add("PA_NO_EFFECT");
+    arrOptions.add("PA_PRINT");
+    arrOptions.add("PA_SCROLL_UP");
+    arrOptions.add("PA_SCROLL_DOWN");
+    arrOptions.add("PA_SCROLL_LEFT");
+    arrOptions.add("PA_SCROLL_RIGHT");
+    arrOptions.add("PA_SLICE");
+    arrOptions.add("PA_MESH");
+    arrOptions.add("PA_FADE");
+    arrOptions.add("PA_DISSOLVE");
+    arrOptions.add("PA_BLINDS");
+    arrOptions.add("PA_RANDOM");
+    arrOptions.add("PA_WIPE");
+    arrOptions.add("PA_WIPE_CURSOR");
+    arrOptions.add("PA_SCAN_HORIZ");
+    arrOptions.add("PA_SCAN_VERT");
+    arrOptions.add("PA_OPENING");
+    arrOptions.add("PA_OPENING_CURSOR");
+    arrOptions.add("PA_CLOSING");
+    arrOptions.add("PA_CLOSING_CURSOR");
+    arrOptions.add("PA_SCROLL_UP_LEFT");
+    arrOptions.add("PA_SCROLL_UP_RIGHT");
+    arrOptions.add("PA_SCROLL_DOWN_LEFT");
+    arrOptions.add("PA_SCROLL_DOWN_RIGHT");
+    arrOptions.add("PA_GROW_UP");
+    arrOptions.add("PA_GROW_DOWN");
+  }
+
+  if (device_type == "scrollEffectOut") {
+    sprintf( topic_config,  "homeassistant/select/%s/zone%sScrollEffectOut/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " scroll Effect Out";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "ScrollEffectOut";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/scrolleffectOut";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['scrollEffectOut'] }}";
+    root["entity_category"] = "config";
+    JsonArray arrOptions    = root.createNestedArray("options"); 
+    arrOptions.add("PA_NO_EFFECT");
+    arrOptions.add("PA_PRINT");
+    arrOptions.add("PA_SCROLL_UP");
+    arrOptions.add("PA_SCROLL_DOWN");
+    arrOptions.add("PA_SCROLL_LEFT");
+    arrOptions.add("PA_SCROLL_RIGHT");
+    arrOptions.add("PA_SLICE");
+    arrOptions.add("PA_MESH");
+    arrOptions.add("PA_FADE");
+    arrOptions.add("PA_DISSOLVE");
+    arrOptions.add("PA_BLINDS");
+    arrOptions.add("PA_RANDOM");
+    arrOptions.add("PA_WIPE");
+    arrOptions.add("PA_WIPE_CURSOR");
+    arrOptions.add("PA_SCAN_HORIZ");
+    arrOptions.add("PA_SCAN_VERT");
+    arrOptions.add("PA_OPENING");
+    arrOptions.add("PA_OPENING_CURSOR");
+    arrOptions.add("PA_CLOSING");
+    arrOptions.add("PA_CLOSING_CURSOR");
+    arrOptions.add("PA_SCROLL_UP_LEFT");
+    arrOptions.add("PA_SCROLL_UP_RIGHT");
+    arrOptions.add("PA_SCROLL_DOWN_LEFT");
+    arrOptions.add("PA_SCROLL_DOWN_RIGHT");
+    arrOptions.add("PA_GROW_UP");
+    arrOptions.add("PA_GROW_DOWN");
+  }
+
+  if (device_type == "charspacing") {
+    sprintf( topic_config,  "homeassistant/number/%s/zone%sCharspacing/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " charspacing";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "Charspacing";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/charspacing";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['charspacing'] }}";
+    root["entity_category"] = "config";
+    root["min"] = 0;
+    root["max"] = 3;
+  }
+
+  if (device_type == "scrollPause") {
+    sprintf( topic_config,  "homeassistant/number/%s/zone%sScrollPause/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " scroll pause";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "ScrollPause";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/scrollpause";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['scrollPause'] }}";
+    root["entity_category"] = "config";
+    root["min"] = 0;
+    root["max"] = 30000;
+  }
+
+  if (device_type == "scrollSpeed") {
+    sprintf( topic_config,  "homeassistant/number/%s/zone%sScrollSpeed/config", shortMACaddr.c_str(), zone.c_str() );
+    root["name"]            = "Zone" + zone + " scroll speed";
+    root["uniq_id"]         = "wledPixelLight" + shortMACaddr + "Zone" + zone + "ScrollSpeed";
+    root["cmd_t"]           = "wledPixel-" + shortMACaddr + "/zone" + zone + "/scrollspeed";
+    root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
+    root["val_tpl"]         = "{{ value_json['zone" + zone + "']['scrollSpeed'] }}";
+    root["entity_category"] = "config";
+    root["min"] = 0;
+    root["max"] = 100;
+  }
+
+  result = mqttClient.beginPublish(topic_config, measureJson(root), true);
+  if( result == false ) Serial.println( "MQTT HA config error begin!" );  
+  serializeJson(root, mqttClient);
+  result = mqttClient.endPublish();
+  if( result == false ) Serial.println( "MQTT HA config error end!" ); 
+
+}
+
+void MQTTPublishState() {
+  if (mqttClient.connected()) {
+    DynamicJsonDocument doc(1024);
+    char buffer[1024];
+    
+    doc["status"] = "online";
+    doc["power"] = power;
+    doc["brightness"] = intensity + 1;
+    doc["wifiSsid"] = WiFi.SSID();
+    for ( uint8_t n = 0; n < zoneNumbers; n++) {
+      doc["zone" + String(n)]["workMode"]    = zones[n].workMode;
+      doc["zone" + String(n)]["charspacing"] = zones[n].charspacing;
+      doc["zone" + String(n)]["scrollAlign"] = zones[n].scrollAlign;
+      doc["zone" + String(n)]["scrollPause"] = zones[n].scrollPause;
+      doc["zone" + String(n)]["scrollSpeed"] = zones[n].scrollSpeed;
+      doc["zone" + String(n)]["scrollEffectIn"] = zones[n].scrollEffectIn;
+      doc["zone" + String(n)]["scrollEffectOut"] = zones[n].scrollEffectOut;
+    }
+
+    serializeJson(doc, Serial);
+    size_t n = serializeJson(doc, buffer);
+    
+    Serial.printf("\nMQTT publish device state: ");
+    bool published = mqttClient.publish(MQTTStateTopic.c_str(), buffer, n);
+    if (published) {
+      Serial.println("OK");
+    } else {
+      Serial.println("fail");
+    }
+  }
+}
 
 void writeVarToConfFile(String VarName, String VarValue, bool softReloadVars, bool hardReloadVars) {
   File configFile = LittleFS.open("/config.json", "r");
@@ -252,7 +488,7 @@ void writeVarToConfFile(String VarName, String VarValue, bool softReloadVars, bo
     return;
   }
 
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(3072);
   deserializeJson(doc, configFile);
   configFile.close();
   doc[VarName] = VarValue;
@@ -261,7 +497,8 @@ void writeVarToConfFile(String VarName, String VarValue, bool softReloadVars, bo
   configFile.close();
 
   if(softReloadVars) newConfigAvailable = true;
-  if(hardReloadVars) restartESP = true;
+  else if(hardReloadVars) restartESP = true;
+  else MQTTPublishState();
 }
 
 void ConfigFile_Read_Variable() {
@@ -271,7 +508,7 @@ void ConfigFile_Read_Variable() {
     return;
   }
 
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(3072);
   deserializeJson(doc, configFile);
   // print config file to serial
   serializeJsonPretty(doc, Serial);
@@ -308,6 +545,12 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("mqttServerPort")])            mqttServerPort = postObj[F("mqttServerPort")].as<int>();
   if(postObj[F("mqttUsername")])              mqttUsername = postObj[F("mqttUsername")].as<String>();
   if(postObj[F("mqttPassword")])              mqttPassword = postObj[F("mqttPassword")].as<String>();
+  if(postObj[F("mqttTextTopicZone0")])        MQTTZones[0].message = postObj[F("mqttTextTopicZone0")].as<String>();
+  if(postObj[F("mqttTextTopicZone1")])        MQTTZones[1].message = postObj[F("mqttTextTopicZone1")].as<String>();
+  if(postObj[F("mqttTextTopicZone2")])        MQTTZones[2].message = postObj[F("mqttTextTopicZone2")].as<String>();
+  if(postObj[F("mqttPostfixZone0")])          zones[0].mqttPostfix = postObj[F("mqttPostfixZone0")].as<String>();
+  if(postObj[F("mqttPostfixZone1")])          zones[1].mqttPostfix = postObj[F("mqttPostfixZone1")].as<String>();
+  if(postObj[F("mqttPostfixZone2")])          zones[2].mqttPostfix = postObj[F("mqttPostfixZone2")].as<String>();
   if(postObj[F("ntpTimeZone")])               ntpTimeZone = postObj[F("ntpTimeZone")].as<int>();
   if(postObj[F("clockDisplayFormatZone0")])   zones[0].clockDisplayFormat = postObj[F("clockDisplayFormatZone0")].as<String>();
   if(postObj[F("clockDisplayFormatZone1")])   zones[1].clockDisplayFormat = postObj[F("clockDisplayFormatZone1")].as<String>();
@@ -336,19 +579,30 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("charspacingZone0")])          zones[0].charspacing = postObj[F("charspacingZone0")].as<int>();
   if(postObj[F("charspacingZone1")])          zones[1].charspacing = postObj[F("charspacingZone1")].as<int>();
   if(postObj[F("charspacingZone2")])          zones[2].charspacing = postObj[F("charspacingZone2")].as<int>();
+  if(postObj[F("power")])                     power = postObj[F("power")].as<String>();
 }
 
-void zone0NewMessage(String newMessage) {
-  strcpy(zone0Message, newMessage.c_str());
-  zone0newMessageAvailable = true;
+void zoneNewMessage(int zone, String newMessage, String postfix) {
+  if ( zone == 0) {
+    strcpy(zone0Message, (newMessage + postfix).c_str());
+    zone0newMessageAvailable = true;
+  }
+  if ( zone == 1) {
+    strcpy(zone1Message, (newMessage + postfix).c_str());
+    zone1newMessageAvailable = true;
+  }
+  if ( zone == 2) {
+    strcpy(zone2Message, (newMessage + postfix).c_str());
+    zone2newMessageAvailable = true;
+  }
 }
-void zone1NewMessage(String newMessage) {
-  strcpy(zone1Message, newMessage.c_str());
-  zone1newMessageAvailable = true;
-}
-void zone2NewMessage(String newMessage) {
-  strcpy(zone2Message, newMessage.c_str());
-  zone2newMessageAvailable = true;
+
+// check a string to see if it is numeric
+bool isNumeric(String str){
+  for(byte i=0;i<str.length();i++) {
+    if(isDigit(str.charAt(i))) return true;
+  }
+  return false;
 }
 
 void MQTTCallback(char* topic, byte* payload, int length) {
@@ -359,121 +613,86 @@ void MQTTCallback(char* topic, byte* payload, int length) {
   Serial.printf("\nTopic: %s\n", topic);
   Serial.println(PayloadString);
 
-  if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient") {
-    if (strcmp(topic, (char*) MQTTIntensity.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone0In", PayloadString.c_str(), false, false);
-      P.setIntensity(PayloadString.toInt());
+  if (strcmp(topic, (char*) MQTTIntensity.c_str()) == 0) {
+    if (isNumeric(PayloadString)) {
+      intensity = PayloadString.toInt()-1;
+      P.setIntensity(intensity);
+      writeVarToConfFile("intensity", String(intensity), false, false);
+    } else {
+      Serial.print("Supports are only numeric values");
     }
-    if (strcmp(topic, (char*) MQTTPower.c_str()) == 0) {
-      if(PayloadString == "on" || PayloadString == "ON" || PayloadString == "TRUE") {
-        P.displayShutdown(0);
-      }
-      if(PayloadString == "off" || PayloadString == "OFF" || PayloadString == "FALSE") {
-        P.displayShutdown(1);
-      }
+    
+  }
+  if (strcmp(topic, (char*) MQTTPower.c_str()) == 0) {
+    if(PayloadString == "on" || PayloadString == "ON" || PayloadString == "TRUE") {
+      P.displayShutdown(0);
+      power = "ON";
+      writeVarToConfFile("power", power, false, false);
+    }
+    if(PayloadString == "off" || PayloadString == "OFF" || PayloadString == "FALSE") {
+      P.displayShutdown(1);
+      power = "OFF";
+      writeVarToConfFile("power", power, false, false);
     }
   }
 
-  if(zones[0].workMode == "mqttClient") {
-    if (strcmp(topic, (char*) MQTTZones[0].message.c_str()) == 0) {
-      zone0NewMessage(PayloadString.c_str());
-    }
-    if (strcmp(topic, (char*) MQTTZones[0].scrollEffect.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone0In", PayloadString.c_str(), true, false);
-      writeVarToConfFile("scrollEffectZone0Out", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[0].effectWithoutExit.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone0In", PayloadString.c_str(), true, false);
-      writeVarToConfFile("scrollEffectZone0Out", "PA_NO_EFFECT", true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[0].scrollSpeed.c_str()) == 0) {
-      writeVarToConfFile("scrollSpeedZone0", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[0].scrollPause.c_str()) == 0) {
-      writeVarToConfFile("scrollPauseZone0", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[0].scrollAllign.c_str()) == 0) {
-      writeVarToConfFile("scrollAlignZone0", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[0].charspacing.c_str()) == 0) {
-      writeVarToConfFile("charspacingZone0", PayloadString.c_str(), true, false);
-    }
-  } 
+  for ( uint8_t n = 0; n < zoneNumbers; n++) {
+    if(zones[n].workMode == "mqttClient" && strcmp(topic, (char*) MQTTZones[n].message.c_str()) == 0) zoneNewMessage(n, PayloadString.c_str(), zones[n].mqttPostfix);
 
-  if(zones[1].workMode == "mqttClient") {
-    if (strcmp(topic, (char*) MQTTZones[1].message.c_str()) == 0) {
-      zone1NewMessage(PayloadString.c_str());
+    if (strcmp(topic, (char*) MQTTZones[n].scrollEffectIn.c_str()) == 0) {
+      writeVarToConfFile("scrollEffectZone" + String(n) + "In", PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].scrollEffect.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone1In", PayloadString.c_str(), true, false);
-      writeVarToConfFile("scrollEffectZone1Out", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[n].scrollEffectOut.c_str()) == 0) {
+      writeVarToConfFile("scrollEffectZone" + String(n) + "Out", PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].effectWithoutExit.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone1In", PayloadString.c_str(), true, false);
-      writeVarToConfFile("scrollEffectZone1Out", "PA_NO_EFFECT", true, false);
+    if (strcmp(topic, (char*) MQTTZones[n].scrollSpeed.c_str()) == 0) {
+      writeVarToConfFile("scrollSpeedZone" + String(n), PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].scrollSpeed.c_str()) == 0) {
-      writeVarToConfFile("scrollSpeedZone1", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[n].scrollPause.c_str()) == 0) {
+      writeVarToConfFile("scrollPauseZone" + String(n), PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].scrollPause.c_str()) == 0) {
-      writeVarToConfFile("scrollPauseZone1", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[n].scrollAllign.c_str()) == 0) {
+      writeVarToConfFile("scrollAlignZone" + String(n), PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].scrollAllign.c_str()) == 0) {
-      writeVarToConfFile("scrollAlignZone1", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[n].charspacing.c_str()) == 0) {
+      writeVarToConfFile("charspacingZone" + String(n), PayloadString.c_str(), true, false);
     }
-    if (strcmp(topic, (char*) MQTTZones[1].charspacing.c_str()) == 0) {
-      writeVarToConfFile("charspacingZone1", PayloadString.c_str(), true, false);
+    if (strcmp(topic, (char*) MQTTZones[n].workMode.c_str()) == 0) {
+      writeVarToConfFile("workModeZone" + String(n), PayloadString.c_str(), true, false);
     }
-  } 
-
-  if(zones[2].workMode == "mqttClient") {
-    if (strcmp(topic, (char*) MQTTZones[2].message.c_str()) == 0) {
-      zone2NewMessage(PayloadString.c_str());
-    }
-    if (strcmp(topic, (char*) MQTTZones[2].scrollEffect.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone2In", PayloadString.c_str(), true, false);
-      writeVarToConfFile("scrollEffectZone2Out", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[2].effectWithoutExit.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone2In", PayloadString.c_str(), true, false);
-      writeVarToConfFile("scrollEffectZone2Out", "PA_NO_EFFECT", true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[2].scrollSpeed.c_str()) == 0) {
-      writeVarToConfFile("scrollSpeedZone2", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[2].scrollPause.c_str()) == 0) {
-      writeVarToConfFile("scrollPauseZone2", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[2].scrollAllign.c_str()) == 0) {
-      writeVarToConfFile("scrollAlignZone2", PayloadString.c_str(), true, false);
-    }
-    if (strcmp(topic, (char*) MQTTZones[2].charspacing.c_str()) == 0) {
-      writeVarToConfFile("charspacingZone2", PayloadString.c_str(), true, false);
-    }
-  } 
+  }
 }
 
 boolean reconnect() {
-  mqttClient.disconnect();
+  //mqttClient.disconnect();
   mqttClient.setServer(mqttServerAddress.c_str(), mqttServerPort);
-  // Create a random client ID
-  String clientId = "ESP8266Client-";
-  clientId += String(random(0xffff), HEX);
 
   // Attempt to connect
-  if (mqttClient.connect(clientId.c_str(), mqttUsername.c_str(),mqttPassword.c_str())) {
+  if (mqttClient.connect(MQTTGlobalPrefix.c_str(), mqttUsername.c_str(),mqttPassword.c_str())) {
+    MQTTPublishHADiscovry("0", "light");
+    MQTTPublishState();
+
     Serial.printf("\nMQTT subscribe objects");
     mqttClient.subscribe((char*) MQTTIntensity.c_str());
     mqttClient.subscribe((char*) MQTTPower.c_str());
+    
+    for ( uint8_t n = 0; n < zoneNumbers; n++) {
+      MQTTPublishHADiscovry(String(n), "scrollAlign");
+      MQTTPublishHADiscovry(String(n), "charspacing");
+      MQTTPublishHADiscovry(String(n), "workMode");
+      MQTTPublishHADiscovry(String(n), "scrollPause");
+      MQTTPublishHADiscovry(String(n), "scrollSpeed");
+      MQTTPublishHADiscovry(String(n), "scrollEffectIn");
+      MQTTPublishHADiscovry(String(n), "scrollEffectOut");
 
-    for ( uint8_t n = 0; n < 3; n++) {
       mqttClient.subscribe((char*) MQTTZones[n].message.c_str());
-      mqttClient.subscribe((char*) MQTTZones[n].scrollEffect.c_str());
-      mqttClient.subscribe((char*) MQTTZones[n].effectWithoutExit.c_str());
+      mqttClient.subscribe((char*) MQTTZones[n].scrollEffectIn.c_str());
+      mqttClient.subscribe((char*) MQTTZones[n].scrollEffectOut.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollSpeed.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollPause.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollAllign.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].charspacing.c_str());
+      mqttClient.subscribe((char*) MQTTZones[n].workMode.c_str());
     }
   }
   else
@@ -512,7 +731,7 @@ void wifiApWelcomeMessage(AsyncWiFiManager *wifiManager) {
   P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
   P.setIntensity(7);
   P.setSpeed(0, 100);
-  P.write(wifiAPname);
+  P.write(MQTTGlobalPrefix.c_str());
   if (MAX_DEVICES > 5) {
     delay(5000);
     P.write(wifiAPpassword);
@@ -561,6 +780,7 @@ String getCurTime(String curZoneFont, String displayFormat) {
       if (displayFormat == "ddmmyyyy") t = monthDayStr + "." + currentMonthStr + "." + String(currentYear);
       if (displayFormat == "ddmm") t = monthDayStr + "." + currentMonthStr;
       if (displayFormat == "ddmmaa") t = monthDayStr + "." + currentMonthStr + String(weekDay);
+      if (displayFormat == "aa") t = String(weekDay);
       return t;
 }
 
@@ -683,15 +903,15 @@ void setup() {
   //WiFi.persistent(true);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setAPCallback(wifiApWelcomeMessage);
-  wifiManager.autoConnect(wifiAPname, wifiAPpassword);
-  WiFi.hostname(hostName.c_str());
+  wifiManager.autoConnect(MQTTGlobalPrefix.c_str(), wifiAPpassword);
+  WiFi.hostname(MQTTGlobalPrefix.c_str());
   Serial.println("");
   Serial.printf("Wifi connected to SSID: %s\n", WiFi.SSID().c_str());
   Serial.printf("Local ip: %s\n", WiFi.localIP().toString().c_str());
   Serial.printf("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
   Serial.printf("Subnet: %s\n", WiFi.subnetMask().toString().c_str());
   Serial.printf("DNS: %s\n", WiFi.dnsIP().toString().c_str());
-  Serial.printf("HostName: %s\n", hostName.c_str());
+  Serial.printf("HostName: %s\n", MQTTGlobalPrefix.c_str());
   
   Serial.printf("MQTT Device Prefix: %s\n", MQTTGlobalPrefix.c_str());
 
@@ -741,6 +961,12 @@ void setup() {
           if (p->name() == "mqttServerPort")              writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "mqttUsername")                writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "mqttPassword")                writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttTextTopicZone0")          writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttTextTopicZone1")          writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttTextTopicZone2")          writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttPostfixZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttPostfixZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "mqttPostfixZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "ntpTimeZone")                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "clockDisplayFormatZone0")     writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "clockDisplayFormatZone1")     writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
@@ -769,12 +995,13 @@ void setup() {
           if (p->name() == "charspacingZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "charspacingZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "charspacingZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
-          if (p->name() == "intensity") {                 writeVarToConfFile(p->name().c_str(), p->value().c_str(), false, false);
-                                                          P.setIntensity((p->value()).toInt());
+          if (p->name() == "intensity") {                 intensity = (p->value()).toInt()-1;
+                                                          P.setIntensity(intensity);
+                                                          writeVarToConfFile(p->name().c_str(), String(intensity), false, false);
           }
-          if (strcmp(p->name().c_str(), "messageZone0") == 0) zone0NewMessage(p->value().c_str());
-          if (strcmp(p->name().c_str(), "messageZone1") == 0) zone1NewMessage(p->value().c_str());
-          if (strcmp(p->name().c_str(), "messageZone2") == 0) zone2NewMessage(p->value().c_str());
+          if (strcmp(p->name().c_str(), "messageZone0") == 0) zoneNewMessage(0, p->value().c_str(), "");
+          if (strcmp(p->name().c_str(), "messageZone1") == 0) zoneNewMessage(1, p->value().c_str(), "");
+          if (strcmp(p->name().c_str(), "messageZone2") == 0) zoneNewMessage(2, p->value().c_str(), "");
         }
       }
       request->send(200, "application/json", "{\"status\":\"success\"}");
@@ -792,6 +1019,7 @@ void setup() {
   // Start MQTT client
   mqttClient.setServer(mqttServerAddress.c_str(), mqttServerPort);
   mqttClient.setCallback(MQTTCallback);
+  mqttClient.setBufferSize(2048);
   
   // Start webserver
   AsyncElegantOTA.begin(&server);    // Start ElegantOTA
@@ -805,11 +1033,23 @@ void setup() {
 
 void loop() {
 
-  if (!zone2Test && P.getZoneStatus(2) && !allTestsFinish) {
+  if (!ipInfo && P.getZoneStatus(0) && !allTestsFinish) {
     allTestsFinish      = true;
     newConfigAvailable  = true;
   }
   
+  if (!zone2Test && ipInfo) {
+    if (P.getZoneStatus(2)) {
+      P.displayClear();
+      P.setCharSpacing(0,1);
+      P.setFont(0, wledFont_cyrillic);
+      P.setSpeed(0, 50);
+      P.setTextEffect(0, PA_SCROLL_LEFT, PA_NO_EFFECT);
+      zoneNewMessage(0, "ip: " + WiFi.localIP().toString(), "");
+      ipInfo = false;
+    }
+  }
+
   if (!zone1Test && zone2Test) {
     if (P.getZoneStatus(1)) {
       P.displayClear();
@@ -817,10 +1057,10 @@ void loop() {
       P.setTextEffect(2, PA_GROW_UP, PA_NO_EFFECT);
       P.setCharSpacing(2,0);
       P.setPause(2, 500);
-      P.setSpeed(2, 50);
+      P.setSpeed(2, 25);
       String testMessage = "8";
       for ( int i = 0; i < int(zones[2].end - zones[2].begin); i++) testMessage += 8;
-      zone2NewMessage(testMessage);
+      zoneNewMessage(2, testMessage, "");
       zone2Test = false;
       
     }      
@@ -833,10 +1073,10 @@ void loop() {
       P.setTextEffect(1, PA_GROW_UP, PA_NO_EFFECT);
       P.setCharSpacing(1,0);
       P.setPause(1, 500);
-      P.setSpeed(1, 50);
+      P.setSpeed(1, 25);
       String testMessage = "8";
       for ( int i = 0; i < int(zones[1].end - zones[1].begin); i++) testMessage += 8;
-      zone1NewMessage(testMessage);
+      zoneNewMessage(1, testMessage, "");
       zone1Test = false;
     }      
   }
@@ -846,10 +1086,10 @@ void loop() {
     P.setTextEffect(0, PA_GROW_UP, PA_NO_EFFECT);
     P.setCharSpacing(0,0);
     P.setPause(0, 500);
-    P.setSpeed(0, 50);
+    P.setSpeed(0, 25);
     String testMessage = "8";
     for ( int i = 0; i < int(zones[0].end - zones[0].begin); i++) testMessage += 8;
-    zone0NewMessage(testMessage);
+    zoneNewMessage(0, testMessage, "");
     zone0Test = false;
   }
 
@@ -878,9 +1118,10 @@ void loop() {
       curTimeZone2 = "0";
     }
 
-    if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient") mqttClient.disconnect();
-    if (zones[0].workMode == "mqttClient")  zone0NewMessage("MQTT");
-    if (zones[0].workMode == "manualInput") zone0NewMessage("Manual");
+    //if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient") mqttClient.disconnect();
+    mqttClient.disconnect();
+    if (zones[0].workMode == "mqttClient")  zoneNewMessage(0, "MQTT", "");
+    if (zones[0].workMode == "manualInput") zoneNewMessage(0, "Manual", "");
     if (zones[0].workMode == "owmWeather") {
       if(zones[0].owmWhatToDisplay == "owmWeatherIcon") {
         P.setFont(0, wledSymbolFont);
@@ -895,8 +1136,8 @@ void loop() {
       P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
       P.setCharSpacing(1, zones[1].charspacing);
       applyZoneFont(1, zones[1].font);
-      if (zones[1].workMode == "mqttClient")  zone1NewMessage("MQTT");
-      if (zones[1].workMode == "manualInput") zone1NewMessage("Manual");
+      if (zones[1].workMode == "mqttClient")  zoneNewMessage(1, "MQTT", "");
+      if (zones[1].workMode == "manualInput") zoneNewMessage(1, "Manual", "");
       if (zones[1].workMode == "owmWeather") {
         if(zones[1].owmWhatToDisplay == "owmWeatherIcon") {
           P.setFont(1, wledSymbolFont);
@@ -912,8 +1153,8 @@ void loop() {
       P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
       P.setCharSpacing(2, zones[2].charspacing);
       applyZoneFont(2, zones[2].font);
-      if (zones[2].workMode == "mqttClient")  zone2NewMessage("MQTT");
-      if (zones[2].workMode == "manualInput") zone2NewMessage("Manual");
+      if (zones[2].workMode == "mqttClient")  zoneNewMessage(2, "MQTT", "");
+      if (zones[2].workMode == "manualInput") zoneNewMessage(2, "Manual", "");
       if (zones[2].workMode == "owmWeather") {
         if(zones[2].owmWhatToDisplay == "owmWeatherIcon") {
           P.setFont(2, wledSymbolFont);
@@ -929,7 +1170,7 @@ void loop() {
   }
   
   if (allTestsFinish) {
-    if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient" ){
+    if (mqttServerAddress.length() > 0){
       if (!mqttClient.connected()) {
         long now = millis();
         if (now - lastReconnectAttempt > 5000) {
@@ -956,13 +1197,13 @@ void loop() {
               if (curTimeZone0.indexOf(":") > 0) curTimeZone0New.replace(":", "¦");
               P.setTextEffect(0, PA_NO_EFFECT, PA_NO_EFFECT);
               curTimeZone0 = curTimeZone0New;
-              zone0NewMessage(curTimeZone0);
+              zoneNewMessage(0, curTimeZone0, "");
             }
           } else {
             P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
             if (curTimeZone0.indexOf(":") > 0) curTimeZone0New.replace(":", "¦");
             curTimeZone0 = curTimeZone0New;
-            zone0NewMessage(curTimeZone0);
+            zoneNewMessage(0, curTimeZone0, "");
           }
         }
 
@@ -975,13 +1216,13 @@ void loop() {
               P.setPause(1, 1);
               P.setTextEffect(1, PA_NO_EFFECT, PA_NO_EFFECT);
               curTimeZone1 = curTimeZone1New;
-              zone1NewMessage(curTimeZone1);
+              zoneNewMessage(1, curTimeZone1, "");
             }
           } else {
             P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
             if (curTimeZone1.indexOf(":") > 0) curTimeZone1New.replace(":", "¦");
             curTimeZone1 = curTimeZone1New;
-            zone1NewMessage(curTimeZone1);
+            zoneNewMessage(1, curTimeZone1, "");
           }
         }
 
@@ -994,13 +1235,13 @@ void loop() {
               P.setPause(2, 1);
               P.setTextEffect(2, PA_NO_EFFECT, PA_NO_EFFECT);
               curTimeZone2 = curTimeZone2New;
-              zone2NewMessage(curTimeZone2);
+              zoneNewMessage(2, curTimeZone2, "");
             }
           } else {
             P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
             if (curTimeZone2.indexOf(":") > 0) curTimeZone2New.replace(":", "¦");
             curTimeZone2 = curTimeZone2New;
-            zone2NewMessage(curTimeZone2);
+            zoneNewMessage(2, curTimeZone2, "");
           }
         }
       }
@@ -1009,17 +1250,17 @@ void loop() {
     if (zones[0].workMode == "owmWeather" || zones[1].workMode == "owmWeather" || zones[2].workMode == "owmWeather") {
       if (millis() - owmLastTime >= (unsigned)owmUpdateInterval * 1000) {
         owmLastTime = millis();
-        if (zones[0].workMode == "owmWeather") zone0NewMessage(openWetherMapGetWeather(zones[0].owmWhatToDisplay));
-        if (zones[1].workMode == "owmWeather" && zoneNumbers > 1) zone1NewMessage(openWetherMapGetWeather(zones[1].owmWhatToDisplay));
-        if (zones[2].workMode == "owmWeather" && zoneNumbers > 2) zone2NewMessage(openWetherMapGetWeather(zones[2].owmWhatToDisplay));
+        if (zones[0].workMode == "owmWeather") zoneNewMessage(0, openWetherMapGetWeather(zones[0].owmWhatToDisplay), "");
+        if (zones[1].workMode == "owmWeather" && zoneNumbers > 1) zoneNewMessage(1, openWetherMapGetWeather(zones[1].owmWhatToDisplay), "");
+        if (zones[2].workMode == "owmWeather" && zoneNumbers > 2) zoneNewMessage(2, openWetherMapGetWeather(zones[2].owmWhatToDisplay), "");
       }
     }
 
     if (zones[0].workMode == "haClient" || zones[1].workMode == "haClient" || zones[2].workMode == "haClient") {
       if (millis() - haLastTime >= (unsigned)haUpdateInterval * 1000) {
-        if (zones[0].workMode == "haClient") zone0NewMessage(haApiGet(zones[0].haSensorId, zones[0].haSensorPostfix));
-        if (zones[1].workMode == "haClient" && zoneNumbers > 1) zone1NewMessage(haApiGet(zones[1].haSensorId, zones[1].haSensorPostfix));
-        if (zones[2].workMode == "haClient" && zoneNumbers > 2) zone2NewMessage(haApiGet(zones[2].haSensorId, zones[2].haSensorPostfix));        
+        if (zones[0].workMode == "haClient") zoneNewMessage(0, haApiGet(zones[0].haSensorId, zones[0].haSensorPostfix), "");
+        if (zones[1].workMode == "haClient" && zoneNumbers > 1) zoneNewMessage(1, haApiGet(zones[1].haSensorId, zones[1].haSensorPostfix), "");
+        if (zones[2].workMode == "haClient" && zoneNumbers > 2) zoneNewMessage(2, haApiGet(zones[2].haSensorId, zones[2].haSensorPostfix), "");        
         haLastTime = millis();
       }
     }
