@@ -22,7 +22,7 @@ WiFiClient espClient;
 WiFiClient mqttEspClient;
 
 /// GLOBAL ///
-const char* firmwareVer = "2.2.3";
+const char* firmwareVer = "2.3";
 
 //// MQTT settings ////
 String mqttServerAddress  = "";
