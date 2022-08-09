@@ -856,7 +856,7 @@ String openWetherMapGetWeather(String whatToDisplay) {
     if (whatToDisplay == "owmPressure") return postObj[F("main")][F("pressure")].as<String>();
     if (whatToDisplay == "owmWindSpeed") return postObj[F("wind")][F("speed")].as<String>();
     if (whatToDisplay == "owmTemperature") {
-      String owmTemp = String(round(postObj[F("main")][F("temp")].as<int>())) + "°";
+      String owmTemp = String((int)(postObj[F("main")][F("temp")].as<float>())) + "°";
       if(owmUnitsFormat == "metric") owmTemp = owmTemp + "C";
       if(owmUnitsFormat == "imperial") owmTemp = owmTemp + "F";
       return owmTemp;
