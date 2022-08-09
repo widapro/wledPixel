@@ -19,7 +19,7 @@ const char PAGE_index[] PROGMEM = R"=====(<!doctype html>
       <div class="container">
         <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
           <a href="/" class="d-flex align-items-center my-2 my-lg-0 me-lg-auto text-white text-decoration-none">
-            <h1 class="mb-3 fw-bold font-monospace">Wled pixel</h1>
+            <h1 class="mb-3 fw-bold font-monospace">wledPixel</h1>
           </a>
 
           <ul class="nav col-12 col-lg-auto my-2 justify-content-center my-md-0 text-small">
@@ -46,7 +46,7 @@ const char PAGE_index[] PROGMEM = R"=====(<!doctype html>
   <div class="container">
     <main>
         <div class="py-5 text-center">
-            <h2>Wled pixel dot led Display</h2>
+            <h2>wledPixel dot led Display</h2>
         </div>
         <div class="row g-5">
             <div class="col-md-5 col-lg-4 order-md-last">
@@ -56,10 +56,10 @@ const char PAGE_index[] PROGMEM = R"=====(<!doctype html>
               <ul class="list-group mb-3">
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                   <div>
-                    <h6 class="my-0">Wled Pixel</h6>
-                    <small class="text-muted">Wled pixel dot led Display</small>
+                    <h6 class="my-0">wledPixel</h6>
+                    <small class="text-muted">wledPixel dot led Display</small>
                   </div>
-                  <span class="text-muted">v2.2.2</span>
+                  <span class="text-muted">%firmwareVer%</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
@@ -266,7 +266,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       <div class="container">
         <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
           <a href="/" class="d-flex align-items-center my-2 my-lg-0 me-lg-auto text-white text-decoration-none">
-            <h1 class="mb-3 fw-bold font-monospace">Wled pixel</h1>
+            <h1 class="mb-3 fw-bold font-monospace">wledPixel</h1>
           </a>
 
           <ul class="nav col-12 col-lg-auto my-2 justify-content-center my-md-0 text-small">
@@ -304,10 +304,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
               <ul class="list-group mb-3">
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                   <div>
-                    <h6 class="my-0">Wled Pixel</h6>
-                    <small class="text-muted">Wled pixel dot led Display</small>
+                    <h6 class="my-0">wledPixel</h6>
+                    <small class="text-muted">wledPixel dot led Display</small>
                   </div>
-                  <span class="text-muted">v2.2.2</span>
+                  <span class="text-muted">%firmwareVer%</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
@@ -379,20 +379,53 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
               <div>
                 <h6 class="my-2">MQTT client</h6>
                 <small class="text-muted">The following topics are supported:
-                  <ul>
-                    <li><b>devicePrefix/zone<i>N</i>/text</b> - message to display</li>
-                    <li><b>devicePrefix/zone<i>N</i>/scrolleffect</b> - scroll effect <b>IN</b> and <b>OUT</b></li>
-                    <li><b>devicePrefix/zone<i>N</i>/scrolleffect_without_exit</b> - scroll effect<b>IN</b>. Effect<b>OUT</b> will be set to <b>NO_EFFECT</b></li>
-                    <li><b>devicePrefix/zone<i>N</i>/scrollspeed</b> - scroll speed</li>
-                    <li><b>devicePrefix/zone<i>N</i>/scrollpause</b> - scroll pause</li>
-                    <li><b>devicePrefix/zone<i>N</i>/scrollalign</b> - scroll alignment</li>
-                    <li><b>devicePrefix/zone<i>N</i>/charspacing</b> - character spacing</li>
-                    <li><b>devicePrefix//intensity</b> - brightness</li>
-                    <li><b>devicePrefix/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
-                  </ul>
-                    where <b>devicePrefix</b> = %mqttDevicePrefix%
-                    <br><b>zoneN</b> = zone number (e.g. Zone0)
-                </small>
+                    <ul>
+                      <li><b>devicePrefix/zone<i>N</i>/workMode</b> - zone work mode</li>
+                      <li><b>devicePrefix/zone<i>N</i>/scrolleffectIn</b> - scroll effect <b>IN</b></li>
+                      <li><b>devicePrefix/zone<i>N</i>/scrolleffectOut</b> - scroll effect <b>Out</b></li><br>
+                      <b>scrolleffectIn</b> and <b>scrolleffectOut</b> support next values:
+                        <ul><li>PA_NO_EFFECT</li>
+                        <li>PA_SCROLL_UP</li>
+                        <li>PA_SCROLL_DOWN</li>
+                        <li>PA_SCROLL_LEFT</li>
+                        <li>PA_SCROLL_RIGHT</li>
+                        <li>PA_SLICE</li>
+                        <li>PA_MESH</li>
+                        <li>PA_FADE</li>
+                        <li>PA_DISSOLVE</li>
+                        <li>PA_BLINDS</li>
+                        <li>PA_RANDOM</li>
+                        <li>PA_WIPE</li>
+                        <li>PA_WIPE_CURSOR</li>
+                        <li>PA_SCAN_HORIZ</li>
+                        <li>PA_SCAN_VERT</li>
+                        <li>PA_OPENING</li>
+                        <li>PA_OPENING_CURSOR</li>
+                        <li>PA_CLOSING</li>
+                        <li>PA_CLOSING_CURSOR</li>
+                        <li>PA_SCROLL_UP_LEFT</li>
+                        <li>PA_SCROLL_UP_RIGHT</li>
+                        <li>PA_SCROLL_DOWN_LEFT</li>
+                        <li>PA_SCROLL_DOWN_RIGHT</li>
+                        <li>PA_GROW_UP</li>
+                        <li>PA_GROW_DOWN</li></ul><br>
+                      <li><b>devicePrefix/zone<i>N</i>/scrollspeed</b> - scroll speed</li>
+                      <li><b>devicePrefix/zone<i>N</i>/scrollpause</b> - scroll pause</li>
+                      <li><b>devicePrefix/zone<i>N</i>/scrollalign</b> - scroll alignment</li>
+                      <li><b>devicePrefix/zone<i>N</i>/charspacing</b> - character spacing</li>
+                      <li><b>devicePrefix/intensity</b> - brightness</li>
+                      <li><b>devicePrefix/zone<i>N</i>/workMode</b> - zone work mode</li><br>
+                      <b>workMode</b> supported values:
+                        <ul><li>mqttClient</li>
+                        <li>manualInput</li>
+                        <li>wallClock</li>
+                        <li>owmWeather</li>
+                        <li>haClient</li></ul><br>
+                      <li><b>devicePrefix/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
+                    </ul>
+                      where <b>devicePrefix</b> = %mqttDevicePrefix%
+                      <br><b>zoneN</b> = zone number (e.g. Zone0)
+                  </small>
               </div>
       
             </div>
@@ -444,7 +477,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 
                   <div class="col-11">
                     <label for="intensity" class="form-label">Brightness</label>
-                    <input type="range" class="form-range" min="0" max="15" step="1" id="intensity" value="%intensity%" onChange="preparePostRequest(event, this.id, this.value);">
+                    <input type="range" class="form-range" min="1" max="16" step="1" id="intensity" value="%intensity%" onChange="preparePostRequest(event, this.id, this.value);">
                   </div>
                   <div class="col-1 align-self-end">
                     <label id="intensityValue" for="intensity" class="form-label text-primary">%intensity%</label>
@@ -454,7 +487,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 
                   <h3 class="mb-3">Zone 0</h3>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="workModeZone0" class="form-label">Working mode</label>
                     <select id="workModeZone0" class="form-select">
                         <option value="mqttClient">MQTT client</option>
@@ -465,12 +498,18 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </select>
                   </div>
                   
-                  <div class="col-6" id="emptyZone0Div"></div>
-                  <div class="col-6" id="mqttZone0PrefixDiv" style="display: none;">
-                    <label for="mqttZone0Prefix" class="form-label">MQTT zone prefix</label>
-                        <input type="text" class="form-control" id="mqttDevicePrefix" value="%mqttDevicePrefix%/zone0/*" disabled="true">
+                  <div class="col-7" id="emptyZone0Div"></div>
+                  <div class="col-5" id="mqttZone0PrefixDiv" style="display: none;">
+                    <label for="mqttZone0Prefix" class="form-label">MQTT zone text topic</label>
+                        <input type="text" class="form-control" id="mqttTextTopicZone0" value="%mqttTextTopicZone0%">
                   </div>
-                  <div class="col-6" id="clockDisplayFormatZone0Div" style="display: none;">
+                  <div class="col-2" id="mqttPostfixZone0Div" style="display: none;">
+                    <label for="mqttPostfixZone0" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="mqttPostfixZone0" value="%mqttPostfixZone0%">
+                  </div>
+                  <div class="col-12" id="mqttDevicePrefixZone0Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone0/*</b></div>
+
+                  <div class="col-7" id="clockDisplayFormatZone0Div" style="display: none;">
                     <label for="clockDisplayFormatZone0" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone0" class="form-select">
                           <option value="HHMM">HH:MM</option>
@@ -480,9 +519,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmmyyyy">dd.mm.yyyy</option>
                           <option value="ddmm">dd.mm</option>
                           <option value="ddmmaa">dd.mm aa</option>
+                          <option value="aa">aa</option>
                         </select>
                   </div>
-                  <div class="col-6" id="owmWhatToDisplayZone0div" style="display: none;">
+                  <div class="col-7" id="owmWhatToDisplayZone0div" style="display: none;">
                     <label for="owmWhatToDisplayZone0" class="form-label">What to display</label>
                     <select id="owmWhatToDisplayZone0" class="form-select">
                         <option value="owmTemperature">Temperature</option>
@@ -492,7 +532,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeatherIcon">Wether icon</option>
                     </select>
                   </div>
-                  <div class="col-4" id="haSensorIdZone0Div" style="display: none;">
+                  <div class="col-5" id="haSensorIdZone0Div" style="display: none;">
                     <label for="haSensorIdZone0" class="form-label">Sensor ID</label>
                         <input type="text" class="form-control" id="haSensorIdZone0" value="%haSensorIdZone0%">
                   </div>
@@ -501,7 +541,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <input type="text" class="form-control" id="haSensorPostfixZone0" value="%haSensorPostfixZone0%">
                   </div>
 
-                  <div class="col-6" id="fontZone0div">
+                  <div class="col-5" id="fontZone0div">
                     <label for="fontZone0" class="form-label">Font</label>
                     <select id="fontZone0" class="form-select">
                         <option value="default">Default</option>
@@ -510,7 +550,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
                     </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                     <label for="charspacingZone0" class="form-label">Character spacing</label>
                     <select id="charspacingZone0" class="form-select">
                         <option value="0">0</option>
@@ -522,7 +562,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollEffectZone0In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone0In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -554,7 +594,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                       <label for="scrollSpeedZone0" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone0" value="%scrollSpeedZone0%" aria-describedby="scrollSpeedZone0Help">
@@ -562,7 +602,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollEffectZone0Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone0Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -594,7 +634,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                     <label for="scrollPauseZone0" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone0" value="%scrollPauseZone0%">
@@ -602,7 +642,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollAlignZone0" class="form-label">Alignment</label>
                     <select id="scrollAlignZone0" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -617,7 +657,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   <hr class="my-4">
                   <h3 class="mb-3">Zone 1</h3>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="workModeZone1" class="form-label">Working mode</label>
                     <select id="workModeZone1" class="form-select">
                         <option value="mqttClient">MQTT client</option>
@@ -628,12 +668,18 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </select>
                   </div>
                   
-                  <div class="col-6" id="emptyZone1Div"></div>
-                  <div class="col-6" id="mqttZone1PrefixDiv" style="display: none;">
-                    <label for="mqttZone1Prefix" class="form-label">MQTT zone prefix</label>
-                        <input type="text" class="form-control" id="mqttDevicePrefix" disabled="true" value="%mqttDevicePrefix%/zone1/*">
+                  <div class="col-7" id="emptyZone1Div"></div>
+                  <div class="col-5" id="mqttZone1PrefixDiv" style="display: none;">
+                    <label for="mqttZone1Prefix" class="form-label">MQTT zone text topic</label>
+                        <input type="text" class="form-control" id="mqttTextTopicZone1" value="%mqttTextTopicZone1%">
                   </div>
-                  <div class="col-6" id="clockDisplayFormatZone1Div" style="display: none;">
+                  <div class="col-2" id="mqttPostfixZone1Div" style="display: none;">
+                    <label for="mqttPostfixZone1" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="mqttPostfixZone1" value="%mqttPostfixZone1%">
+                  </div>
+                  <div class="col-12" id="mqttDevicePrefixZone1Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone1/*</b></div>
+
+                  <div class="col-7" id="clockDisplayFormatZone1Div" style="display: none;">
                     <label for="clockDisplayFormatZone1" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone1" class="form-select">
                           <option value="HHMM">HH:MM</option>
@@ -643,9 +689,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmmyyyy">dd.mm.yyyy</option>
                           <option value="ddmm">dd.mm</option>
                           <option value="ddmmaa">dd.mm aa</option>
+                          <option value="aa">aa</option>
                         </select>
                   </div>
-                  <div class="col-6" id="owmWhatToDisplayZone1div" style="display: none;">
+                  <div class="col-7" id="owmWhatToDisplayZone1div" style="display: none;">
                     <label for="owmWhatToDisplayZone1" class="form-label">What to display</label>
                     <select id="owmWhatToDisplayZone1" class="form-select">
                         <option value="owmTemperature">Temperature</option>
@@ -655,7 +702,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeatherIcon">Wether icon</option>
                     </select>
                   </div>
-                  <div class="col-4" id="haSensorIdZone1Div" style="display: none;">
+                  <div class="col-5" id="haSensorIdZone1Div" style="display: none;">
                     <label for="haSensorIdZone1" class="form-label">Sensor ID</label>
                         <input type="text" class="form-control" id="haSensorIdZone1" value="%haSensorIdZone1%">
                   </div>
@@ -664,7 +711,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <input type="text" class="form-control" id="haSensorPostfixZone1" value="%haSensorPostfixZone1%">
                   </div>
 
-                  <div class="col-6" id="fontZone1div">
+                  <div class="col-5" id="fontZone1div">
                     <label for="fontZone1" class="form-label">Font</label>
                     <select id="fontZone1" class="form-select">
                         <option value="default">Default</option>
@@ -673,7 +720,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
                     </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                     <label for="charspacingZone1" class="form-label">Character spacing</label>
                     <select id="charspacingZone1" class="form-select">
                         <option value="0">0</option>
@@ -685,7 +732,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollEffectZone1In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone1In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -717,7 +764,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                       <label for="scrollSpeedZone1" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone1" value="%scrollSpeedZone1%" aria-describedby="scrollSpeedZone1Help">
@@ -725,7 +772,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollEffectZone1Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone1Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -757,7 +804,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                     <label for="scrollPauseZone1" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone1" value="%scrollPauseZone1%">
@@ -765,7 +812,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollAlignZone1" class="form-label">Alignment</label>
                     <select id="scrollAlignZone1" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -781,7 +828,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 <hr class="my-4">
                   <h3 class="mb-3">Zone 2</h3>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="workModeZone2" class="form-label">Working mode</label>
                     <select id="workModeZone2" class="form-select">
                         <option value="mqttClient">MQTT client</option>
@@ -792,12 +839,18 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </select>
                   </div>
                   
-                  <div class="col-6" id="emptyZone2Div"></div>
-                  <div class="col-6" id="mqttZone2PrefixDiv" style="display: none;">
-                    <label for="mqttZone2Prefix" class="form-label">MQTT zone prefix</label>
-                        <input type="text" class="form-control" id="mqttDevicePrefix" disabled="true" value="%mqttDevicePrefix%/zone2/*">
+                  <div class="col-7" id="emptyZone2Div"></div>
+                  <div class="col-5" id="mqttZone2PrefixDiv" style="display: none;">
+                    <label for="mqttZone2Prefix" class="form-label">MQTT zone text topic</label>
+                        <input type="text" class="form-control" id="mqttTextTopicZone2" value="%mqttTextTopicZone2%">
                   </div>
-                  <div class="col-6" id="clockDisplayFormatZone2Div" style="display: none;">
+                  <div class="col-2" id="mqttPostfixZone2Div" style="display: none;">
+                    <label for="mqttPostfixZone2" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="mqttPostfixZone2" value="%mqttPostfixZone2%">
+                  </div>
+                  <div class="col-12" id="mqttDevicePrefixZone2Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone2/*</b></div>
+
+                  <div class="col-7" id="clockDisplayFormatZone2Div" style="display: none;">
                     <label for="clockDisplayFormatZone2" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone2" class="form-select">
                           <option value="HHMM">HH:MM</option>
@@ -807,9 +860,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmmyyyy">dd.mm.yyyy</option>
                           <option value="ddmm">dd.mm</option>
                           <option value="ddmmaa">dd.mm aa</option>
+                          <option value="aa">aa</option>
                         </select>
                   </div>
-                  <div class="col-6" id="owmWhatToDisplayZone2div" style="display: none;">
+                  <div class="col-7" id="owmWhatToDisplayZone2div" style="display: none;">
                     <label for="owmWhatToDisplayZone2" class="form-label">What to display</label>
                     <select id="owmWhatToDisplayZone2" class="form-select">
                         <option value="owmTemperature">Temperature</option>
@@ -819,7 +873,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeatherIcon">Wether icon</option>
                     </select>
                   </div>
-                  <div class="col-4" id="haSensorIdZone2Div" style="display: none;">
+                  <div class="col-5" id="haSensorIdZone2Div" style="display: none;">
                     <label for="haSensorIdZone2" class="form-label">Sensor ID</label>
                         <input type="text" class="form-control" id="haSensorIdZone2" value="%haSensorIdZone2%">
                   </div>
@@ -828,7 +882,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <input type="text" class="form-control" id="haSensorPostfixZone2" value="%haSensorPostfixZone2%">
                   </div>
 
-                  <div class="col-6" id="fontZone2div">
+                  <div class="col-5" id="fontZone2div">
                     <label for="fontZone2" class="form-label">Font</label>
                     <select id="fontZone2" class="form-select">
                         <option value="default">Default</option>
@@ -837,7 +891,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
                     </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                     <label for="charspacingZone2" class="form-label">Character spacing</label>
                     <select id="charspacingZone2" class="form-select">
                         <option value="0">0</option>
@@ -849,7 +903,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollEffectZone2In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone2In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -881,7 +935,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                       <label for="scrollSpeedZone2" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone2" value="%scrollSpeedZone2%" aria-describedby="scrollSpeedZone2Help">
@@ -889,7 +943,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollEffectZone2Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone2Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -921,7 +975,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-6">
+                  <div class="col-7">
                     <label for="scrollPauseZone2" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone2" value="%scrollPauseZone2%">
@@ -929,7 +983,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-6">
+                  <div class="col-5">
                     <label for="scrollAlignZone2" class="form-label">Alignment</label>
                     <select id="scrollAlignZone2" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -1134,7 +1188,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("mqttServerAddress").value = "%mqttServerAddress%";
      document.getElementById("mqttServerPort").value = "%mqttServerPort%";
      document.getElementById("mqttUsername").value = "%mqttUsername%";
-     document.getElementById("mqttDevicePrefix").value = "%mqttDevicePrefix%";
+     //document.getElementById("mqttDevicePrefix").value = "%mqttDevicePrefix%";
+     document.getElementById("mqttTextTopicZone0").value = "%mqttTextTopicZone0%";
+     document.getElementById("mqttTextTopicZone1").value = "%mqttTextTopicZone1%";
+     document.getElementById("mqttTextTopicZone2").value = "%mqttTextTopicZone2%";
      document.getElementById("ntpTimeZone").value = "%ntpTimeZone%";
      document.getElementById("clockDisplayFormatZone0").value = "%clockDisplayFormatZone0%";
      document.getElementById("clockDisplayFormatZone1").value = "%clockDisplayFormatZone1%";
@@ -1160,6 +1217,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("haSensorPostfixZone0").value = "%haSensorPostfixZone0%";
      document.getElementById("haSensorPostfixZone1").value = "%haSensorPostfixZone1%";
      document.getElementById("haSensorPostfixZone2").value = "%haSensorPostfixZone2%";
+     document.getElementById("mqttPostfixZone0").value = "%mqttPostfixZone0%";
+     document.getElementById("mqttPostfixZone1").value = "%mqttPostfixZone1%";
+     document.getElementById("mqttPostfixZone2").value = "%mqttPostfixZone2%";
      document.getElementById("charspacingZone0").value = "%charspacingZone0%";
      document.getElementById("charspacingZone1").value = "%charspacingZone1%";
      document.getElementById("charspacingZone2").value = "%charspacingZone2%";
@@ -1188,6 +1248,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (document.getElementById("workModeZone0").value == "mqttClient") {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("mqttZone0PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone0Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone0Div")).show();
       }
       if (document.getElementById("workModeZone0").value == "owmWeather") {
         $(document.getElementById("emptyZone0Div")).hide();
@@ -1206,6 +1268,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (document.getElementById("workModeZone1").value == "mqttClient") {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("mqttZone1PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone1Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone1Div")).show();
       }
       if (document.getElementById("workModeZone1").value == "owmWeather") {
         $(document.getElementById("emptyZone1Div")).hide();
@@ -1224,6 +1288,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (document.getElementById("workModeZone2").value == "mqttClient") {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("mqttZone2PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone2Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone2Div")).show();
       }
       if (document.getElementById("workModeZone2").value == "owmWeather") {
         $(document.getElementById("emptyZone2Div")).hide();
@@ -1243,6 +1309,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
     workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone0Div")).show();
       $(document.getElementById("mqttZone0PrefixDiv")).hide();
+      $(document.getElementById("mqttPostfixZone0Div")).hide();
+      $(document.getElementById("mqttDevicePrefixZone0Div")).hide();
       document.getElementById("scrollPauseZone0").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone0div")).hide();
       $(document.getElementById("clockDisplayFormatZone0Div")).hide();
@@ -1252,6 +1320,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("mqttZone0PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone0Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone0Div")).show();
       }
       
       if (e.target.value == "wallClock") {
@@ -1275,6 +1345,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
     workModeZone1.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone1Div")).show();
       $(document.getElementById("mqttZone1PrefixDiv")).hide();
+      $(document.getElementById("mqttPostfixZone1Div")).hide();
+      $(document.getElementById("mqttDevicePrefixZone1Div")).hide();
       document.getElementById("scrollPauseZone1").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone1div")).hide();
       $(document.getElementById("clockDisplayFormatZone1Div")).hide();
@@ -1284,6 +1356,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("mqttZone1PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone1Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone1Div")).show();
       }
       
       if (e.target.value == "wallClock") {
@@ -1307,6 +1381,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
     workModeZone2.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone2Div")).show();
       $(document.getElementById("mqttZone2PrefixDiv")).hide();
+      $(document.getElementById("mqttPostfixZone2Div")).hide();
+      $(document.getElementById("mqttDevicePrefixZone2Div")).hide();
       document.getElementById("scrollPauseZone2").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone2div")).hide();
       $(document.getElementById("clockDisplayFormatZone2Div")).hide();
@@ -1316,6 +1392,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("mqttZone2PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone2Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone2Div")).show();
       }
       
       if (e.target.value == "wallClock") {
@@ -1391,7 +1469,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 scrollEffectZone0In:        document.getElementById("scrollEffectZone0In").value,
                 scrollEffectZone0Out:       document.getElementById("scrollEffectZone0Out").value,
                 fontZone0:                  document.getElementById("fontZone0").value,
-                charspacingZone0:           document.getElementById("charspacingZone0").value
+                charspacingZone0:           document.getElementById("charspacingZone0").value,
+                mqttTextTopicZone0:         document.getElementById("mqttTextTopicZone0").value,
+                mqttPostfixZone0:           document.getElementById("mqttPostfixZone0").value
                 
             }
             sendPost(data);
@@ -1410,7 +1490,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 scrollEffectZone1In:        document.getElementById("scrollEffectZone1In").value,
                 scrollEffectZone1Out:       document.getElementById("scrollEffectZone1Out").value,
                 fontZone1:                  document.getElementById("fontZone1").value,
-                charspacingZone1:           document.getElementById("charspacingZone1").value
+                charspacingZone1:           document.getElementById("charspacingZone1").value,
+                mqttTextTopicZone1:         document.getElementById("mqttTextTopicZone1").value,
+                mqttPostfixZone1:           document.getElementById("mqttPostfixZone1").value
             }
             sendPost(data);
         }
@@ -1428,7 +1510,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 scrollEffectZone2In:        document.getElementById("scrollEffectZone2In").value,
                 scrollEffectZone2Out:       document.getElementById("scrollEffectZone2Out").value,
                 fontZone2:                  document.getElementById("fontZone2").value,
-                charspacingZone2:           document.getElementById("charspacingZone2").value
+                charspacingZone2:           document.getElementById("charspacingZone2").value,
+                mqttTextTopicZone2:         document.getElementById("mqttTextTopicZone2").value,
+                mqttPostfixZone2:           document.getElementById("mqttPostfixZone2").value
             }
             sendPost(data);
         }
