@@ -430,8 +430,31 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       
             </div>
             <div class="col-md-7 col-lg-8">
+             <form class="needs-validation" novalidate="">
+              <div class="row g-3">
+ 
+                <h3 class="mb-3">System settings</h3>
+                  <div class="col-6" hidden>
+                    <label for="deviceName" class="form-label">Device Name</label>
+                    <div class="input-group mb-3">
+                      <input type="text" class="form-control" id="deviceName" value="%deviceName%">
+                    </div> 
+                  </div>
+
+                  <div class="col-6 align-self-center">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="disableServiceMessages" id="disableServiceMessages">
+                      <label class="form-check-label" for="disableServiceMessages">
+                        Disable service messages on display
+                      </label>
+                    </div>
+                  </div>
+
+                <button id="applySystemSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
+              <hr class="my-4">
+
               <h4 class="mb-3">Display settings <span class="text-primary fs-6" style="--bs-text-opacity: .5;">[reboot required]</span></h4>
-              <form class="needs-validation" novalidate="">
                 <div class="row g-3">
                   <div class="col-sm-4">
                     <label for="Numbers of zones" class="form-label">Number of zones</label>
@@ -1038,6 +1061,15 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <input type="text" class="form-control" id="ntpTimeZone" value="%ntpTimeZone%">
                     </div>
                   </div>
+                  <div class="col-6 align-self-center">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="disableDotsblink" id="disableDotsBlink">
+                      <label class="form-check-label" for="disableDotsBlink">
+                        Disable clock dots blink
+                      </label>
+                    </div>
+                  </div>
+                  
 
                 <button id="applyWallClockSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
@@ -1223,6 +1255,19 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("charspacingZone0").value = "%charspacingZone0%";
      document.getElementById("charspacingZone1").value = "%charspacingZone1%";
      document.getElementById("charspacingZone2").value = "%charspacingZone2%";
+     document.getElementById("deviceName").value = "%deviceName%";
+     document.getElementById("disableServiceMessages").value = "%disableServiceMessages%";
+     if (%disableServiceMessages%) {
+      document.getElementById("disableServiceMessages").checked = true;
+     } else {
+      document.getElementById("disableServiceMessages").checked = false;
+     }
+     if (%disableDotsBlink%) {
+      document.getElementById("disableDotsBlink").checked = true;
+     } else {
+      document.getElementById("disableDotsBlink").checked = false;
+     }
+     
      
      //const ZoneNumbersFirstValue = "%zoneNumbers%";
      //if (ZoneNumbersFirstValue == "1") {
@@ -1529,7 +1574,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 
         if (key == "applyWallClockSettings") {
             data = {
-                ntpTimeZone:            document.getElementById("ntpTimeZone").value        
+                ntpTimeZone:            document.getElementById("ntpTimeZone").value,
+                disableDotsBlink:       document.querySelector('#disableDotsBlink').checked
             }
             sendPost(data);
         }
@@ -1551,6 +1597,14 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 haApiHttpType:      document.getElementById("haApiHttpType").value,
                 haApiPort:          document.getElementById("haApiPort").value,
                 haUpdateInterval:   document.getElementById("haUpdateInterval").value
+            }
+            sendPost(data);
+        }
+
+        if (key == "applySystemSettings") {
+            data = {
+                deviceName:             document.getElementById("deviceName").value,
+                disableServiceMessages: document.querySelector('#disableServiceMessages').checked
             }
             sendPost(data);
         }  
