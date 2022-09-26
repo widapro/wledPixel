@@ -1243,6 +1243,9 @@ void loop() {
                 zoneNewMessage(0, curTimeZone0, "");
               }
             }
+          } else {
+            curTimeZone0 = curTimeZone0New;
+            zoneNewMessage(0, curTimeZone0, "");
           }
         }
 
@@ -1277,6 +1280,9 @@ void loop() {
                 zoneNewMessage(1, curTimeZone1, "");
               }
             }
+          } else {
+            curTimeZone1 = curTimeZone1New;
+            zoneNewMessage(1, curTimeZone1, "");
           }
         }
 
@@ -1311,6 +1317,9 @@ void loop() {
                 zoneNewMessage(2, curTimeZone2, "");
               }
             }
+          } else {
+            curTimeZone2 = curTimeZone2New;
+            zoneNewMessage(2, curTimeZone2, "");
           }
         }
       }
