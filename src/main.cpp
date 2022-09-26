@@ -22,7 +22,7 @@ WiFiClient espClient;
 WiFiClient mqttEspClient;
 
 /// GLOBAL ///
-const char* firmwareVer = "2.3";
+const char* firmwareVer = "2.4";
 
 //// MQTT settings ////
 String mqttServerAddress  = "";
@@ -33,7 +33,8 @@ long lastReconnectAttempt = 0;
 PubSubClient mqttClient(mqttEspClient);
 
 String shortMACaddr = WiFi.macAddress().substring(12, 14) + WiFi.macAddress().substring(15); // last five chars of the MAC, ie: C0A4;
-String MQTTGlobalPrefix = "wledPixel-" + shortMACaddr;
+String deviceName = shortMACaddr;
+String MQTTGlobalPrefix = "wledPixel-" + deviceName;
 
 typedef struct {
   String    message, scrollEffectIn, scrollEffectOut, scrollSpeed, scrollPause, scrollAllign, charspacing, workMode;
@@ -76,6 +77,8 @@ ZoneData zones[] = {
 uint8_t zoneNumbers = 1;
 uint8_t intensity   = 7;
 String power = "ON";
+String disableServiceMessages = "false";
+String disableDotsBlink = "false";
 
 char zone0Message[50] = "zone0";
 char zone1Message[50] = "zone1";
@@ -255,6 +258,9 @@ String processor(const String& var){
   if(var == "charspacingZone1")             return itoa(zones[1].charspacing, buffer, 10);
   if(var == "charspacingZone2")             return itoa(zones[2].charspacing, buffer, 10);
   if(var == "firmwareVer")                  return firmwareVer;
+  if(var == "deviceName")                   return deviceName;
+  if(var == "disableServiceMessages")       return disableServiceMessages;
+  if(var == "disableDotsBlink")             return disableDotsBlink;
   return String();
 }
 
@@ -580,6 +586,9 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("charspacingZone1")])          zones[1].charspacing = postObj[F("charspacingZone1")].as<int>();
   if(postObj[F("charspacingZone2")])          zones[2].charspacing = postObj[F("charspacingZone2")].as<int>();
   if(postObj[F("power")])                     power = postObj[F("power")].as<String>();
+  if(postObj[F("deviceName")])                deviceName = postObj[F("deviceName")].as<String>();
+  if(postObj[F("disableServiceMessages")])    disableServiceMessages = postObj[F("disableServiceMessages")].as<String>();
+  if(postObj[F("disableDotsBlink")])          disableDotsBlink = postObj[F("disableDotsBlink")].as<String>();
 }
 
 void zoneNewMessage(int zone, String newMessage, String postfix) {
@@ -595,6 +604,17 @@ void zoneNewMessage(int zone, String newMessage, String postfix) {
     strcpy(zone2Message, (newMessage + postfix).c_str());
     zone2newMessageAvailable = true;
   }
+}
+
+// check if display service messages are disabled
+bool checkdDisableServiceMessages() {
+  if (disableServiceMessages == "true") return true;
+  return false;
+}
+// check if clock dots blink is disabled
+bool checkDisableDotsBlink() {
+  if (disableDotsBlink == "true") return true;
+  return false;
 }
 
 // check a string to see if it is numeric
@@ -995,6 +1015,9 @@ void setup() {
           if (p->name() == "charspacingZone0")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "charspacingZone1")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "charspacingZone2")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "deviceName")                  writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "disableServiceMessages")      writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
+          if (p->name() == "disableDotsBlink")            writeVarToConfFile(p->name().c_str(), p->value().c_str(), true, false);
           if (p->name() == "intensity") {                 intensity = (p->value()).toInt()-1;
                                                           P.setIntensity(intensity);
                                                           writeVarToConfFile(p->name().c_str(), String(intensity), false, false);
@@ -1113,15 +1136,15 @@ void loop() {
     if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
       timeClient.setTimeOffset(ntpTimeZone * 3600);
       timeClient.update();
-      curTimeZone0 = "0";
-      curTimeZone1 = "0";
-      curTimeZone2 = "0";
+      curTimeZone0 = getCurTime(zones[0].font, zones[0].clockDisplayFormat);
+      curTimeZone1 = getCurTime(zones[1].font, zones[1].clockDisplayFormat);
+      curTimeZone2 = getCurTime(zones[2].font, zones[2].clockDisplayFormat);;
     }
 
     //if (zones[0].workMode == "mqttClient" || zones[1].workMode == "mqttClient" || zones[2].workMode == "mqttClient") mqttClient.disconnect();
     mqttClient.disconnect();
-    if (zones[0].workMode == "mqttClient")  zoneNewMessage(0, "MQTT", "");
-    if (zones[0].workMode == "manualInput") zoneNewMessage(0, "Manual", "");
+    if (zones[0].workMode == "mqttClient" && !checkdDisableServiceMessages()) zoneNewMessage(0, "MQTT", "");
+    if (zones[0].workMode == "manualInput" && !checkdDisableServiceMessages()) zoneNewMessage(0, "Manual", "");
     if (zones[0].workMode == "owmWeather") {
       if(zones[0].owmWhatToDisplay == "owmWeatherIcon") {
         P.setFont(0, wledSymbolFont);
@@ -1136,8 +1159,8 @@ void loop() {
       P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
       P.setCharSpacing(1, zones[1].charspacing);
       applyZoneFont(1, zones[1].font);
-      if (zones[1].workMode == "mqttClient")  zoneNewMessage(1, "MQTT", "");
-      if (zones[1].workMode == "manualInput") zoneNewMessage(1, "Manual", "");
+      if (zones[1].workMode == "mqttClient" && !checkdDisableServiceMessages())  zoneNewMessage(1, "MQTT", "");
+      if (zones[1].workMode == "manualInput" && !checkdDisableServiceMessages()) zoneNewMessage(1, "Manual", "");
       if (zones[1].workMode == "owmWeather") {
         if(zones[1].owmWhatToDisplay == "owmWeatherIcon") {
           P.setFont(1, wledSymbolFont);
@@ -1153,8 +1176,8 @@ void loop() {
       P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
       P.setCharSpacing(2, zones[2].charspacing);
       applyZoneFont(2, zones[2].font);
-      if (zones[2].workMode == "mqttClient")  zoneNewMessage(2, "MQTT", "");
-      if (zones[2].workMode == "manualInput") zoneNewMessage(2, "Manual", "");
+      if (zones[2].workMode == "mqttClient" && !checkdDisableServiceMessages())  zoneNewMessage(2, "MQTT", "");
+      if (zones[2].workMode == "manualInput" && !checkdDisableServiceMessages()) zoneNewMessage(2, "Manual", "");
       if (zones[2].workMode == "owmWeather") {
         if(zones[2].owmWhatToDisplay == "owmWeatherIcon") {
           P.setFont(2, wledSymbolFont);
@@ -1190,58 +1213,104 @@ void loop() {
         previousMillis = currentMillis;
         timeClient.update();
         if (zones[0].workMode == "wallClock") {
-          P.setPause(0,100);
+          // get current time
           String curTimeZone0New = getCurTime(zones[0].font, zones[0].clockDisplayFormat);
-          if (curTimeZone0 == curTimeZone0New || curTimeZone0 == flashClockDots(curTimeZone0New)) {
-            if (zones[0].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ){
-              if (curTimeZone0.indexOf(":") > 0) curTimeZone0New.replace(":", "¦");
-              P.setTextEffect(0, PA_NO_EFFECT, PA_NO_EFFECT);
-              curTimeZone0 = curTimeZone0New;
-              zoneNewMessage(0, curTimeZone0, "");
+          // checking if clock display format contains dots
+          if (zones[0].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ) {
+            // checking if current time and new time are the same, checking with dots and without dots
+            if (curTimeZone0 == curTimeZone0New || curTimeZone0 == flashClockDots(curTimeZone0New)) {
+              // checking if dot blinds not disabl
+              if (!checkDisableDotsBlink()) {
+                // checking if current time have dots and remove dots
+                if (curTimeZone0.indexOf(":") > 0) curTimeZone0New.replace(":", "¦");
+                // pause display for 1 second before flashing dots
+                P.setPause(0,100);
+                P.setTextEffect(0, PA_NO_EFFECT, PA_NO_EFFECT);
+                curTimeZone0 = curTimeZone0New;
+                zoneNewMessage(0, curTimeZone0, "");
+              }
+            } else {
+              // checking if dot blinds not disabl
+              if (!checkDisableDotsBlink()) {
+                // checking if cur time have dots and remove dots
+                if ( curTimeZone0.indexOf(":") > 0 ) curTimeZone0New.replace(":", "¦");
+                curTimeZone0 = curTimeZone0New;
+                P.setPause(0,100);
+                P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
+                zoneNewMessage(0, curTimeZone0, "");
+              } else {
+                curTimeZone0 = curTimeZone0New;
+                zoneNewMessage(0, curTimeZone0, "");
+              }
             }
-          } else {
-            P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
-            if (curTimeZone0.indexOf(":") > 0) curTimeZone0New.replace(":", "¦");
-            curTimeZone0 = curTimeZone0New;
-            zoneNewMessage(0, curTimeZone0, "");
           }
         }
 
         if (zones[1].workMode == "wallClock" && zoneNumbers > 1) {
-          P.setPause(1,100);
+          // get current time
           String curTimeZone1New = getCurTime(zones[1].font, zones[1].clockDisplayFormat);
-          if (curTimeZone1 == curTimeZone1New || curTimeZone1 == flashClockDots(curTimeZone1New)) {
-            if (zones[1].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ) {
-              if (curTimeZone1.indexOf(":") > 0) curTimeZone1New.replace(":", "¦");
-              P.setPause(1, 1);
-              P.setTextEffect(1, PA_NO_EFFECT, PA_NO_EFFECT);
-              curTimeZone1 = curTimeZone1New;
-              zoneNewMessage(1, curTimeZone1, "");
+          // checking if clock display format contains dots
+          if (zones[1].clockDisplayFormat == "HHMM" || zones[1].clockDisplayFormat == "HHMMSS" ) {
+            // checking if current time and new time are the same, checking with dots and without dots
+            if (curTimeZone1 == curTimeZone1New || curTimeZone0 == flashClockDots(curTimeZone1New)) {
+              // checking if dot blinds not disabl
+              if (!checkDisableDotsBlink()) {
+                // checking if current time have dots and remove dots
+                if (curTimeZone1.indexOf(":") > 0) curTimeZone1New.replace(":", "¦");
+                // pause display for 1 second before flashing dots
+                P.setPause(1,100);
+                P.setTextEffect(1, PA_NO_EFFECT, PA_NO_EFFECT);
+                curTimeZone1 = curTimeZone1New;
+                zoneNewMessage(1, curTimeZone1, "");
+              }
+            } else {
+              // checking if dot blinds not disabl
+              if (!checkDisableDotsBlink()) {
+                // checking if cur time have dots and remove dots
+                if ( curTimeZone1.indexOf(":") > 0 ) curTimeZone1New.replace(":", "¦");
+                curTimeZone1 = curTimeZone1New;
+                P.setPause(1,100);
+                P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
+                zoneNewMessage(1, curTimeZone1, "");
+              } else {
+                curTimeZone1 = curTimeZone1New;
+                zoneNewMessage(1, curTimeZone1, "");
+              }
             }
-          } else {
-            P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
-            if (curTimeZone1.indexOf(":") > 0) curTimeZone1New.replace(":", "¦");
-            curTimeZone1 = curTimeZone1New;
-            zoneNewMessage(1, curTimeZone1, "");
           }
         }
 
         if (zones[2].workMode == "wallClock" && zoneNumbers > 2) {
-          P.setPause(2,100);
+          // get current time
           String curTimeZone2New = getCurTime(zones[2].font, zones[2].clockDisplayFormat);
-          if (curTimeZone2 == curTimeZone2New || curTimeZone2 == flashClockDots(curTimeZone2New)) {
-            if (zones[2].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ) {
-              if (curTimeZone2.indexOf(":") > 0) curTimeZone2New.replace(":", "¦");
-              P.setPause(2, 1);
-              P.setTextEffect(2, PA_NO_EFFECT, PA_NO_EFFECT);
-              curTimeZone2 = curTimeZone2New;
-              zoneNewMessage(2, curTimeZone2, "");
+          // checking if clock display format contains dots
+          if (zones[2].clockDisplayFormat == "HHMM" || zones[2].clockDisplayFormat == "HHMMSS" ) {
+            // checking if current time and new time are the same, checking with dots and without dots
+            if (curTimeZone2 == curTimeZone2New || curTimeZone2 == flashClockDots(curTimeZone2New)) {
+              // checking if dot blinds not disabl
+              if (!checkDisableDotsBlink()) {
+                // checking if current time have dots and remove dots
+                if (curTimeZone2.indexOf(":") > 0) curTimeZone2New.replace(":", "¦");
+                // pause display for 1 second before flashing dots
+                P.setPause(2,100);
+                P.setTextEffect(2, PA_NO_EFFECT, PA_NO_EFFECT);
+                curTimeZone2 = curTimeZone2New;
+                zoneNewMessage(2, curTimeZone2, "");
+              }
+            } else {
+              // checking if dot blinds not disabl
+              if (!checkDisableDotsBlink()) {
+                // checking if cur time have dots and remove dots
+                if ( curTimeZone2.indexOf(":") > 0 ) curTimeZone2New.replace(":", "¦");
+                curTimeZone2 = curTimeZone2New;
+                P.setPause(2,100);
+                P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
+                zoneNewMessage(2, curTimeZone2, "");
+              } else {
+                curTimeZone2 = curTimeZone2New;
+                zoneNewMessage(2, curTimeZone2, "");
+              }
             }
-          } else {
-            P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
-            if (curTimeZone2.indexOf(":") > 0) curTimeZone2New.replace(":", "¦");
-            curTimeZone2 = curTimeZone2New;
-            zoneNewMessage(2, curTimeZone2, "");
           }
         }
       }
