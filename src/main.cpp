@@ -660,22 +660,34 @@ void MQTTCallback(char* topic, byte* payload, int length) {
     if(zones[n].workMode == "mqttClient" && strcmp(topic, (char*) MQTTZones[n].message.c_str()) == 0) zoneNewMessage(n, PayloadString.c_str(), zones[n].mqttPostfix);
 
     if (strcmp(topic, (char*) MQTTZones[n].scrollEffectIn.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone" + String(n) + "In", PayloadString.c_str(), true, false);
+      P.setTextEffect(n, stringToTextEffectT(PayloadString.c_str()), stringToTextEffectT(zones[n].scrollEffectOut));
+      zones[n].scrollEffectIn = PayloadString.c_str();
+      writeVarToConfFile("scrollEffectZone" + String(n) + "In", PayloadString.c_str(), false, false);
     }
     if (strcmp(topic, (char*) MQTTZones[n].scrollEffectOut.c_str()) == 0) {
-      writeVarToConfFile("scrollEffectZone" + String(n) + "Out", PayloadString.c_str(), true, false);
+      P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn), stringToTextEffectT(PayloadString.c_str()));
+      zones[n].scrollEffectOut = PayloadString.c_str();
+      writeVarToConfFile("scrollEffectZone" + String(n) + "Out", PayloadString.c_str(), false, false);
     }
     if (strcmp(topic, (char*) MQTTZones[n].scrollSpeed.c_str()) == 0) {
-      writeVarToConfFile("scrollSpeedZone" + String(n), PayloadString.c_str(), true, false);
+      P.setSpeed(n, PayloadString.toInt());
+      zones[n].scrollSpeed = PayloadString.toInt();
+      writeVarToConfFile("scrollSpeedZone" + String(n), PayloadString.c_str(), false, false);
     }
     if (strcmp(topic, (char*) MQTTZones[n].scrollPause.c_str()) == 0) {
-      writeVarToConfFile("scrollPauseZone" + String(n), PayloadString.c_str(), true, false);
+      P.setPause(n, PayloadString.toInt());
+      zones[n].scrollPause = PayloadString.toInt();
+      writeVarToConfFile("scrollPauseZone" + String(n), PayloadString.c_str(), false, false);
     }
     if (strcmp(topic, (char*) MQTTZones[n].scrollAllign.c_str()) == 0) {
-      writeVarToConfFile("scrollAlignZone" + String(n), PayloadString.c_str(), true, false);
+      P.setTextAlignment(n, stringToTextPositionT(PayloadString.c_str()));
+      zones[n].scrollAlign = PayloadString.c_str();
+      writeVarToConfFile("scrollAlignZone" + String(n), PayloadString.c_str(), false, false);
     }
     if (strcmp(topic, (char*) MQTTZones[n].charspacing.c_str()) == 0) {
-      writeVarToConfFile("charspacingZone" + String(n), PayloadString.c_str(), true, false);
+      P.setCharSpacing(n,PayloadString.toInt());
+      zones[n].charspacing = PayloadString.toInt();
+      writeVarToConfFile("charspacingZone" + String(n), PayloadString.c_str(), false, false);
     }
     if (strcmp(topic, (char*) MQTTZones[n].workMode.c_str()) == 0) {
       writeVarToConfFile("workModeZone" + String(n), PayloadString.c_str(), true, false);
@@ -705,7 +717,7 @@ boolean reconnect() {
       MQTTPublishHADiscovry(String(n), "scrollEffectIn");
       MQTTPublishHADiscovry(String(n), "scrollEffectOut");
 
-      mqttClient.subscribe((char*) MQTTZones[n].message.c_str());
+      if (zones[n].workMode == "mqttClient" && MQTTZones[n].message != "" && MQTTZones[n].message != " ") mqttClient.subscribe((char*) MQTTZones[n].message.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollEffectIn.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollEffectOut.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollSpeed.c_str());
