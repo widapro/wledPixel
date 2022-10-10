@@ -449,7 +449,6 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                       </label>
                     </div>
                   </div>
-
                 <button id="applySystemSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
               <hr class="my-4">
@@ -500,7 +499,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 
                   <div class="col-11">
                     <label for="intensity" class="form-label">Brightness</label>
-                    <input type="range" class="form-range" min="1" max="16" step="1" id="intensity" value="%intensity%" onChange="preparePostRequest(event, this.id, this.value);">
+                    <input type="range" class="form-range" min="1" max="17" step="1" id="intensity" value="%intensity%" onChange="preparePostRequest(event, this.id, this.value);">
                   </div>
                   <div class="col-1 align-self-end">
                     <label id="intensityValue" for="intensity" class="form-label text-primary">%intensity%</label>
@@ -518,6 +517,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="wallClock">Wall clock</option>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
+                        <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                     </select>
                   </div>
                   
@@ -562,6 +562,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-2" id="haSensorPostfixZone0Div" style="display: none;">
                     <label for="haSensorPostfixZone0" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="haSensorPostfixZone0" value="%haSensorPostfixZone0%">
+                  </div>
+                  <div class="col-7" id="ds18b20PostfixZone0Div" style="display: none;">
+                    <label for="ds18b20PostfixZone0" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="ds18b20PostfixZone0" value="%ds18b20PostfixZone0%">
                   </div>
 
                   <div class="col-5" id="fontZone0div">
@@ -688,6 +692,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="wallClock">Wall clock</option>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
+                        <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                     </select>
                   </div>
                   
@@ -732,6 +737,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-2" id="haSensorPostfixZone1Div" style="display: none;">
                     <label for="haSensorPostfixZone1" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="haSensorPostfixZone1" value="%haSensorPostfixZone1%">
+                  </div>
+                  <div class="col-7" id="ds18b20PostfixZone1Div" style="display: none;">
+                    <label for="ds18b20PostfixZone1" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="ds18b20PostfixZone1" value="%ds18b20PostfixZone1%">
                   </div>
 
                   <div class="col-5" id="fontZone1div">
@@ -859,6 +868,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="wallClock">Wall clock</option>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
+                        <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                     </select>
                   </div>
                   
@@ -903,6 +913,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-2" id="haSensorPostfixZone2Div" style="display: none;">
                     <label for="haSensorPostfixZone2" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="haSensorPostfixZone2" value="%haSensorPostfixZone2%">
+                  </div>
+                  <div class="col-7" id="ds18b20PostfixZone2Div" style="display: none;">
+                    <label for="ds18b20PostfixZone2" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="ds18b20PostfixZone2" value="%ds18b20PostfixZone2%">
                   </div>
 
                   <div class="col-5" id="fontZone2div">
@@ -1151,6 +1165,37 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
 
                 <button id="applyHaSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
+
+                <hr class="my-4">
+                  <h3 class="mb-4">Internal Temperature sensor (ds18b20) settings</h3>
+                  <div class="col-6 align-self-center">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" value="ds18b20Enable" id="ds18b20Enable">
+                      <label class="form-check-label" for="ds18b20Enable">
+                        Enable Temperature sensor (ds18b20)
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">Update interval</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="ds18b20UpdateInterval" value="%ds18b20UpdateInterval%">
+                        <span class="input-group-text">s</span>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <label for="ds18b20UnitsFormat" class="form-label">Units format</label>
+                    <div class="input-group mb-3">
+                        <select id="ds18b20UnitsFormat" class="form-select">
+                          <option value="Celsius">Celsius</option>
+                          <option value="Fahrenheit">Fahrenheit</option>
+                        </select>
+                    </div>
+                  </div>
+                <button id="applyDs18b20Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
+
+
                 <div class="col-sm-12"></div>
               </form>
             </div>
@@ -1252,11 +1297,16 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("mqttPostfixZone0").value = "%mqttPostfixZone0%";
      document.getElementById("mqttPostfixZone1").value = "%mqttPostfixZone1%";
      document.getElementById("mqttPostfixZone2").value = "%mqttPostfixZone2%";
+     document.getElementById("ds18b20PostfixZone0").value = "%ds18b20PostfixZone0%";
+     document.getElementById("ds18b20PostfixZone1").value = "%ds18b20PostfixZone1%";
+     document.getElementById("ds18b20PostfixZone2").value = "%ds18b20PostfixZone2%";
      document.getElementById("charspacingZone0").value = "%charspacingZone0%";
      document.getElementById("charspacingZone1").value = "%charspacingZone1%";
      document.getElementById("charspacingZone2").value = "%charspacingZone2%";
      document.getElementById("deviceName").value = "%deviceName%";
-     document.getElementById("disableServiceMessages").value = "%disableServiceMessages%";
+     document.getElementById("ds18b20UpdateInterval").value = "%ds18b20UpdateInterval%";
+     document.getElementById("ds18b20UnitsFormat").value = "%ds18b20UnitsFormat%";
+     //document.getElementById("disableServiceMessages").value = "%disableServiceMessages%";
      if (%disableServiceMessages%) {
       document.getElementById("disableServiceMessages").checked = true;
      } else {
@@ -1267,7 +1317,11 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      } else {
       document.getElementById("disableDotsBlink").checked = false;
      }
-     
+     if (%ds18b20Enable%) {
+      document.getElementById("ds18b20Enable").checked = true;
+     } else {
+      document.getElementById("ds18b20Enable").checked = false;
+     }
      
      //const ZoneNumbersFirstValue = "%zoneNumbers%";
      //if (ZoneNumbersFirstValue == "1") {
@@ -1309,7 +1363,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("haSensorIdZone0Div")).show();
         $(document.getElementById("haSensorPostfixZone0Div")).show();
       }
-
+      if (document.getElementById("workModeZone0").value == "intTempSensor") {
+        $(document.getElementById("emptyZone0Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone0Div")).show();
+      }
       if (document.getElementById("workModeZone1").value == "mqttClient") {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("mqttZone1PrefixDiv")).show();
@@ -1328,6 +1385,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("haSensorIdZone1Div")).show();
         $(document.getElementById("haSensorPostfixZone1Div")).show();
+      }
+      if (document.getElementById("workModeZone1").value == "intTempSensor") {
+        $(document.getElementById("emptyZone1Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone1Div")).show();
       }
 
       if (document.getElementById("workModeZone2").value == "mqttClient") {
@@ -1349,6 +1410,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("haSensorIdZone2Div")).show();
         $(document.getElementById("haSensorPostfixZone2Div")).show();
       }
+      if (document.getElementById("workModeZone2").value == "intTempSensor") {
+        $(document.getElementById("emptyZone2Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone2Div")).show();
+      }
     }
 
     workModeZone0.addEventListener('change', function (e) {
@@ -1361,6 +1426,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       $(document.getElementById("clockDisplayFormatZone0Div")).hide();
       $(document.getElementById("haSensorIdZone0Div")).hide();
       $(document.getElementById("haSensorPostfixZone0Div")).hide();
+      $(document.getElementById("ds18b20PostfixZone0Div")).hide();
       
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone0Div")).hide();
@@ -1385,6 +1451,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("haSensorIdZone0Div")).show();
         $(document.getElementById("haSensorPostfixZone0Div")).show();
       }
+      if (e.target.value == "intTempSensor") {
+        $(document.getElementById("emptyZone0Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone0Div")).show();
+      }
     });
 
     workModeZone1.addEventListener('change', function (e) {
@@ -1397,7 +1467,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       $(document.getElementById("clockDisplayFormatZone1Div")).hide();
       $(document.getElementById("haSensorIdZone1Div")).hide();
       $(document.getElementById("haSensorPostfixZone1Div")).hide();
-      
+      $(document.getElementById("ds18b20PostfixZone1Div")).hide();
+
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("mqttZone1PrefixDiv")).show();
@@ -1421,6 +1492,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("haSensorIdZone1Div")).show();
         $(document.getElementById("haSensorPostfixZone1Div")).show();
       }
+      if (e.target.value == "intTempSensor") {
+        $(document.getElementById("emptyZone1Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone1Div")).show();
+      }
     });
 
     workModeZone2.addEventListener('change', function (e) {
@@ -1433,6 +1508,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       $(document.getElementById("clockDisplayFormatZone2Div")).hide();
       $(document.getElementById("haSensorIdZone2Div")).hide();
       $(document.getElementById("haSensorPostfixZone2Div")).hide();
+      $(document.getElementById("ds18b20PostfixZone2Div")).hide();
       
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone2Div")).hide();
@@ -1456,6 +1532,10 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("haSensorIdZone2Div")).show();
         $(document.getElementById("haSensorPostfixZone2Div")).show();
+      }
+      if (e.target.value == "intTempSensor") {
+        $(document.getElementById("emptyZone2Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone2Div")).show();
       }
     });
 
@@ -1516,7 +1596,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 fontZone0:                  document.getElementById("fontZone0").value,
                 charspacingZone0:           document.getElementById("charspacingZone0").value,
                 mqttTextTopicZone0:         document.getElementById("mqttTextTopicZone0").value,
-                mqttPostfixZone0:           document.getElementById("mqttPostfixZone0").value
+                mqttPostfixZone0:           document.getElementById("mqttPostfixZone0").value,
+                ds18b20PostfixZone0:        document.getElementById("ds18b20PostfixZone0").value
                 
             }
             sendPost(data);
@@ -1537,7 +1618,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 fontZone1:                  document.getElementById("fontZone1").value,
                 charspacingZone1:           document.getElementById("charspacingZone1").value,
                 mqttTextTopicZone1:         document.getElementById("mqttTextTopicZone1").value,
-                mqttPostfixZone1:           document.getElementById("mqttPostfixZone1").value
+                mqttPostfixZone1:           document.getElementById("mqttPostfixZone1").value,
+                ds18b20PostfixZone1:        document.getElementById("ds18b20PostfixZone1").value
             }
             sendPost(data);
         }
@@ -1557,7 +1639,8 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 fontZone2:                  document.getElementById("fontZone2").value,
                 charspacingZone2:           document.getElementById("charspacingZone2").value,
                 mqttTextTopicZone2:         document.getElementById("mqttTextTopicZone2").value,
-                mqttPostfixZone2:           document.getElementById("mqttPostfixZone2").value
+                mqttPostfixZone2:           document.getElementById("mqttPostfixZone2").value,
+                ds18b20PostfixZone2:        document.getElementById("ds18b20PostfixZone2").value
             }
             sendPost(data);
         }
@@ -1608,6 +1691,15 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
             }
             sendPost(data);
         }  
+        if (key == "applyDs18b20Settings") {
+            data = {
+                ds18b20Enable:          document.querySelector('#ds18b20Enable').checked,
+                ds18b20UpdateInterval:  document.querySelector('#ds18b20UpdateInterval').value,
+                ds18b20UnitsFormat:     document.querySelector('#ds18b20UnitsFormat').value
+            }
+            sendPost(data);
+        }
+        
 
     };
 
