@@ -22,8 +22,8 @@ ESP8266 and MAX7219 dot matrix display management
 13. Symbols font
 
 ##### Ingredients:
-1. Dot matrix display MAX7219, something like this: https://aliexpress.ru/item/32618155357.html
-2. WeMos D1 Mini (esp8266), something like this: https://aliexpress.ru/item/32651747570.html
+1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
+2. WeMos D1 Mini (esp8266), something like this: https://aliexpress.com/item/32651747570.html
 
 ##### Firmware compiled with next parameters:
 ```
@@ -31,7 +31,13 @@ ESP8266 and MAX7219 dot matrix display management
 #define DATA_PIN  D7                     // WeMos D1 mini or ESP8266 -> GPIO13
 #define CS_PIN    D6                     // WeMos D1 mini or ESP8266 -> GPIO12
 #define CLK_PIN   D5                     // WeMos D1 mini or ESP8266 -> GPIO14
+
+// Ds18b20 pinout
+const int oneWireBus = D4;               // WeMos D1 mini GPIO02
 ```
+
+## Wiring
+![img](https://github.com/widapro/wledPixel/blob/9ea4164575de9fc7c5ffbd9eb50f75493889256c/img/WledPixel%20Wiring800.png)
 
 
 ## First boot:
