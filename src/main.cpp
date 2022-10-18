@@ -24,10 +24,9 @@ WiFiClient espClient;
 WiFiClient mqttEspClient;
 
 /// GLOBAL ///
-const char* firmwareVer = "2.5b";
+const char* firmwareVer = "2.5";
 
 //// DS18B20 ////
-//OneWire  ds(D4);  // on pin D4 (a 4.7K resistor is necessary)
 const int oneWireBus = D4;  // WeMos D1 mini GPIO02
 byte addrS1[8];
 OneWire oneWire(oneWireBus);
@@ -37,6 +36,8 @@ unsigned long previousDsMillis = -1000;
 String ds18b20Enable = "false";
 int ds18b20UpdateInterval = 30; // in seconds
 String ds18b20UnitsFormat = "Celsius";
+char dsTemp[5];
+bool dsTempToDisplay = false;
 
 
 //// MQTT settings ////
@@ -59,6 +60,7 @@ MQTTZoneData MQTTZones[] = {
   {MQTTGlobalPrefix + "/zone0/text", MQTTGlobalPrefix + "/zone0/scrolleffectIn", MQTTGlobalPrefix + "/zone0/scrolleffectOut", MQTTGlobalPrefix + "/zone0/scrollspeed", MQTTGlobalPrefix + "/zone0/scrollpause", MQTTGlobalPrefix + "/zone0/scrollalign", MQTTGlobalPrefix + "/zone0/charspacing", MQTTGlobalPrefix + "/zone0/workmode"},
   {MQTTGlobalPrefix + "/zone1/text", MQTTGlobalPrefix + "/zone1/scrolleffectIn", MQTTGlobalPrefix + "/zone1/scrolleffectOut", MQTTGlobalPrefix + "/zone1/scrollspeed", MQTTGlobalPrefix + "/zone1/scrollpause", MQTTGlobalPrefix + "/zone1/scrollalign", MQTTGlobalPrefix + "/zone1/charspacing", MQTTGlobalPrefix + "/zone1/workmode"},
   {MQTTGlobalPrefix + "/zone2/text", MQTTGlobalPrefix + "/zone2/scrolleffectIn", MQTTGlobalPrefix + "/zone2/scrolleffectOut", MQTTGlobalPrefix + "/zone2/scrollspeed", MQTTGlobalPrefix + "/zone2/scrollpause", MQTTGlobalPrefix + "/zone2/scrollalign", MQTTGlobalPrefix + "/zone2/charspacing", MQTTGlobalPrefix + "/zone2/workmode"},
+  {MQTTGlobalPrefix + "/zone3/text", MQTTGlobalPrefix + "/zone3/scrolleffectIn", MQTTGlobalPrefix + "/zone3/scrolleffectOut", MQTTGlobalPrefix + "/zone3/scrollspeed", MQTTGlobalPrefix + "/zone3/scrollpause", MQTTGlobalPrefix + "/zone3/scrollalign", MQTTGlobalPrefix + "/zone3/charspacing", MQTTGlobalPrefix + "/zone3/workmode"},
 };
 String MQTTIntensity = MQTTGlobalPrefix + "/intensity";
 String MQTTPower = MQTTGlobalPrefix + "/power";
@@ -72,21 +74,23 @@ String MQTTStateTopic = MQTTGlobalPrefix + "/state";
 #define DATA_PIN  D7                      // WeMos D1 mini GPIO13
 #define CS_PIN    D6                      // WeMos D1 mini GPIO12
 #define CLK_PIN   D5                      // WeMos D1 mini GPIO14
-uint8_t MAX_DEVICES = 12;                 // number of device segments
+uint8_t MAX_DEVICES = 16;                 // number of device segments
 MD_Parola P = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
 typedef struct {
     uint8_t   begin, end;
     uint8_t   scrollSpeed, charspacing;
     uint16_t  scrollPause;
-    String    scrollAlign, scrollEffectIn, scrollEffectOut, font, workMode, clockDisplayFormat, haSensorId, haSensorPostfix, owmWhatToDisplay, mqttPostfix, ds18b20Postfix;
+    unsigned long previousMillis;
+    String    scrollAlign, scrollEffectIn, scrollEffectOut, font, workMode, clockDisplayFormat, haSensorId, haSensorPostfix, owmWhatToDisplay, mqttPostfix, ds18b20Postfix, curTimeZone;
 } ZoneData;
 
 // structure:
 ZoneData zones[] = {
-  {0, 3, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", ""},
-  {4, 5, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", ""},
-  {6, 7, 35, 1, 3000, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", ""},
+  {0, 2, 35, 1, 3000, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", ""},
+  {3, 4, 35, 1, 3000, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", ""},
+  {5, 6, 35, 1, 3000, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", ""},
+  {7, 7, 35, 1, 3000, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", ""},
 };
 
 uint8_t zoneNumbers = 1;
@@ -98,12 +102,13 @@ String disableDotsBlink = "false";
 char zone0Message[50] = "zone0";
 char zone1Message[50] = "zone1";
 char zone2Message[50] = "zone2";
+char zone3Message[50] = "zone3";
 
 bool zone0newMessageAvailable = false;
 bool zone1newMessageAvailable = false;
 bool zone2newMessageAvailable = false;
+bool zone3newMessageAvailable = false;
 
-//char const *wifiAPname      = "wled-AP";
 char const *wifiAPpassword  = "12345678";
 
 unsigned long currentMillis;
@@ -111,7 +116,7 @@ unsigned long previousMillis = 0;
 String curTimeZone0 = "00:00";
 String curTimeZone1 = "00:00";
 String curTimeZone2 = "00:00";
-//int i = 0;
+String curTimeZone3 = "00:00";
 
 // Initialize NTP
 String ntpServerAddress = "pool.ntp.org";
@@ -128,6 +133,7 @@ bool restartESP         = false;
 bool zone0Test          = true;
 bool zone1Test          = true;
 bool zone2Test          = true;
+bool zone3Test          = true;
 bool ipInfo             = true;
 bool allTestsFinish     = false;
 
@@ -208,6 +214,7 @@ String processor(const String& var){
   if(var == "workModeZone0")                return zones[0].workMode;
   if(var == "workModeZone1")                return zones[1].workMode;
   if(var == "workModeZone2")                return zones[2].workMode;
+  if(var == "workModeZone3")                return zones[3].workMode;
   if(var == "zoneNumbers")                  return itoa(zoneNumbers, buffer, 10);
   if(var == "zone0Begin")                   return itoa(zones[0].begin, buffer, 10);
   if(var == "zone0End")                     return itoa(zones[0].end, buffer, 10);
@@ -215,6 +222,8 @@ String processor(const String& var){
   if(var == "zone1End")                     return itoa(zones[1].end, buffer, 10);
   if(var == "zone2Begin")                   return itoa(zones[2].begin, buffer, 10);
   if(var == "zone2End")                     return itoa(zones[2].end, buffer, 10);
+  if(var == "zone3Begin")                   return itoa(zones[3].begin, buffer, 10);
+  if(var == "zone3End")                     return itoa(zones[3].end, buffer, 10);
   if(var == "wifiSsid")                     return WiFi.SSID();
   if(var == "wifiIp")                       return WiFi.localIP().toString();
   if(var == "wifiGateway")                  return WiFi.gatewayIP().toString();
@@ -222,18 +231,23 @@ String processor(const String& var){
   if(var == "scrollSpeedZone0")             return itoa(zones[0].scrollSpeed, buffer, 10);
   if(var == "scrollSpeedZone1")             return itoa(zones[1].scrollSpeed, buffer, 10);
   if(var == "scrollSpeedZone2")             return itoa(zones[2].scrollSpeed, buffer, 10);
+  if(var == "scrollSpeedZone3")             return itoa(zones[3].scrollSpeed, buffer, 10);
   if(var == "scrollPauseZone0")             return itoa(zones[0].scrollPause, buffer, 10);
   if(var == "scrollPauseZone1")             return itoa(zones[1].scrollPause, buffer, 10);
   if(var == "scrollPauseZone2")             return itoa(zones[2].scrollPause, buffer, 10);
+  if(var == "scrollPauseZone3")             return itoa(zones[3].scrollPause, buffer, 10);
   if(var == "scrollAlignZone0")             return zones[0].scrollAlign;
   if(var == "scrollAlignZone1")             return zones[1].scrollAlign;
   if(var == "scrollAlignZone2")             return zones[2].scrollAlign;
+  if(var == "scrollAlignZone3")             return zones[3].scrollAlign;
   if(var == "scrollEffectZone0In")          return zones[0].scrollEffectIn;
   if(var == "scrollEffectZone1In")          return zones[1].scrollEffectIn;
   if(var == "scrollEffectZone2In")          return zones[2].scrollEffectIn;
+  if(var == "scrollEffectZone3In")          return zones[3].scrollEffectIn;
   if(var == "scrollEffectZone0Out")         return zones[0].scrollEffectOut;
   if(var == "scrollEffectZone1Out")         return zones[1].scrollEffectOut;
   if(var == "scrollEffectZone2Out")         return zones[2].scrollEffectOut;
+  if(var == "scrollEffectZone3Out")         return zones[3].scrollEffectOut;
   if(var == "mqttServerAddress")            return mqttServerAddress;
   if(var == "mqttServerPort")               return itoa(mqttServerPort, buffer, 10);
   if(var == "mqttUsername")                 return mqttUsername;
@@ -242,23 +256,28 @@ String processor(const String& var){
   if(var == "mqttTextTopicZone0")           return MQTTZones[0].message;
   if(var == "mqttTextTopicZone1")           return MQTTZones[1].message;
   if(var == "mqttTextTopicZone2")           return MQTTZones[2].message;
+  if(var == "mqttTextTopicZone3")           return MQTTZones[3].message;
   if(var == "mqttPostfixZone0")             return zones[0].mqttPostfix;
   if(var == "mqttPostfixZone1")             return zones[1].mqttPostfix;
   if(var == "mqttPostfixZone2")             return zones[2].mqttPostfix;
+  if(var == "mqttPostfixZone3")             return zones[3].mqttPostfix;
   if(var == "ntpTimeZone")                  return itoa(ntpTimeZone, buffer, 10);
   if(var == "clockDisplayFormatZone0")      return zones[0].clockDisplayFormat;
   if(var == "clockDisplayFormatZone1")      return zones[1].clockDisplayFormat;
   if(var == "clockDisplayFormatZone2")      return zones[2].clockDisplayFormat;
+  if(var == "clockDisplayFormatZone3")      return zones[3].clockDisplayFormat;
   if(var == "owmApiToken")                  return owmApiToken;
   if(var == "owmUnitsFormat")               return owmUnitsFormat;
   if(var == "owmUpdateInterval")            return itoa(owmUpdateInterval, buffer, 10);
   if(var == "owmWhatToDisplayZone0")        return zones[0].owmWhatToDisplay;
   if(var == "owmWhatToDisplayZone1")        return zones[1].owmWhatToDisplay;
   if(var == "owmWhatToDisplayZone2")        return zones[2].owmWhatToDisplay;
+  if(var == "owmWhatToDisplayZone3")        return zones[3].owmWhatToDisplay;
   if(var == "owmCity")                      return owmCity;
   if(var == "fontZone0")                    return zones[0].font;
   if(var == "fontZone1")                    return zones[1].font;
   if(var == "fontZone2")                    return zones[2].font;
+  if(var == "fontZone3")                    return zones[3].font;
   if(var == "haAddr")                       return haAddr;
   if(var == "haApiToken")                   return haApiToken;
   if(var == "haApiHttpType")                return haApiHttpType;
@@ -266,13 +285,16 @@ String processor(const String& var){
   if(var == "haSensorIdZone0")              return zones[0].haSensorId;
   if(var == "haSensorIdZone1")              return zones[1].haSensorId;
   if(var == "haSensorIdZone2")              return zones[2].haSensorId;
+  if(var == "haSensorIdZone3")              return zones[3].haSensorId;
   if(var == "haSensorPostfixZone0")         return zones[0].haSensorPostfix;
   if(var == "haSensorPostfixZone1")         return zones[1].haSensorPostfix;
   if(var == "haSensorPostfixZone2")         return zones[2].haSensorPostfix;
+  if(var == "haSensorPostfixZone3")         return zones[3].haSensorPostfix;
   if(var == "haUpdateInterval")             return itoa(haUpdateInterval, buffer, 10);
   if(var == "charspacingZone0")             return itoa(zones[0].charspacing, buffer, 10);
   if(var == "charspacingZone1")             return itoa(zones[1].charspacing, buffer, 10);
   if(var == "charspacingZone2")             return itoa(zones[2].charspacing, buffer, 10);
+  if(var == "charspacingZone3")             return itoa(zones[3].charspacing, buffer, 10);
   if(var == "firmwareVer")                  return firmwareVer;
   if(var == "deviceName")                   return deviceName;
   if(var == "disableServiceMessages")       return disableServiceMessages;
@@ -283,6 +305,7 @@ String processor(const String& var){
   if(var == "ds18b20PostfixZone0")          return zones[0].ds18b20Postfix;
   if(var == "ds18b20PostfixZone1")          return zones[1].ds18b20Postfix;
   if(var == "ds18b20PostfixZone2")          return zones[2].ds18b20Postfix;
+  if(var == "ds18b20PostfixZone3")          return zones[3].ds18b20Postfix;
   return String();
 }
 
@@ -536,6 +559,8 @@ void writeAllVarsToConfFile() {
   doc["zone1End"] = String(zones[1].end);
   doc["zone2Begin"] = String(zones[2].begin);
   doc["zone2End"] = String(zones[2].end);
+  doc["zone3Begin"] = String(zones[3].begin);
+  doc["zone3End"] = String(zones[3].end);
   // zone0
   doc["workModeZone0"] = zones[0].workMode;
   doc["scrollSpeedZone0"] = String(zones[0].scrollSpeed);
@@ -584,6 +609,22 @@ void writeAllVarsToConfFile() {
   doc["haSensorPostfixZone2"] = zones[2].haSensorPostfix;
   doc["mqttTextTopicZone2"] = MQTTZones[2].message;
   doc["ds18b20PostfixZone2"] = zones[2].ds18b20Postfix;
+  // zone3
+  doc["workModeZone3"] = zones[3].workMode;
+  doc["scrollSpeedZone3"] = String(zones[3].scrollSpeed);
+  doc["scrollPauseZone3"] = String(zones[3].scrollPause);
+  doc["scrollAlignZone3"] = zones[3].scrollAlign;
+  doc["scrollEffectZone3In"] = zones[3].scrollEffectIn;
+  doc["scrollEffectZone3Out"] = zones[3].scrollEffectOut;
+  doc["mqttPostfixZone3"] = zones[3].mqttPostfix;
+  doc["clockDisplayFormatZone3"] = zones[3].clockDisplayFormat;
+  doc["owmWhatToDisplayZone3"] = zones[3].owmWhatToDisplay;
+  doc["fontZone3"] = zones[3].font;
+  doc["charspacingZone3"] = String(zones[3].charspacing);
+  doc["haSensorIdZone3"] = zones[3].haSensorId;
+  doc["haSensorPostfixZone3"] = zones[3].haSensorPostfix;
+  doc["mqttTextTopicZone3"] = MQTTZones[3].message;
+  doc["ds18b20PostfixZone3"] = zones[3].ds18b20Postfix;  
   
   doc["mqttServerAddress"] = mqttServerAddress;
   doc["mqttServerPort"] = String(mqttServerPort);
@@ -613,26 +654,6 @@ void writeAllVarsToConfFile() {
   MQTTPublishState();
 }
 
-void writeVarToConfFile(String VarName, String VarValue, bool softReloadVars, bool hardReloadVars) {
-  File configFile = LittleFS.open("/config.json", "r");
-  if (!configFile) {
-    Serial.println("!!! ERROR !!! failed to open config file for writing");
-    return;
-  }
-
-  DynamicJsonDocument doc(3072);
-  deserializeJson(doc, configFile);
-  configFile.close();
-  doc[VarName] = VarValue;
-  configFile = LittleFS.open("/config.json", "w");
-  serializeJson(doc, configFile);
-  configFile.close();
-
-  if(softReloadVars) newConfigAvailable = true;
-  else if(hardReloadVars) restartESP = true;
-  else MQTTPublishState();
-}
-
 void ConfigFile_Read_Variable() {
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
@@ -650,6 +671,7 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("workModeZone0")])             zones[0].workMode = postObj[F("workModeZone0")].as<String>();
   if(postObj[F("workModeZone1")])             zones[1].workMode = postObj[F("workModeZone1")].as<String>();
   if(postObj[F("workModeZone2")])             zones[2].workMode = postObj[F("workModeZone2")].as<String>();
+  if(postObj[F("workModeZone3")])             zones[3].workMode = postObj[F("workModeZone3")].as<String>();
   if(postObj[F("zoneNumbers")])               zoneNumbers = postObj[F("zoneNumbers")].as<uint8_t>();
   if(postObj[F("zone0Begin")])                zones[0].begin = postObj[F("zone0Begin")].as<uint8_t>();
   if(postObj[F("zone0End")])                  zones[0].end = postObj[F("zone0End")].as<uint8_t>();
@@ -657,22 +679,29 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("zone1End")])                  zones[1].end = postObj[F("zone1End")].as<uint8_t>();
   if(postObj[F("zone2Begin")])                zones[2].begin = postObj[F("zone2Begin")].as<uint8_t>();
   if(postObj[F("zone2End")])                  zones[2].end = postObj[F("zone2End")].as<uint8_t>();
+  if(postObj[F("zone3Begin")])                zones[3].begin = postObj[F("zone3Begin")].as<uint8_t>();
+  if(postObj[F("zone3End")])                  zones[3].end = postObj[F("zone3End")].as<uint8_t>();
   if(postObj[F("intensity")])                 intensity = postObj[F("intensity")].as<uint8_t>();
   if(postObj[F("scrollSpeedZone0")])          zones[0].scrollSpeed = postObj[F("scrollSpeedZone0")].as<uint8_t>();
   if(postObj[F("scrollSpeedZone1")])          zones[1].scrollSpeed = postObj[F("scrollSpeedZone1")].as<uint8_t>();
   if(postObj[F("scrollSpeedZone2")])          zones[2].scrollSpeed = postObj[F("scrollSpeedZone2")].as<uint8_t>();
+  if(postObj[F("scrollSpeedZone3")])          zones[3].scrollSpeed = postObj[F("scrollSpeedZone3")].as<uint8_t>();
   if(postObj[F("scrollPauseZone0")])          zones[0].scrollPause = postObj[F("scrollPauseZone0")].as<uint16_t>();
   if(postObj[F("scrollPauseZone1")])          zones[1].scrollPause = postObj[F("scrollPauseZone1")].as<uint16_t>();
   if(postObj[F("scrollPauseZone2")])          zones[2].scrollPause = postObj[F("scrollPauseZone2")].as<uint16_t>();
+  if(postObj[F("scrollPauseZone3")])          zones[3].scrollPause = postObj[F("scrollPauseZone3")].as<uint16_t>();
   if(postObj[F("scrollAlignZone0")])          zones[0].scrollAlign = postObj[F("scrollAlignZone0")].as<String>();
   if(postObj[F("scrollAlignZone1")])          zones[1].scrollAlign = postObj[F("scrollAlignZone1")].as<String>();
   if(postObj[F("scrollAlignZone2")])          zones[2].scrollAlign = postObj[F("scrollAlignZone2")].as<String>();
+  if(postObj[F("scrollAlignZone3")])          zones[3].scrollAlign = postObj[F("scrollAlignZone3")].as<String>();
   if(postObj[F("scrollEffectZone0In")])       zones[0].scrollEffectIn = postObj[F("scrollEffectZone0In")].as<String>();
   if(postObj[F("scrollEffectZone1In")])       zones[1].scrollEffectIn = postObj[F("scrollEffectZone1In")].as<String>();
   if(postObj[F("scrollEffectZone2In")])       zones[2].scrollEffectIn = postObj[F("scrollEffectZone2In")].as<String>();
+  if(postObj[F("scrollEffectZone3In")])       zones[3].scrollEffectIn = postObj[F("scrollEffectZone3In")].as<String>();
   if(postObj[F("scrollEffectZone0Out")])      zones[0].scrollEffectOut = postObj[F("scrollEffectZone0Out")].as<String>();
   if(postObj[F("scrollEffectZone1Out")])      zones[1].scrollEffectOut = postObj[F("scrollEffectZone1Out")].as<String>();
   if(postObj[F("scrollEffectZone2Out")])      zones[2].scrollEffectOut = postObj[F("scrollEffectZone2Out")].as<String>();
+  if(postObj[F("scrollEffectZone3Out")])      zones[3].scrollEffectOut = postObj[F("scrollEffectZone3Out")].as<String>();
   if(postObj[F("mqttServerAddress")])         mqttServerAddress = postObj[F("mqttServerAddress")].as<String>();
   if(postObj[F("mqttServerPort")])            mqttServerPort = postObj[F("mqttServerPort")].as<int>();
   if(postObj[F("mqttUsername")])              mqttUsername = postObj[F("mqttUsername")].as<String>();
@@ -680,13 +709,16 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("mqttTextTopicZone0")])        MQTTZones[0].message = postObj[F("mqttTextTopicZone0")].as<String>();
   if(postObj[F("mqttTextTopicZone1")])        MQTTZones[1].message = postObj[F("mqttTextTopicZone1")].as<String>();
   if(postObj[F("mqttTextTopicZone2")])        MQTTZones[2].message = postObj[F("mqttTextTopicZone2")].as<String>();
+  if(postObj[F("mqttTextTopicZone3")])        MQTTZones[3].message = postObj[F("mqttTextTopicZone3")].as<String>();
   if(postObj[F("mqttPostfixZone0")])          zones[0].mqttPostfix = postObj[F("mqttPostfixZone0")].as<String>();
   if(postObj[F("mqttPostfixZone1")])          zones[1].mqttPostfix = postObj[F("mqttPostfixZone1")].as<String>();
   if(postObj[F("mqttPostfixZone2")])          zones[2].mqttPostfix = postObj[F("mqttPostfixZone2")].as<String>();
+  if(postObj[F("mqttPostfixZone3")])          zones[3].mqttPostfix = postObj[F("mqttPostfixZone3")].as<String>();
   if(postObj[F("ntpTimeZone")])               ntpTimeZone = postObj[F("ntpTimeZone")].as<int>();
   if(postObj[F("clockDisplayFormatZone0")])   zones[0].clockDisplayFormat = postObj[F("clockDisplayFormatZone0")].as<String>();
   if(postObj[F("clockDisplayFormatZone1")])   zones[1].clockDisplayFormat = postObj[F("clockDisplayFormatZone1")].as<String>();
   if(postObj[F("clockDisplayFormatZone2")])   zones[2].clockDisplayFormat = postObj[F("clockDisplayFormatZone2")].as<String>();
+  if(postObj[F("clockDisplayFormatZone3")])   zones[3].clockDisplayFormat = postObj[F("clockDisplayFormatZone3")].as<String>();
   if(postObj[F("owmApiToken")])               owmApiToken = postObj[F("owmApiToken")].as<String>();
   if(postObj[F("owmUnitsFormat")])            owmUnitsFormat = postObj[F("owmUnitsFormat")].as<String>();
   if(postObj[F("owmUpdateInterval")])         owmUpdateInterval = postObj[F("owmUpdateInterval")].as<int>();
@@ -694,9 +726,11 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("owmWhatToDisplayZone0")])     zones[0].owmWhatToDisplay = postObj[F("owmWhatToDisplayZone0")].as<String>();
   if(postObj[F("owmWhatToDisplayZone1")])     zones[1].owmWhatToDisplay = postObj[F("owmWhatToDisplayZone1")].as<String>();
   if(postObj[F("owmWhatToDisplayZone2")])     zones[2].owmWhatToDisplay = postObj[F("owmWhatToDisplayZone2")].as<String>();
+  if(postObj[F("owmWhatToDisplayZone3")])     zones[3].owmWhatToDisplay = postObj[F("owmWhatToDisplayZone3")].as<String>();
   if(postObj[F("fontZone0")])                 zones[0].font = postObj[F("fontZone0")].as<String>();
   if(postObj[F("fontZone1")])                 zones[1].font = postObj[F("fontZone1")].as<String>();
   if(postObj[F("fontZone2")])                 zones[2].font = postObj[F("fontZone2")].as<String>();
+  if(postObj[F("fontZone3")])                 zones[3].font = postObj[F("fontZone3")].as<String>();
   if(postObj[F("haAddr")])                    haAddr = postObj[F("haAddr")].as<String>();
   if(postObj[F("haApiToken")])                haApiToken = postObj[F("haApiToken")].as<String>();
   if(postObj[F("haApiHttpType")])             haApiHttpType = postObj[F("haApiHttpType")].as<String>();
@@ -704,13 +738,16 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("haSensorIdZone0")])           zones[0].haSensorId = postObj[F("haSensorIdZone0")].as<String>();
   if(postObj[F("haSensorIdZone1")])           zones[1].haSensorId = postObj[F("haSensorIdZone1")].as<String>();
   if(postObj[F("haSensorIdZone2")])           zones[2].haSensorId = postObj[F("haSensorIdZone2")].as<String>();
+  if(postObj[F("haSensorIdZone3")])           zones[3].haSensorId = postObj[F("haSensorIdZone3")].as<String>();
   if(postObj[F("haSensorPostfixZone0")])      zones[0].haSensorPostfix = postObj[F("haSensorPostfixZone0")].as<String>();
   if(postObj[F("haSensorPostfixZone1")])      zones[1].haSensorPostfix = postObj[F("haSensorPostfixZone1")].as<String>();
   if(postObj[F("haSensorPostfixZone2")])      zones[2].haSensorPostfix = postObj[F("haSensorPostfixZone2")].as<String>();
+  if(postObj[F("haSensorPostfixZone3")])      zones[3].haSensorPostfix = postObj[F("haSensorPostfixZone3")].as<String>();
   if(postObj[F("haUpdateInterval")])          haUpdateInterval = postObj[F("haUpdateInterval")].as<int>();
   if(postObj[F("charspacingZone0")])          zones[0].charspacing = postObj[F("charspacingZone0")].as<int>();
   if(postObj[F("charspacingZone1")])          zones[1].charspacing = postObj[F("charspacingZone1")].as<int>();
   if(postObj[F("charspacingZone2")])          zones[2].charspacing = postObj[F("charspacingZone2")].as<int>();
+  if(postObj[F("charspacingZone3")])          zones[3].charspacing = postObj[F("charspacingZone3")].as<int>();
   if(postObj[F("power")])                     power = postObj[F("power")].as<String>();
   if(postObj[F("deviceName")])                deviceName = postObj[F("deviceName")].as<String>();
   if(postObj[F("disableServiceMessages")])    disableServiceMessages = postObj[F("disableServiceMessages")].as<String>();
@@ -721,6 +758,7 @@ void ConfigFile_Read_Variable() {
   if(postObj[F("ds18b20PostfixZone0")])       zones[0].ds18b20Postfix = postObj[F("ds18b20PostfixZone0")].as<String>();
   if(postObj[F("ds18b20PostfixZone1")])       zones[1].ds18b20Postfix = postObj[F("ds18b20PostfixZone1")].as<String>();
   if(postObj[F("ds18b20PostfixZone2")])       zones[2].ds18b20Postfix = postObj[F("ds18b20PostfixZone2")].as<String>();
+  if(postObj[F("ds18b20PostfixZone3")])       zones[3].ds18b20Postfix = postObj[F("ds18b20PostfixZone3")].as<String>();
 }
 
 void zoneNewMessage(int zone, String newMessage, String postfix) {
@@ -735,6 +773,10 @@ void zoneNewMessage(int zone, String newMessage, String postfix) {
   if ( zone == 2) {
     strcpy(zone2Message, (newMessage + postfix).c_str());
     zone2newMessageAvailable = true;
+  }
+  if ( zone == 3) {
+    strcpy(zone3Message, (newMessage + postfix).c_str());
+    zone3newMessageAvailable = true;
   }
 }
 
@@ -891,13 +933,16 @@ String getCurTime(String curZoneFont, String displayFormat) {
       
       if (displayFormat == "HHMM") {
         t.remove(5,4);
+        return t;
       }
       if (displayFormat == "HH") {
         t.remove(2,7);
+        return t;
       }
       if (displayFormat == "MM") {
         t.remove(5,4);
         t.remove(0,3);
+        return t;
       }
 
       time_t epochTime = timeClient.getEpochTime(); // returns the Unix epoch
@@ -929,6 +974,10 @@ String getCurTime(String curZoneFont, String displayFormat) {
       if (displayFormat == "ddmm") t = monthDayStr + "." + currentMonthStr;
       if (displayFormat == "ddmmaa") t = monthDayStr + "." + currentMonthStr + String(weekDay);
       if (displayFormat == "aa") t = String(weekDay);
+      if (displayFormat == "ddmmaahhmm") {
+        t.remove(5,4);
+        t = monthDayStr + "." + currentMonthStr + " " + String(weekDay) + " " + t;
+      }
       return t;
 }
 
@@ -959,6 +1008,13 @@ void displayAnimation() {
         zone2newMessageAvailable = false;
         P.setTextBuffer(2, zone2Message);
         P.displayReset(2);
+    }
+
+    if (zone3newMessageAvailable && P.getZoneStatus(3)) {
+        Serial.printf("\nzone3Message availabel: %s", zone3Message);
+        zone3newMessageAvailable = false;
+        P.setTextBuffer(3, zone3Message);
+        P.displayReset(3);
     }
   }
 }
@@ -1108,14 +1164,24 @@ void setup() {
             zones[2].end = p->value().toInt();
             restartESP = true;
           }
+          if (p->name() == "zone3Begin") {
+            zones[3].begin = p->value().toInt();
+            restartESP = true;
+          }
+          if (p->name() == "zone3End") {
+            zones[3].end = p->value().toInt();
+            restartESP = true;
+          }
           // zone 0
           if (p->name() == "workModeZone0") {
             zones[0].workMode = p->value().c_str();
             if (zones[0].workMode == "owmWeather") owmLastTime = -1000000;
+            if (zones[0].workMode == "mqttClient") mqttClient.disconnect();
             if (zones[0].workMode == "haClient") haLastTime = -1000000;
             if (zones[0].workMode == "wallClock") {
               timeClient.setTimeOffset(ntpTimeZone * 3600);
               timeClient.update();
+              zones[0].previousMillis = -1000000;
             }
           }
           if (p->name() == "scrollSpeedZone0") { 
@@ -1179,10 +1245,12 @@ void setup() {
           if (p->name() == "workModeZone1") {
             zones[1].workMode = p->value().c_str();
             if (zones[1].workMode == "owmWeather") owmLastTime = -1000000;
+            if (zones[1].workMode == "mqttClient") mqttClient.disconnect();
             if (zones[1].workMode == "haClient") haLastTime = -1000000;
             if (zones[1].workMode == "wallClock") {
               timeClient.setTimeOffset(ntpTimeZone * 3600);
               timeClient.update();
+              zones[1].previousMillis = -1000000;
             }
           }
           if (p->name() == "scrollSpeedZone1") { 
@@ -1246,10 +1314,12 @@ void setup() {
           if (p->name() == "workModeZone2") {
             zones[2].workMode = p->value().c_str();
             if (zones[2].workMode == "owmWeather") owmLastTime = -1000000;
+            if (zones[2].workMode == "mqttClient") mqttClient.disconnect();
             if (zones[2].workMode == "haClient") haLastTime = -1000000;
             if (zones[2].workMode == "wallClock") {
               timeClient.setTimeOffset(ntpTimeZone * 3600);
               timeClient.update();
+              zones[2].previousMillis = -1000000;
             }
           }
           if (p->name() == "scrollSpeedZone2") { 
@@ -1309,6 +1379,75 @@ void setup() {
             zones[2].ds18b20Postfix = p->value().c_str();
             previousDsMillis = -1000;
           }
+          // zone 3
+          if (p->name() == "workModeZone3") {
+            zones[3].workMode = p->value().c_str();
+            if (zones[3].workMode == "owmWeather") owmLastTime = -1000000;
+            if (zones[3].workMode == "mqttClient") mqttClient.disconnect();
+            if (zones[3].workMode == "haClient") haLastTime = -1000000;
+            if (zones[3].workMode == "wallClock") {
+              timeClient.setTimeOffset(ntpTimeZone * 3600);
+              timeClient.update();
+              zones[3].previousMillis = -1000000;
+            }
+          }
+          if (p->name() == "scrollSpeedZone3") { 
+            zones[3].scrollSpeed = p->value().toInt();
+            P.setSpeed(3, zones[3].scrollSpeed);
+          }
+          if (p->name() == "scrollPauseZone3") {
+            zones[3].scrollPause = p->value().toInt();
+            P.setPause(3, zones[3].scrollPause);
+          }
+          if (p->name() == "scrollAlignZone3") {
+            zones[3].scrollAlign = p->value().c_str();
+            P.setTextAlignment(3, stringToTextPositionT(zones[3].scrollAlign));
+          }
+          if (p->name() == "scrollEffectZone3In") {
+            zones[3].scrollEffectIn = p->value().c_str();
+            P.setTextEffect(3, stringToTextEffectT(zones[3].scrollEffectIn), stringToTextEffectT(zones[3].scrollEffectOut));
+          }
+          if (p->name() == "scrollEffectZone3Out") {
+            zones[3].scrollEffectOut = p->value().c_str();
+            P.setTextEffect(3, stringToTextEffectT(zones[3].scrollEffectIn), stringToTextEffectT(zones[3].scrollEffectOut));
+          }
+          if (p->name() == "mqttTextTopicZone3") {
+            if (MQTTZones[3].message != p->value().c_str()) {
+              MQTTZones[3].message = p->value().c_str();
+              mqttClient.disconnect();
+            }
+          }
+          if (p->name() == "mqttPostfixZone3") {
+            if (zones[3].mqttPostfix != p->value().c_str()) {
+              zones[3].mqttPostfix = p->value().c_str();
+              mqttClient.disconnect();
+            }
+          }
+          if (p->name() == "clockDisplayFormatZone3") {
+            zones[3].clockDisplayFormat = p->value().c_str();
+            curTimeZone3 = getCurTime(zones[3].font, zones[3].clockDisplayFormat);
+          }
+          if (p->name() == "owmWhatToDisplayZone3") {
+            zones[3].owmWhatToDisplay = p->value().c_str();
+            if(zones[3].owmWhatToDisplay == "owmWeatherIcon") {
+              P.setFont(3, wledSymbolFont);
+              P.setTextEffect(3, stringToTextEffectT(zones[3].scrollEffectIn), PA_NO_EFFECT);
+            }
+          }
+          if (p->name() == "fontZone3") {
+            zones[3].font = p->value().c_str();
+            applyZoneFont(3, zones[3].font);
+          }
+          if (p->name() == "haSensorIdZone3") zones[3].haSensorId = p->value().c_str();
+          if (p->name() == "haSensorPostfixZone3") zones[3].haSensorPostfix = p->value().c_str();
+          if (p->name() == "charspacingZone3") {
+            zones[3].charspacing = p->value().toInt();
+            P.setCharSpacing(3, zones[3].charspacing);
+          }
+          if (p->name() == "ds18b20PostfixZone3") {
+            zones[3].ds18b20Postfix = p->value().c_str();
+            previousDsMillis = -1000;
+          }
 
           if (p->name() == "mqttServerAddress") mqttServerAddress = p->value().c_str();
           if (p->name() == "mqttServerPort") mqttServerPort = p->value().toInt();
@@ -1343,6 +1482,7 @@ void setup() {
           if (strcmp(p->name().c_str(), "messageZone0") == 0) zoneNewMessage(0, p->value().c_str(), "");
           if (strcmp(p->name().c_str(), "messageZone1") == 0) zoneNewMessage(1, p->value().c_str(), "");
           if (strcmp(p->name().c_str(), "messageZone2") == 0) zoneNewMessage(2, p->value().c_str(), "");
+          if (strcmp(p->name().c_str(), "messageZone3") == 0) zoneNewMessage(3, p->value().c_str(), "");
         }
       }
       request->send(200, "application/json", "{\"status\":\"success\"}");
@@ -1353,9 +1493,9 @@ void setup() {
 
   // Initializing display
   P.begin(zoneNumbers);
-  P.setZone(0, zones[0].begin, zones[0].end);
-  if(zoneNumbers > 1) P.setZone(1, zones[1].begin, zones[1].end);
-  if(zoneNumbers > 2) P.setZone(2, zones[2].begin, zones[2].end);
+  for ( uint8_t n = 0; n < zoneNumbers; n++) {
+    P.setZone(n, zones[n].begin, zones[n].end);
+  }
   P.setIntensity(intensity);
 
   // Start MQTT client
@@ -1386,8 +1526,8 @@ void loop() {
     newConfigAvailable  = true;
   }
   
-  if (!zone2Test && ipInfo) {
-    if (P.getZoneStatus(2)) {
+  if (!zone3Test && ipInfo) {
+    if (P.getZoneStatus(3)) {
       P.displayClear();
       P.setCharSpacing(0,1);
       P.setFont(0, wledFont_cyrillic);
@@ -1396,6 +1536,22 @@ void loop() {
       zoneNewMessage(0, "ip: " + WiFi.localIP().toString(), "");
       ipInfo = false;
     }
+  }
+
+  if (!zone2Test && zone3Test) {
+    if (P.getZoneStatus(2)) {
+      P.displayClear();
+      P.setFont(3, wledSymbolFont);
+      P.setTextEffect(3, PA_GROW_UP, PA_NO_EFFECT);
+      P.setCharSpacing(3,0);
+      P.setPause(3, 500);
+      P.setSpeed(3, 25);
+      String testMessage = "8";
+      for ( int i = 0; i < int(zones[3].end - zones[3].begin); i++) testMessage += 8;
+      zoneNewMessage(3, testMessage, "");
+      zone3Test = false;
+      
+    }      
   }
 
   if (!zone1Test && zone2Test) {
@@ -1451,69 +1607,35 @@ void loop() {
     newConfigAvailable = false;
     ConfigFile_Read_Variable();
     
-    P.setSpeed(0, zones[0].scrollSpeed);
-    P.setPause(0, zones[0].scrollPause);
-    P.setTextAlignment(0, stringToTextPositionT(zones[0].scrollAlign));
-    P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), stringToTextEffectT(zones[0].scrollEffectOut));
-    P.setCharSpacing(0, zones[0].charspacing);
-    applyZoneFont(0, zones[0].font);
-
-    if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
-      timeClient.setTimeOffset(ntpTimeZone * 3600);
-      timeClient.update();
-      curTimeZone0 = getCurTime(zones[0].font, zones[0].clockDisplayFormat);
-      curTimeZone1 = getCurTime(zones[1].font, zones[1].clockDisplayFormat);
-      curTimeZone2 = getCurTime(zones[2].font, zones[2].clockDisplayFormat);;
-    }
-
     mqttClient.disconnect();
-    if (zones[0].workMode == "mqttClient" && disableServiceMessages == "false") zoneNewMessage(0, "MQTT", "");
-    if (zones[0].workMode == "manualInput" && disableServiceMessages == "false") zoneNewMessage(0, "Manual", "");
-    if (zones[0].workMode == "owmWeather") {
-      if(zones[0].owmWhatToDisplay == "owmWeatherIcon") {
-        P.setFont(0, wledSymbolFont);
-        P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
-      }
-    }
-    
-    if(zoneNumbers > 1) {
-      P.setSpeed(1, zones[1].scrollSpeed);
-      P.setPause(1, zones[1].scrollPause);
-      P.setTextAlignment(1, stringToTextPositionT(zones[1].scrollAlign));
-      P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), stringToTextEffectT(zones[1].scrollEffectOut));
-      P.setCharSpacing(1, zones[1].charspacing);
-      applyZoneFont(1, zones[1].font);
-      if (zones[1].workMode == "mqttClient" && disableServiceMessages == "false")  zoneNewMessage(1, "MQTT", "");
-      if (zones[1].workMode == "manualInput" && disableServiceMessages == "false") zoneNewMessage(1, "Manual", "");
-      if (zones[1].workMode == "owmWeather") {
-        if(zones[1].owmWhatToDisplay == "owmWeatherIcon") {
-          P.setFont(1, wledSymbolFont);
-          P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
-        }
-      }
-    }
-
-    if(zoneNumbers > 2) {
-      P.setSpeed(2, zones[2].scrollSpeed);
-      P.setPause(2, zones[2].scrollPause);
-      P.setTextAlignment(2, stringToTextPositionT(zones[2].scrollAlign));
-      P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), stringToTextEffectT(zones[2].scrollEffectOut));
-      P.setCharSpacing(2, zones[2].charspacing);
-      applyZoneFont(2, zones[2].font);
-      if (zones[2].workMode == "mqttClient" && disableServiceMessages == "false")  zoneNewMessage(2, "MQTT", "");
-      if (zones[2].workMode == "manualInput" && disableServiceMessages == "false") zoneNewMessage(2, "Manual", "");
-      if (zones[2].workMode == "owmWeather") {
-        if(zones[2].owmWhatToDisplay == "owmWeatherIcon") {
-          P.setFont(2, wledSymbolFont);
-          P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
-        }
-      }
-    }
-
     P.setIntensity(intensity);
 
-    if (zones[0].workMode == "owmWeather" || zones[1].workMode == "owmWeather" || zones[2].workMode == "owmWeather") owmLastTime = -1000000;
-    if (zones[0].workMode == "haClient" || zones[1].workMode == "haClient" || zones[2].workMode == "haClient") haLastTime = -1000000;
+    for ( uint8_t n = 0; n < zoneNumbers; n++) {
+      P.setSpeed(n, zones[n].scrollSpeed);
+      P.setPause(n, zones[n].scrollPause);
+      P.setTextAlignment(n, stringToTextPositionT(zones[n].scrollAlign));
+      P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn), stringToTextEffectT(zones[n].scrollEffectOut));
+      P.setCharSpacing(n, zones[n].charspacing);
+      applyZoneFont(n, zones[n].font);
+
+      if (zones[n].workMode == "wallClock") {
+        timeClient.setTimeOffset(ntpTimeZone * 3600);
+        timeClient.update();
+        zones[n].curTimeZone = getCurTime(zones[n].font, zones[n].clockDisplayFormat);
+        zones[n].previousMillis = -1000000;
+      }
+
+      if (zones[n].workMode == "mqttClient" && disableServiceMessages == "false") zoneNewMessage(n, "MQTT", "");
+      if (zones[n].workMode == "manualInput" && disableServiceMessages == "false") zoneNewMessage(n, "Manual", "");
+      if (zones[n].workMode == "owmWeather") {
+        owmLastTime = -1000000;
+        if(zones[n].owmWhatToDisplay == "owmWeatherIcon") {
+          P.setFont(n, wledSymbolFont);
+          P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn), PA_NO_EFFECT);
+        }
+      }
+      if (zones[n].workMode == "haClient") haLastTime = -1000000;
+    }
   }
   
   if (allTestsFinish) {
@@ -1531,160 +1653,82 @@ void loop() {
       }
     }
 
-    if (zones[0].workMode == "wallClock" || zones[1].workMode == "wallClock" || zones[2].workMode == "wallClock") {
-      if (currentMillis - previousMillis >= 1000) {
-        previousMillis = currentMillis;
-        timeClient.update();
-        if (zones[0].workMode == "wallClock") {
-          // get current time
-          String curTimeZone0New = getCurTime(zones[0].font, zones[0].clockDisplayFormat);
-          // checking if clock display format contains dots
-          if (zones[0].clockDisplayFormat == "HHMM" || zones[0].clockDisplayFormat == "HHMMSS" ) {
-            // checking if current time and new time are the same, checking with dots and without dots
-            if (curTimeZone0 == curTimeZone0New || curTimeZone0 == flashClockDots(curTimeZone0New)) {
-              // checking if dot blinds not disabl
-              if (disableDotsBlink == "false") {
-                // checking if current time have dots and remove dots
-                if (curTimeZone0.indexOf(":") > 0) curTimeZone0New.replace(":", "¦");
-                // pause display for 1 second before flashing dots
-                P.setPause(0,100);
-                P.setTextEffect(0, PA_NO_EFFECT, PA_NO_EFFECT);
-                curTimeZone0 = curTimeZone0New;
-                zoneNewMessage(0, curTimeZone0, "");
-              }
-            } else {
-              // checking if dot blinds not disabl
-              if (disableDotsBlink == "false") {
-                // checking if cur time have dots and remove dots
-                if ( curTimeZone0.indexOf(":") > 0 ) curTimeZone0New.replace(":", "¦");
-                curTimeZone0 = curTimeZone0New;
-                P.setPause(0,100);
-                P.setTextEffect(0, stringToTextEffectT(zones[0].scrollEffectIn), PA_NO_EFFECT);
-                zoneNewMessage(0, curTimeZone0, "");
-              } else {
-                curTimeZone0 = curTimeZone0New;
-                zoneNewMessage(0, curTimeZone0, "");
-              }
-            }
-          } else {
-            curTimeZone0 = curTimeZone0New;
-            zoneNewMessage(0, curTimeZone0, "");
-          }
-        }
-
-        if (zones[1].workMode == "wallClock" && zoneNumbers > 1) {
-          // get current time
-          String curTimeZone1New = getCurTime(zones[1].font, zones[1].clockDisplayFormat);
-          // checking if clock display format contains dots
-          if (zones[1].clockDisplayFormat == "HHMM" || zones[1].clockDisplayFormat == "HHMMSS" ) {
-            // checking if current time and new time are the same, checking with dots and without dots
-            if (curTimeZone1 == curTimeZone1New || curTimeZone0 == flashClockDots(curTimeZone1New)) {
-              // checking if dot blinds not disabl
-              if (disableDotsBlink == "false") {
-                // checking if current time have dots and remove dots
-                if (curTimeZone1.indexOf(":") > 0) curTimeZone1New.replace(":", "¦");
-                // pause display for 1 second before flashing dots
-                P.setPause(1,100);
-                P.setTextEffect(1, PA_NO_EFFECT, PA_NO_EFFECT);
-                curTimeZone1 = curTimeZone1New;
-                zoneNewMessage(1, curTimeZone1, "");
-              }
-            } else {
-              // checking if dot blinds not disabl
-              if (disableDotsBlink == "false") {
-                // checking if cur time have dots and remove dots
-                if ( curTimeZone1.indexOf(":") > 0 ) curTimeZone1New.replace(":", "¦");
-                curTimeZone1 = curTimeZone1New;
-                P.setPause(1,100);
-                P.setTextEffect(1, stringToTextEffectT(zones[1].scrollEffectIn), PA_NO_EFFECT);
-                zoneNewMessage(1, curTimeZone1, "");
-              } else {
-                curTimeZone1 = curTimeZone1New;
-                zoneNewMessage(1, curTimeZone1, "");
-              }
-            }
-          } else {
-            curTimeZone1 = curTimeZone1New;
-            zoneNewMessage(1, curTimeZone1, "");
-          }
-        }
-
-        if (zones[2].workMode == "wallClock" && zoneNumbers > 2) {
-          // get current time
-          String curTimeZone2New = getCurTime(zones[2].font, zones[2].clockDisplayFormat);
-          // checking if clock display format contains dots
-          if (zones[2].clockDisplayFormat == "HHMM" || zones[2].clockDisplayFormat == "HHMMSS" ) {
-            // checking if current time and new time are the same, checking with dots and without dots
-            if (curTimeZone2 == curTimeZone2New || curTimeZone2 == flashClockDots(curTimeZone2New)) {
-              // checking if dot blinds not disabl
-              if (disableDotsBlink == "false") {
-                // checking if current time have dots and remove dots
-                if (curTimeZone2.indexOf(":") > 0) curTimeZone2New.replace(":", "¦");
-                // pause display for 1 second before flashing dots
-                P.setPause(2,100);
-                P.setTextEffect(2, PA_NO_EFFECT, PA_NO_EFFECT);
-                curTimeZone2 = curTimeZone2New;
-                zoneNewMessage(2, curTimeZone2, "");
-              }
-            } else {
-              // checking if dot blinds not disabl
-              if (disableDotsBlink == "false") {
-                // checking if cur time have dots and remove dots
-                if ( curTimeZone2.indexOf(":") > 0 ) curTimeZone2New.replace(":", "¦");
-                curTimeZone2 = curTimeZone2New;
-                P.setPause(2,100);
-                P.setTextEffect(2, stringToTextEffectT(zones[2].scrollEffectIn), PA_NO_EFFECT);
-                zoneNewMessage(2, curTimeZone2, "");
-              } else {
-                curTimeZone2 = curTimeZone2New;
-                zoneNewMessage(2, curTimeZone2, "");
-              }
-            }
-          } else {
-            curTimeZone2 = curTimeZone2New;
-            zoneNewMessage(2, curTimeZone2, "");
-          }
-        }
-      }
-    }
-
-    if (zones[0].workMode == "owmWeather" || zones[1].workMode == "owmWeather" || zones[2].workMode == "owmWeather") {
-      if (millis() - owmLastTime >= (unsigned)owmUpdateInterval * 1000) {
-        owmLastTime = millis();
-        for ( uint8_t n = 0; n < zoneNumbers; n++) {
-          if (zones[n].workMode == "owmWeather") zoneNewMessage(n, openWetherMapGetWeather(zones[n].owmWhatToDisplay), "");
-        }
-      }
-    }
-
-    if (zones[0].workMode == "haClient" || zones[1].workMode == "haClient" || zones[2].workMode == "haClient") {
-      if (millis() - haLastTime >= (unsigned)haUpdateInterval * 1000) {
-        for ( uint8_t n = 0; n < zoneNumbers; n++) {
-          if (zones[n].workMode == "haClient") zoneNewMessage(n, haApiGet(zones[n].haSensorId, zones[n].haSensorPostfix), "");
-        }
-        haLastTime = millis();
-      }
-    }
-
     if (ds18b20Enable == "true") {
-      if (currentMillis - previousDsMillis >= (unsigned)ds18b20UpdateInterval * 1000) {
-        previousDsMillis = currentMillis;
-        sensors.requestTemperatures();
-        char dsTemp[5];
-
-        if (ds18b20UnitsFormat == "Fahrenheit") {
-          dtostrf(sensors.getTempF(addrS1), -5, 1, dsTemp);
-        } else {
-          dtostrf(sensors.getTempC(addrS1), -5, 1, dsTemp);
+          if (currentMillis - previousDsMillis >= (unsigned)ds18b20UpdateInterval * 1000) {
+            previousDsMillis = currentMillis;
+            sensors.requestTemperatures();
+            float dsTempC = sensors.getTempC(addrS1);
+            dtostrf(dsTempC, -5, 1, dsTemp);
+            
+            mqttClient.publish(String("wledPixel-" + shortMACaddr + "/temperature").c_str(), dsTemp);
+            
+            if (ds18b20UnitsFormat == "Fahrenheit") {
+              float dsTempF = (dsTempC*1.8)+32;
+              dtostrf(dsTempF, -5, 1, dsTemp);
+            }
+            
+            dsTempToDisplay = true;
+          }
         }
-        
-        mqttClient.publish(String("wledPixel-" + shortMACaddr + "/temperature").c_str(), dsTemp);
-    
-        for ( uint8_t n = 0; n < zoneNumbers; n++) {
-          if (zones[n].workMode == "intTempSensor") zoneNewMessage(n, String(dsTemp), zones[n].ds18b20Postfix);
+
+    for ( uint8_t n = 0; n < zoneNumbers; n++) {
+      // Wall Clock
+      if (zones[n].workMode == "wallClock") {
+        String curTimeZoneNew = getCurTime(zones[n].font, zones[n].clockDisplayFormat);
+        if (zones[n].clockDisplayFormat == "HHMM" || zones[n].clockDisplayFormat == "HHMMSS" || zones[n].clockDisplayFormat == "ddmmaahhmm") {
+          if (disableDotsBlink == "false") {
+            if (currentMillis - zones[n].previousMillis >= 1000) {
+                zones[n].previousMillis = currentMillis;
+                    if (zones[n].curTimeZone == curTimeZoneNew || zones[n].curTimeZone == flashClockDots(curTimeZoneNew)) {
+                        if (zones[n].curTimeZone.indexOf(":") > 0) curTimeZoneNew.replace(":", "¦");
+                        P.setPause(n,100);
+                        P.setTextEffect(n, PA_NO_EFFECT, PA_NO_EFFECT);
+                        zones[n].curTimeZone = curTimeZoneNew;
+                        zoneNewMessage(n, zones[n].curTimeZone, "");
+                    } else {
+                        if ( zones[n].curTimeZone.indexOf(":") > 0 ) curTimeZoneNew.replace(":", "¦");
+                        zones[n].curTimeZone = curTimeZoneNew;
+                        P.setPause(n,100);
+                        P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn), PA_NO_EFFECT);
+                        zoneNewMessage(n, zones[n].curTimeZone, "");
+                    }
+            }
+          } else {
+            if (currentMillis - zones[n].previousMillis >= 60000) {
+                zones[n].previousMillis = currentMillis;
+                zones[n].curTimeZone = curTimeZoneNew;
+                zoneNewMessage(n, zones[n].curTimeZone, "");   
+            }
+          }
+        } else {
+          if (currentMillis - zones[n].previousMillis >= 60000) {
+            zones[n].previousMillis = currentMillis;
+            zones[n].curTimeZone = curTimeZoneNew;
+            zoneNewMessage(n, zones[n].curTimeZone, "");
+          }
         }
       }
+
+      // OWM client
+      if (zones[n].workMode == "owmWeather") {
+        if (currentMillis - owmLastTime >= (unsigned)owmUpdateInterval * 1000) {
+          zoneNewMessage(n, openWetherMapGetWeather(zones[n].owmWhatToDisplay), "");
+          owmLastTime = currentMillis;
+        }
+      }
+      // HA client
+      if (zones[n].workMode == "haClient") {
+        if (currentMillis - haLastTime >= (unsigned)haUpdateInterval * 1000) {
+          zoneNewMessage(n, haApiGet(zones[n].haSensorId, zones[n].haSensorPostfix), "");
+          haLastTime = currentMillis;
+        }
+      }
+      // DS18B20
+      if (zones[n].workMode == "intTempSensor" && dsTempToDisplay == true) {
+        zoneNewMessage(n, String(dsTemp), zones[n].ds18b20Postfix);
+      }
     }
+
   }
   
   displayAnimation();
