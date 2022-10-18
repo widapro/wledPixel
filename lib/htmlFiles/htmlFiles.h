@@ -230,6 +230,7 @@ function preparePostRequest(event, key, val) {
     const workModeZone0 = "%workModeZone0%"
     const workModeZone1 = "%workModeZone1%"
     const workModeZone2 = "%workModeZone2%"
+    const workModeZone3 = "%workModeZone3%"
     if (workModeZone1 != "manualInput") {
         document.getElementById('messageZone1').disabled = true;
         document.getElementById('postZone1Text').disabled = true;
