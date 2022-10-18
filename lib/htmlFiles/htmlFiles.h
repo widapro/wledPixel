@@ -129,6 +129,13 @@ const char PAGE_index[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-2 align-self-end">
                     <button id="postZone2Text" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Send</button>
                   </div>
+                  <div class="col-10">
+                    <label for="messageZone3" class="form-label">Zone3 text</label>
+                    <input id="messageZone3" class="form-control form-control-lg" type="text" placeholder="Zone3 message">
+                  </div>
+                  <div class="col-2 align-self-end">
+                    <button id="postZone3Text" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Send</button>
+                  </div>
                 <div class="col-sm-12"></div>
             </div>
           </div>
@@ -189,6 +196,13 @@ function preparePostRequest(event, key, val) {
         }
         sendPost(data);
     };
+
+    if (key == "postZone3Text") {
+        data = {
+            messageZone3: document.getElementById("messageZone3").value,
+        }
+        sendPost(data);
+    };
 };
 
     function sendPost(dataPost) {
@@ -230,6 +244,11 @@ function preparePostRequest(event, key, val) {
         document.getElementById('messageZone2').disabled = true;
         document.getElementById('postZone2Text').disabled = true;
         document.getElementById('messageZone2').placeholder = "Zone2 is not in a Manual input work mode";
+    }
+    if (workModeZone3 != "manualInput") {
+        document.getElementById('messageZone3').disabled = true;
+        document.getElementById('postZone3Text').disabled = true;
+        document.getElementById('messageZone3').placeholder = "Zone3 is not in a Manual input work mode";
     }
     if (zoneNumbers == 1) {
         document.getElementById('messageZone1').disabled = true;
@@ -461,6 +480,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
+                        <option value="4">4</option>
                       </select>
                     <div class="invalid-feedback">
                       Valid first name is required.
@@ -492,6 +512,15 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-sm-4" id="zone2EndDiv">
                     <label for="zone2End" class="form-label">Last module <span class="text-muted">[ zone 2 ]</span></label>
                     <input type="text" class="form-control" id="zone2End" value="%zone2End%" >
+                  </div>
+                  <div class="col-sm-4"></div>
+                  <div class="col-sm-4" id="zone3BeginDiv">
+                    <label for="zone3Begin" class="form-label">First module <span class="text-muted">[ zone 3 ]</span></label>
+                    <input type="text" class="form-control" id="zone3Begin" value="%zone3Begin%" >
+                  </div>
+                  <div class="col-sm-4" id="zone3EndDiv">
+                    <label for="zone3End" class="form-label">Last module <span class="text-muted">[ zone 3 ]</span></label>
+                    <input type="text" class="form-control" id="zone3End" value="%zone3End%" >
                   </div>
                   <button id="applyAndReboot" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply and reboot</button>
                   
@@ -543,6 +572,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmm">dd.mm</option>
                           <option value="ddmmaa">dd.mm aa</option>
                           <option value="aa">aa</option>
+                          <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
                   </div>
                   <div class="col-7" id="owmWhatToDisplayZone0div" style="display: none;">
@@ -718,6 +748,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmm">dd.mm</option>
                           <option value="ddmmaa">dd.mm aa</option>
                           <option value="aa">aa</option>
+                          <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
                   </div>
                   <div class="col-7" id="owmWhatToDisplayZone1div" style="display: none;">
@@ -894,6 +925,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmm">dd.mm</option>
                           <option value="ddmmaa">dd.mm aa</option>
                           <option value="aa">aa</option>
+                          <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
                   </div>
                   <div class="col-7" id="owmWhatToDisplayZone2div" style="display: none;">
@@ -1030,6 +1062,181 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                   </div>
       
                 <button id="applyAdditionalSettingsZone2" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
+                <hr class="my-4">
+                  <h3 class="mb-3">Zone 3</h3>
+
+                  <div class="col-5">
+                    <label for="workModeZone3" class="form-label">Working mode</label>
+                    <select id="workModeZone3" class="form-select">
+                        <option value="mqttClient">MQTT client</option>
+                        <option value="manualInput">Manual input</option>
+                        <option value="wallClock">Wall clock</option>
+                        <option value="owmWeather">Open Weather map</option>
+                        <option value="haClient">Home Assistant client</option>
+                        <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
+                    </select>
+                  </div>
+                  
+                  <div class="col-7" id="emptyZone3Div"></div>
+                  <div class="col-5" id="mqttZone3PrefixDiv" style="display: none;">
+                    <label for="mqttZone3Prefix" class="form-label">MQTT zone text topic</label>
+                        <input type="text" class="form-control" id="mqttTextTopicZone3" value="%mqttTextTopicZone3%">
+                  </div>
+                  <div class="col-2" id="mqttPostfixZone3Div" style="display: none;">
+                    <label for="mqttPostfixZone3" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="mqttPostfixZone3" value="%mqttPostfixZone3%">
+                  </div>
+                  <div class="col-12" id="mqttDevicePrefixZone3Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone3/*</b></div>
+
+                  <div class="col-7" id="clockDisplayFormatZone3Div" style="display: none;">
+                    <label for="clockDisplayFormatZone3" class="form-label">Time format</label>
+                        <select id="clockDisplayFormatZone3" class="form-select">
+                          <option value="HHMM">HH:MM</option>
+                          <option value="HHMMSS">HH:MM:SS</option>
+                          <option value="HH">HH</option>
+                          <option value="MM">MM</option>
+                          <option value="ddmmyyyy">dd.mm.yyyy</option>
+                          <option value="ddmm">dd.mm</option>
+                          <option value="ddmmaa">dd.mm aa</option>
+                          <option value="aa">aa</option>
+                          <option value="ddmmaahhmm">ddmmaahhmm</option>
+                        </select>
+                  </div>
+                  <div class="col-7" id="owmWhatToDisplayZone3div" style="display: none;">
+                    <label for="owmWhatToDisplayZone3" class="form-label">What to display</label>
+                    <select id="owmWhatToDisplayZone3" class="form-select">
+                        <option value="owmTemperature">Temperature</option>
+                        <option value="owmHumidity">Humidity</option>
+                        <option value="owmPressure">Pressure</option>
+                        <option value="owmWindSpeed">Wind speed</option>
+                        <option value="owmWeatherIcon">Wether icon</option>
+                    </select>
+                  </div>
+                  <div class="col-5" id="haSensorIdZone3Div" style="display: none;">
+                    <label for="haSensorIdZone3" class="form-label">Sensor ID</label>
+                        <input type="text" class="form-control" id="haSensorIdZone3" value="%haSensorIdZone3%">
+                  </div>
+                  <div class="col-2" id="haSensorPostfixZone3Div" style="display: none;">
+                    <label for="haSensorPostfixZone3" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="haSensorPostfixZone3" value="%haSensorPostfixZone3%">
+                  </div>
+                  <div class="col-7" id="ds18b20PostfixZone3Div" style="display: none;">
+                    <label for="ds18b20PostfixZone3" class="form-label">Postfix</label>
+                        <input type="text" class="form-control" id="ds18b20PostfixZone3" value="%ds18b20PostfixZone3%">
+                  </div>
+
+                  <div class="col-5" id="fontZone3div">
+                    <label for="fontZone3" class="form-label">Font</label>
+                    <select id="fontZone3" class="form-select">
+                        <option value="default">Default</option>
+                        <option value="wledFont">Wled font</option>
+                        <option value="wledFont_cyrillic">Cyrillic</option>
+                        <option value="wledSymbolFont">Wled Symbol Font</option>
+                    </select>
+                  </div>
+                  <div class="col-7">
+                    <label for="charspacingZone3" class="form-label">Character spacing</label>
+                    <select id="charspacingZone3" class="form-select">
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                      </select>
+                  </div>
+
+                  <div class="col-5">
+                    <label for="scrollEffectZone3In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
+                    <select id="scrollEffectZone3In" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
+                      </select>
+                  </div>
+                  <div class="col-7">
+                      <label for="scrollSpeedZone3" class="form-label">Scroll speed</label>
+                      <div class="input-group mb-3">
+                          <input type="text" class="form-control" id="scrollSpeedZone3" value="%scrollSpeedZone3%" aria-describedby="scrollSpeedZone3Help">
+                          <span class="input-group-text">ms</span>
+                      </div>
+                  </div>
+
+                  <div class="col-5">
+                    <label for="scrollEffectZone3Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
+                    <select id="scrollEffectZone3Out" class="form-select">
+                        <option value="PA_NO_EFFECT">NO_EFFECT</option>
+                        <option value="PA_PRINT">PRINT</option>
+                        <option value="PA_SCROLL_UP">SCROLL_UP</option>
+                        <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
+                        <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
+                        <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
+                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PA_SLICE">SLICE</option>
+                        <option value="PA_MESH">MESH</option>
+                        <option value="PA_FADE">FADE</option>
+                        <option value="PA_DISSOLVE">DISSOLVE</option>
+                        <option value="PA_BLINDS">BLINDS</option>
+                        <option value="PA_RANDOM">RANDOM</option>
+                        <option value="PA_WIPE">WIPE</option>
+                        <option value="PA_WIPE_CURSOR">WIPE_CURSOR</option>
+                        <option value="PA_SCAN_HORIZ">SCAN_HORIZ</option>
+                        <option value="PA_SCAN_VERT">SCAN_VERT</option>
+                        <option value="PA_OPENING">OPENING</option>
+                        <option value="PA_OPENING_CURSOR">OPENING_CURSOR</option>
+                        <option value="PA_CLOSING">CLOSING</option>
+                        <option value="PA_CLOSING_CURSOR">CLOSING_CURSOR</option>
+                        <option value="PA_SCROLL_UP_LEFT">SCROLL_UP_LEFT</option>
+                        <option value="PA_SCROLL_UP_RIGHT">SCROLL_UP_RIGHT</option>
+                        <option value="PA_SCROLL_DOWN_LEFT">SCROLL_DOWN_LEFT</option>
+                        <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
+                        <option value="PA_GROW_UP">GROW_UP</option>
+                        <option value="PA_GROW_DOWN">GROW_DOWN</option>
+                      </select>
+                  </div>
+                  <div class="col-7">
+                    <label for="scrollPauseZone3" class="form-label">Scroll pause</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="scrollPauseZone3" value="%scrollPauseZone3%">
+                        <span class="input-group-text">ms</span>
+                    </div>
+                  </div>
+
+                  <div class="col-5">
+                    <label for="scrollAlignZone3" class="form-label">Alignment</label>
+                    <select id="scrollAlignZone3" class="form-select">
+                        <option value="PA_LEFT">Left</option>
+                        <option value="PA_CENTER">Center</option>
+                        <option value="PA_RIGHT">Right</option>
+                      </select>
+                  </div>
+      
+                <button id="applyAdditionalSettingsZone3" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
 
                 <hr class="my-4">
@@ -1238,6 +1445,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("workModeZone0").value = "%workModeZone0%";
      document.getElementById("workModeZone1").value = "%workModeZone1%";
      document.getElementById("workModeZone2").value = "%workModeZone2%";
+     document.getElementById("workModeZone3").value = "%workModeZone3%";
      document.getElementById("zoneNumbers").value = "%zoneNumbers%";
      document.getElementById("zone0Begin").value = "%zone0Begin%";
      document.getElementById("zone0End").value = "%zone0End%";
@@ -1245,23 +1453,30 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("zone1End").value = "%zone1End%";
      document.getElementById("zone2Begin").value = "%zone2Begin%";
      document.getElementById("zone2End").value = "%zone2End%";
+     document.getElementById("zone3Begin").value = "%zone3Begin%";
+     document.getElementById("zone3End").value = "%zone3End%";
      document.getElementById("intensity").value = "%intensity%";
      document.getElementById("intensityValue").value = "%intensity%";
      document.getElementById("scrollSpeedZone0").value = "%scrollSpeedZone0%";
      document.getElementById("scrollSpeedZone1").value = "%scrollSpeedZone1%";
      document.getElementById("scrollSpeedZone2").value = "%scrollSpeedZone2%";
+     document.getElementById("scrollSpeedZone3").value = "%scrollSpeedZone3%";
      document.getElementById("scrollPauseZone0").value = "%scrollPauseZone0%";
      document.getElementById("scrollPauseZone1").value = "%scrollPauseZone1%";
      document.getElementById("scrollPauseZone2").value = "%scrollPauseZone2%";
+     document.getElementById("scrollPauseZone3").value = "%scrollPauseZone3%";
      document.getElementById("scrollAlignZone0").value = "%scrollAlignZone0%";
      document.getElementById("scrollAlignZone1").value = "%scrollAlignZone1%";
      document.getElementById("scrollAlignZone2").value = "%scrollAlignZone2%";
+     document.getElementById("scrollAlignZone3").value = "%scrollAlignZone3%";
      document.getElementById("scrollEffectZone0In").value = "%scrollEffectZone0In%";
      document.getElementById("scrollEffectZone0Out").value = "%scrollEffectZone0Out%";
      document.getElementById("scrollEffectZone1In").value = "%scrollEffectZone1In%";
      document.getElementById("scrollEffectZone1Out").value = "%scrollEffectZone1Out%";
      document.getElementById("scrollEffectZone2In").value = "%scrollEffectZone2In%";
      document.getElementById("scrollEffectZone2Out").value = "%scrollEffectZone2Out%";
+     document.getElementById("scrollEffectZone3In").value = "%scrollEffectZone3In%";
+     document.getElementById("scrollEffectZone3Out").value = "%scrollEffectZone3Out%";
      document.getElementById("mqttServerAddress").value = "%mqttServerAddress%";
      document.getElementById("mqttServerPort").value = "%mqttServerPort%";
      document.getElementById("mqttUsername").value = "%mqttUsername%";
@@ -1269,13 +1484,16 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("mqttTextTopicZone0").value = "%mqttTextTopicZone0%";
      document.getElementById("mqttTextTopicZone1").value = "%mqttTextTopicZone1%";
      document.getElementById("mqttTextTopicZone2").value = "%mqttTextTopicZone2%";
+     document.getElementById("mqttTextTopicZone3").value = "%mqttTextTopicZone3%";
      document.getElementById("ntpTimeZone").value = "%ntpTimeZone%";
      document.getElementById("clockDisplayFormatZone0").value = "%clockDisplayFormatZone0%";
      document.getElementById("clockDisplayFormatZone1").value = "%clockDisplayFormatZone1%";
      document.getElementById("clockDisplayFormatZone2").value = "%clockDisplayFormatZone2%";
+     document.getElementById("clockDisplayFormatZone3").value = "%clockDisplayFormatZone3%";
      document.getElementById("owmWhatToDisplayZone0").value = "%owmWhatToDisplayZone0%";
      document.getElementById("owmWhatToDisplayZone1").value = "%owmWhatToDisplayZone1%";
      document.getElementById("owmWhatToDisplayZone2").value = "%owmWhatToDisplayZone2%";
+     document.getElementById("owmWhatToDisplayZone3").value = "%owmWhatToDisplayZone3%";
      document.getElementById("owmApiToken").value = "%owmApiToken%";
      document.getElementById("owmUnitsFormat").value = "%owmUnitsFormat%";
      document.getElementById("owmUpdateInterval").value = "%owmUpdateInterval%";
@@ -1283,6 +1501,7 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("fontZone0").value = "%fontZone0%";
      document.getElementById("fontZone1").value = "%fontZone1%";
      document.getElementById("fontZone2").value = "%fontZone2%";
+     document.getElementById("fontZone3").value = "%fontZone3%";
      document.getElementById("haAddr").value = "%haAddr%";
      document.getElementById("haApiHttpType").value = "%haApiHttpType%";
      document.getElementById("haApiToken").value = "%haApiToken%";
@@ -1291,18 +1510,23 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("haSensorIdZone0").value = "%haSensorIdZone0%";
      document.getElementById("haSensorIdZone1").value = "%haSensorIdZone1%";
      document.getElementById("haSensorIdZone2").value = "%haSensorIdZone2%";
+     document.getElementById("haSensorIdZone3").value = "%haSensorIdZone3%";
      document.getElementById("haSensorPostfixZone0").value = "%haSensorPostfixZone0%";
      document.getElementById("haSensorPostfixZone1").value = "%haSensorPostfixZone1%";
      document.getElementById("haSensorPostfixZone2").value = "%haSensorPostfixZone2%";
+     document.getElementById("haSensorPostfixZone3").value = "%haSensorPostfixZone3%";
      document.getElementById("mqttPostfixZone0").value = "%mqttPostfixZone0%";
      document.getElementById("mqttPostfixZone1").value = "%mqttPostfixZone1%";
      document.getElementById("mqttPostfixZone2").value = "%mqttPostfixZone2%";
+     document.getElementById("mqttPostfixZone3").value = "%mqttPostfixZone3%";
      document.getElementById("ds18b20PostfixZone0").value = "%ds18b20PostfixZone0%";
      document.getElementById("ds18b20PostfixZone1").value = "%ds18b20PostfixZone1%";
      document.getElementById("ds18b20PostfixZone2").value = "%ds18b20PostfixZone2%";
+     document.getElementById("ds18b20PostfixZone3").value = "%ds18b20PostfixZone3%";
      document.getElementById("charspacingZone0").value = "%charspacingZone0%";
      document.getElementById("charspacingZone1").value = "%charspacingZone1%";
      document.getElementById("charspacingZone2").value = "%charspacingZone2%";
+     document.getElementById("charspacingZone3").value = "%charspacingZone3%";
      document.getElementById("deviceName").value = "%deviceName%";
      document.getElementById("ds18b20UpdateInterval").value = "%ds18b20UpdateInterval%";
      document.getElementById("ds18b20UnitsFormat").value = "%ds18b20UnitsFormat%";
@@ -1330,18 +1554,32 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
         $(document.getElementById("zone1EndDiv")).hide();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (document.getElementById("zoneNumbers").value == "2") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (document.getElementById("zoneNumbers").value == "3") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).show();
         $(document.getElementById("zone2EndDiv")).show();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
+      }
+      if (document.getElementById("zoneNumbers").value == "4") {
+        $(document.getElementById("zone1BeginDiv")).show();
+        $(document.getElementById("zone1EndDiv")).show();
+        $(document.getElementById("zone2BeginDiv")).show();
+        $(document.getElementById("zone2EndDiv")).show();
+        $(document.getElementById("zone3BeginDiv")).show();
+        $(document.getElementById("zone3EndDiv")).show();
       }
 
       if (document.getElementById("workModeZone0").value == "mqttClient") {
@@ -1413,6 +1651,30 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       if (document.getElementById("workModeZone2").value == "intTempSensor") {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("ds18b20PostfixZone2Div")).show();
+      }
+      // zone3
+      if (document.getElementById("workModeZone3").value == "mqttClient") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("mqttZone3PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone3Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone3Div")).show();
+      }
+      if (document.getElementById("workModeZone3").value == "owmWeather") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("owmWhatToDisplayZone3div")).show();
+      }
+      if (document.getElementById("workModeZone3").value == "wallClock") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("clockDisplayFormatZone3Div")).show();
+      }
+      if (document.getElementById("workModeZone3").value == "haClient") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("haSensorIdZone3Div")).show();
+        $(document.getElementById("haSensorPostfixZone3Div")).show();
+      }
+      if (document.getElementById("workModeZone3").value == "intTempSensor") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone3Div")).show();
       }
     }
 
@@ -1539,24 +1801,79 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
       }
     });
 
+    workModeZone3.addEventListener('change', function (e) {
+      $(document.getElementById("emptyZone3Div")).show();
+      $(document.getElementById("mqttZone3PrefixDiv")).hide();
+      $(document.getElementById("mqttPostfixZone3Div")).hide();
+      $(document.getElementById("mqttDevicePrefixZone3Div")).hide();
+      document.getElementById("scrollPauseZone3").disabled = false;
+      $(document.getElementById("owmWhatToDisplayZone3div")).hide();
+      $(document.getElementById("clockDisplayFormatZone3Div")).hide();
+      $(document.getElementById("haSensorIdZone3Div")).hide();
+      $(document.getElementById("haSensorPostfixZone3Div")).hide();
+      $(document.getElementById("ds18b20PostfixZone3Div")).hide();
+      
+      if (e.target.value == "mqttClient") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("mqttZone3PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone3Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone3Div")).show();
+      }
+      
+      if (e.target.value == "wallClock") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("clockDisplayFormatZone3Div")).show();
+        document.getElementById("scrollPauseZone3").disabled = true;
+      }
+
+      if (e.target.value == "owmWeather") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("owmWhatToDisplayZone3div")).show();
+      }
+
+      if (e.target.value == "haClient") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("haSensorIdZone3Div")).show();
+        $(document.getElementById("haSensorPostfixZone3Div")).show();
+      }
+      if (e.target.value == "intTempSensor") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone3Div")).show();
+      }
+    });
+
     document.getElementById("zoneNumbers").addEventListener('change', function (e) {
       if (e.target.value == "1") {
         $(document.getElementById("zone1BeginDiv")).hide();
         $(document.getElementById("zone1EndDiv")).hide();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (e.target.value == "2") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (e.target.value == "3") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).show();
         $(document.getElementById("zone2EndDiv")).show();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
+      }
+      if (e.target.value == "4") {
+        $(document.getElementById("zone1BeginDiv")).show();
+        $(document.getElementById("zone1EndDiv")).show();
+        $(document.getElementById("zone2BeginDiv")).show();
+        $(document.getElementById("zone2EndDiv")).show();
+        $(document.getElementById("zone3BeginDiv")).show();
+        $(document.getElementById("zone3EndDiv")).show();
       }
     });
 
@@ -1576,7 +1893,9 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 zone1Begin:   document.getElementById("zone1Begin").value,
                 zone1End:     document.getElementById("zone1End").value,
                 zone2Begin:   document.getElementById("zone2Begin").value,
-                zone2End:     document.getElementById("zone2End").value
+                zone2End:     document.getElementById("zone2End").value,
+                zone3Begin:   document.getElementById("zone3Begin").value,
+                zone3End:     document.getElementById("zone3End").value
             }
             sendPost(data);
         }
@@ -1641,6 +1960,27 @@ const char PAGE_settings[] PROGMEM = R"=====(<!doctype html>
                 mqttTextTopicZone2:         document.getElementById("mqttTextTopicZone2").value,
                 mqttPostfixZone2:           document.getElementById("mqttPostfixZone2").value,
                 ds18b20PostfixZone2:        document.getElementById("ds18b20PostfixZone2").value
+            }
+            sendPost(data);
+        }
+
+        if (key == "applyAdditionalSettingsZone3") {
+            data = {
+                workModeZone3:              document.getElementById("workModeZone3").value,
+                owmWhatToDisplayZone3:      document.getElementById("owmWhatToDisplayZone3").value,
+                haSensorIdZone3:            document.getElementById("haSensorIdZone3").value,
+                haSensorPostfixZone3:       document.getElementById("haSensorPostfixZone3").value,
+                clockDisplayFormatZone3:    document.getElementById("clockDisplayFormatZone3").value,
+                scrollSpeedZone3:           document.getElementById("scrollSpeedZone3").value,
+                scrollPauseZone3:           document.getElementById("scrollPauseZone3").value,
+                scrollAlignZone3:           document.getElementById("scrollAlignZone3").value,
+                scrollEffectZone3In:        document.getElementById("scrollEffectZone3In").value,
+                scrollEffectZone3Out:       document.getElementById("scrollEffectZone3Out").value,
+                fontZone3:                  document.getElementById("fontZone3").value,
+                charspacingZone3:           document.getElementById("charspacingZone3").value,
+                mqttTextTopicZone3:         document.getElementById("mqttTextTopicZone3").value,
+                mqttPostfixZone3:           document.getElementById("mqttPostfixZone3").value,
+                ds18b20PostfixZone3:        document.getElementById("ds18b20PostfixZone3").value
             }
             sendPost(data);
         }
