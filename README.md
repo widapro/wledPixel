@@ -25,6 +25,9 @@ ESP8266 and MAX7219 dot matrix display management
 1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
 2. WeMos D1 Mini (esp8266), something like this: https://aliexpress.com/item/32651747570.html
 
+## Web UI - Settings
+![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/SettingsUI.jpg)
+
 ##### Firmware compiled with next parameters:
 ```
 // Display pinout
