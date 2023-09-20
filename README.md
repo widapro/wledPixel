@@ -18,9 +18,9 @@ ESP8266 and MAX7219 dot matrix display management
 9. Control display as light in Home Assistant [MQTT setup required]
 10. Initial setup through wifi AP and web UI
 11. Support 3 independent display zones
-12. Support 12 display segments in the same time
+12. Support up to 12 display segments at the same time [configured in web UI]
 13. Included 3 different fonts
-14. Symbols font
+14. Plus symbols font
 
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
