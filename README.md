@@ -10,16 +10,17 @@ ESP8266 and MAX7219 dot matrix display management
 1. **Home Assistant client** [display sensor values]
 2. **OpenWeatherMap client** [display: temperature (C/F), humidity, pressure, wind speed, weather icon]
 3. **MQTT client** [each display zone support own topic]
-4. **Wall NTP clock** [NTP sync clock]
-5. **Manual input**
-6. Full controll through **web UI**
-7. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
-8. Initial setup through wifi AP and web UI
-9. Controll through MQTT
-10. Support 3 separated display zones
-11. Support 12 display segments in the same time
-12. Included 3 different fonts
-13. Symbols font
+4. Display controll through MQTT
+5. **Wall NTP clock** [NTP sync clock]
+6. **Manual input**
+7. Full controll through **web UI**
+8. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
+9. Control display as light in Home Assistant [MQTT setup required]
+10. Initial setup through wifi AP and web UI
+11. Support 3 independent display zones
+12. Support 12 display segments in the same time
+13. Included 3 different fonts
+14. Symbols font
 
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
@@ -31,12 +32,12 @@ ESP8266 and MAX7219 dot matrix display management
 ##### Firmware compiled with next parameters:
 ```
 // Display pinout
-#define DATA_PIN  D7                     // WeMos D1 mini or ESP8266 -> GPIO13
-#define CS_PIN    D6                     // WeMos D1 mini or ESP8266 -> GPIO12
-#define CLK_PIN   D5                     // WeMos D1 mini or ESP8266 -> GPIO14
+#define DATA_PIN  D7         // WeMos D1 mini or ESP8266 -> GPIO13
+#define CS_PIN    D6         // WeMos D1 mini or ESP8266 -> GPIO12
+#define CLK_PIN   D5         // WeMos D1 mini or ESP8266 -> GPIO14
 
 // Ds18b20 pinout
-const int oneWireBus = D4;               // WeMos D1 mini GPIO02
+const int oneWireBus = D4;   // WeMos D1 mini GPIO02
 ```
 
 ## Wiring
@@ -51,7 +52,10 @@ const int oneWireBus = D4;               // WeMos D1 mini GPIO02
 > - When the device connects to the WIFI network, the device's IP address will be displayed on the zone0
 > - Open the browser and go to the device IP address
 
-
+## API
+```
+/api/temperature      - get measured temperature from connected ds18b20 sensor
+```
 
 ## Icons in Wled symbol font:
 <img width="898" alt="Screen Shot 2022-07-14 at 23 09 11" src="https://user-images.githubusercontent.com/6948905/179143312-908f9cda-a766-4928-9fb2-5f4c08b55dbc.png">
@@ -168,7 +172,7 @@ Send sensor value each time when a value has been changed
   action:
     - service: mqtt.publish
       data:
-        topic: wledPixel-A071/zone0_text
+        topic: wledPixel-A071/zone0/text
         payload_template: "{{ states('sensor.outside_thp_sensor_3') }} C"
 ```
 Change **wledPixel-A071** to device name with your prefix
