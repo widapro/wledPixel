@@ -25,13 +25,13 @@ JsonObject httpsRequest(String addr, int port, String path, String token, bool h
       payload = "err" + httpCode;
     }
   } else { 
-    Serial.print("\napi error start connection");
+    Serial.print(F("api error start connection"));
     payload = "err";
   }
   httpClient->end();
   delete httpClient;
   
-  Serial.printf("\nStart json in httpRequest func");
+  Serial.print(F("\nStart json in httpRequest func"));
   DynamicJsonDocument httpsRespond(ESP.getMaxFreeBlockSize() - 512);
   deserializeJson(httpsRespond, payload);
   JsonObject httpsRespondPostObj = httpsRespond.as<JsonObject>();

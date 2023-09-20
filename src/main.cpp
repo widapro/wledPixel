@@ -26,7 +26,7 @@ Preferences preferences;
 WiFiClient mqttEspClient;
 
 /// GLOBAL ///
-const char* firmwareVer = "2.6b";
+const char* firmwareVer = "2.6";
 int nLoop = 0;
 bool restartESP         = false;
 bool allTestsFinish     = false;
@@ -110,9 +110,9 @@ bool power                  = true;
 bool disableServiceMessages = false;
 bool disableDotsBlink       = false;
 
-char zone0Message[50] = "zone0";
-char zone1Message[50] = "zone1";
-char zone2Message[50] = "zone2";
+char zone0Message[100] = "zone0";
+char zone1Message[100] = "zone1";
+char zone2Message[100] = "zone2";
 //char zone3Message[50] = "zone3";
 
 // Initialize NTP
@@ -150,163 +150,163 @@ static uint32_t haLastTime        = 0;
 
 // Convert scrollAlig in String to textPosition_t type
 textPosition_t stringToTextPositionT(String val) {
-  if(val == "PA_CENTER")  return PA_CENTER;
-  if(val == "PA_LEFT")    return PA_LEFT;
-  if(val == "PA_RIGHT")   return PA_RIGHT;
+  if(val == F("PA_CENTER"))  return PA_CENTER;
+  if(val == F("PA_LEFT"))    return PA_LEFT;
+  if(val == F("PA_RIGHT"))   return PA_RIGHT;
   return PA_LEFT;
 }
 
 void applyZoneFont(int zone, String font) {
-  if(font == "default")           P.setFont(zone, nullptr);
-  if(font == "wledFont")          P.setFont(zone, wledFont);
-  if(font == "wledFont_cyrillic") P.setFont(zone, wledFont_cyrillic);
-  if(font == "wledSymbolFont")    P.setFont(zone, wledSymbolFont);
+  if(font == F("default"))           P.setFont(zone, nullptr);
+  if(font == F("wledFont"))          P.setFont(zone, wledFont);
+  if(font == F("wledFont_cyrillic")) P.setFont(zone, wledFont_cyrillic);
+  if(font == F("wledSymbolFont"))    P.setFont(zone, wledSymbolFont);
 }
 
 textEffect_t stringToTextEffectT(String val) {
-  if(val == "PA_NO_EFFECT")         return PA_NO_EFFECT;
-  if(val == "PA_PRINT")             return PA_PRINT;
-  if(val == "PA_SCROLL_UP")         return PA_SCROLL_UP;
-  if(val == "PA_SCROLL_DOWN")       return PA_SCROLL_DOWN;
-  if(val == "PA_SCROLL_LEFT")       return PA_SCROLL_LEFT;
-  if(val == "PA_SCROLL_RIGHT")      return PA_SCROLL_RIGHT;
-  if(val == "PA_SPRITE")            return PA_SPRITE;
-  if(val == "PA_SLICE")             return PA_SLICE;
-  if(val == "PA_MESH")              return PA_MESH;
-  if(val == "PA_FADE")              return PA_FADE;
-  if(val == "PA_DISSOLVE")          return PA_DISSOLVE;
-  if(val == "PA_BLINDS")            return PA_BLINDS;
-  if(val == "PA_RANDOM")            return PA_RANDOM;
-  if(val == "PA_WIPE")              return PA_WIPE;
-  if(val == "PA_WIPE_CURSOR")       return PA_WIPE_CURSOR;
-  if(val == "PA_SCAN_HORIZ")        return PA_SCAN_HORIZ;
-  if(val == "PA_SCAN_HORIZX")       return PA_SCAN_HORIZX;
-  if(val == "PA_SCAN_VERT")         return PA_SCAN_VERT;
-  if(val == "PA_SCAN_VERTX")        return PA_SCAN_VERTX;
-  if(val == "PA_OPENING")           return PA_OPENING;
-  if(val == "PA_OPENING_CURSOR")    return PA_OPENING_CURSOR;
-  if(val == "PA_CLOSING")           return PA_CLOSING;
-  if(val == "PA_CLOSING_CURSOR")    return PA_CLOSING_CURSOR;
-  if(val == "PA_SCROLL_UP_LEFT")    return PA_SCROLL_UP_LEFT;
-  if(val == "PA_SCROLL_UP_RIGHT")   return PA_SCROLL_UP_RIGHT;
-  if(val == "PA_SCROLL_DOWN_LEFT")  return PA_SCROLL_DOWN_LEFT;
-  if(val == "PA_SCROLL_DOWN_RIGHT") return PA_SCROLL_DOWN_RIGHT;
-  if(val == "PA_GROW_UP")           return PA_GROW_UP;
-  if(val == "PA_GROW_DOWN")         return PA_GROW_DOWN;
+  if(val == F("PA_NO_EFFECT"))         return PA_NO_EFFECT;
+  if(val == F("PA_PRINT"))             return PA_PRINT;
+  if(val == F("PA_SCROLL_UP"))         return PA_SCROLL_UP;
+  if(val == F("PA_SCROLL_DOWN"))       return PA_SCROLL_DOWN;
+  if(val == F("PA_SCROLL_LEFT"))       return PA_SCROLL_LEFT;
+  if(val == F("PA_SCROLL_RIGHT"))      return PA_SCROLL_RIGHT;
+  if(val == F("PA_SPRITE"))            return PA_SPRITE;
+  if(val == F("PA_SLICE"))             return PA_SLICE;
+  if(val == F("PA_MESH"))              return PA_MESH;
+  if(val == F("PA_FADE"))              return PA_FADE;
+  if(val == F("PA_DISSOLVE"))          return PA_DISSOLVE;
+  if(val == F("PA_BLINDS"))            return PA_BLINDS;
+  if(val == F("PA_RANDOM"))            return PA_RANDOM;
+  if(val == F("PA_WIPE"))              return PA_WIPE;
+  if(val == F("PA_WIPE_CURSOR"))       return PA_WIPE_CURSOR;
+  if(val == F("PA_SCAN_HORIZ"))        return PA_SCAN_HORIZ;
+  if(val == F("PA_SCAN_HORIZX"))       return PA_SCAN_HORIZX;
+  if(val == F("PA_SCAN_VERT"))         return PA_SCAN_VERT;
+  if(val == F("PA_SCAN_VERTX"))        return PA_SCAN_VERTX;
+  if(val == F("PA_OPENING"))           return PA_OPENING;
+  if(val == F("PA_OPENING_CURSOR"))    return PA_OPENING_CURSOR;
+  if(val == F("PA_CLOSING"))           return PA_CLOSING;
+  if(val == F("PA_CLOSING_CURSOR"))    return PA_CLOSING_CURSOR;
+  if(val == F("PA_SCROLL_UP_LEFT"))    return PA_SCROLL_UP_LEFT;
+  if(val == F("PA_SCROLL_UP_RIGHT"))   return PA_SCROLL_UP_RIGHT;
+  if(val == F("PA_SCROLL_DOWN_LEFT"))  return PA_SCROLL_DOWN_LEFT;
+  if(val == F("PA_SCROLL_DOWN_RIGHT")) return PA_SCROLL_DOWN_RIGHT;
+  if(val == F("PA_GROW_UP"))           return PA_GROW_UP;
+  if(val == F("PA_GROW_DOWN"))         return PA_GROW_DOWN;
   return PA_SCROLL_LEFT;
 }
 
 // Return values for variables in html page
 String processor(const String& var){
   char buffer [10];
-  if(var == "workModeZone0")                return zones[0].workMode;
-  if(var == "workModeZone1")                return zones[1].workMode;
-  if(var == "workModeZone2")                return zones[2].workMode;
+  if(var == F("workModeZone0"))                return zones[0].workMode;
+  if(var == F("workModeZone1"))                return zones[1].workMode;
+  if(var == F("workModeZone2"))                return zones[2].workMode;
 //  if(var == "workModeZone3")                return zones[3].workMode;
-  if(var == "zoneNumbers")                  return itoa(zoneNumbers, buffer, 10);
-  if(var == "zone0Begin")                   return itoa(zones[0].begin, buffer, 10);
-  if(var == "zone0End")                     return itoa(zones[0].end, buffer, 10);
-  if(var == "zone1Begin")                   return itoa(zones[1].begin, buffer, 10);
-  if(var == "zone1End")                     return itoa(zones[1].end, buffer, 10);
-  if(var == "zone2Begin")                   return itoa(zones[2].begin, buffer, 10);
-  if(var == "zone2End")                     return itoa(zones[2].end, buffer, 10);
+  if(var == F("zoneNumbers"))                  return itoa(zoneNumbers, buffer, 10);
+  if(var == F("zone0Begin"))                   return itoa(zones[0].begin, buffer, 10);
+  if(var == F("zone0End"))                     return itoa(zones[0].end, buffer, 10);
+  if(var == F("zone1Begin"))                   return itoa(zones[1].begin, buffer, 10);
+  if(var == F("zone1End"))                     return itoa(zones[1].end, buffer, 10);
+  if(var == F("zone2Begin"))                   return itoa(zones[2].begin, buffer, 10);
+  if(var == F("zone2End"))                     return itoa(zones[2].end, buffer, 10);
 //  if(var == "zone3Begin")                   return itoa(zones[3].begin, buffer, 10);
 //  if(var == "zone3End")                     return itoa(zones[3].end, buffer, 10);
-  if(var == "wifiSsid")                     return WiFi.SSID();
-  if(var == "wifiIp")                       return WiFi.localIP().toString();
-  if(var == "wifiGateway")                  return WiFi.gatewayIP().toString();
-  if(var == "intensity")                    return itoa(intensity + 1, buffer, 10);
-  if(var == "scrollSpeedZone0")             return itoa(zones[0].scrollSpeed, buffer, 10);
-  if(var == "scrollSpeedZone1")             return itoa(zones[1].scrollSpeed, buffer, 10);
-  if(var == "scrollSpeedZone2")             return itoa(zones[2].scrollSpeed, buffer, 10);
+  if(var == F("wifiSsid"))                     return WiFi.SSID();
+  if(var == F("wifiIp"))                       return WiFi.localIP().toString();
+  if(var == F("wifiGateway"))                  return WiFi.gatewayIP().toString();
+  if(var == F("intensity"))                    return itoa(intensity + 1, buffer, 10);
+  if(var == F("scrollSpeedZone0"))             return itoa(zones[0].scrollSpeed, buffer, 10);
+  if(var == F("scrollSpeedZone1"))             return itoa(zones[1].scrollSpeed, buffer, 10);
+  if(var == F("scrollSpeedZone2"))             return itoa(zones[2].scrollSpeed, buffer, 10);
 //  if(var == "scrollSpeedZone3")             return itoa(zones[3].scrollSpeed, buffer, 10);
-  if(var == "scrollPauseZone0")             return itoa(zones[0].scrollPause, buffer, 10);
-  if(var == "scrollPauseZone1")             return itoa(zones[1].scrollPause, buffer, 10);
-  if(var == "scrollPauseZone2")             return itoa(zones[2].scrollPause, buffer, 10);
+  if(var == F("scrollPauseZone0"))             return itoa(zones[0].scrollPause, buffer, 10);
+  if(var == F("scrollPauseZone1"))             return itoa(zones[1].scrollPause, buffer, 10);
+  if(var == F("scrollPauseZone2"))             return itoa(zones[2].scrollPause, buffer, 10);
 //  if(var == "scrollPauseZone3")             return itoa(zones[3].scrollPause, buffer, 10);
-  if(var == "scrollAlignZone0")             return zones[0].scrollAlign;
-  if(var == "scrollAlignZone1")             return zones[1].scrollAlign;
-  if(var == "scrollAlignZone2")             return zones[2].scrollAlign;
+  if(var == F("scrollAlignZone0"))             return zones[0].scrollAlign;
+  if(var == F("scrollAlignZone1"))             return zones[1].scrollAlign;
+  if(var == F("scrollAlignZone2"))             return zones[2].scrollAlign;
 //  if(var == "scrollAlignZone3")             return zones[3].scrollAlign;
-  if(var == "scrollEffectZone0In")          return zones[0].scrollEffectIn;
-  if(var == "scrollEffectZone1In")          return zones[1].scrollEffectIn;
-  if(var == "scrollEffectZone2In")          return zones[2].scrollEffectIn;
+  if(var == F("scrollEffectZone0In"))          return zones[0].scrollEffectIn;
+  if(var == F("scrollEffectZone1In"))          return zones[1].scrollEffectIn;
+  if(var == F("scrollEffectZone2In"))          return zones[2].scrollEffectIn;
 //  if(var == "scrollEffectZone3In")          return zones[3].scrollEffectIn;
-  if(var == "scrollEffectZone0Out")         return zones[0].scrollEffectOut;
-  if(var == "scrollEffectZone1Out")         return zones[1].scrollEffectOut;
-  if(var == "scrollEffectZone2Out")         return zones[2].scrollEffectOut;
+  if(var == F("scrollEffectZone0Out"))         return zones[0].scrollEffectOut;
+  if(var == F("scrollEffectZone1Out"))         return zones[1].scrollEffectOut;
+  if(var == F("scrollEffectZone2Out"))         return zones[2].scrollEffectOut;
 //  if(var == "scrollEffectZone3Out")         return zones[3].scrollEffectOut;
-  if(var == "mqttEnable") {
+  if(var == F("mqttEnable")) {
     if (mqttEnable) return "true";
     if (!mqttEnable) return "false";
   }
-  if(var == "mqttServerAddress")            return mqttServerAddress;
-  if(var == "mqttServerPort")               return itoa(mqttServerPort, buffer, 10);
-  if(var == "mqttUsername")                 return mqttUsername;
-  if(var == "mqttPassword")                 return mqttPassword;
-  if(var == "mqttDevicePrefix")             return MQTTGlobalPrefix;
-  if(var == "mqttTextTopicZone0")           return MQTTZones[0].message;
-  if(var == "mqttTextTopicZone1")           return MQTTZones[1].message;
-  if(var == "mqttTextTopicZone2")           return MQTTZones[2].message;
+  if(var == F("mqttServerAddress"))            return mqttServerAddress;
+  if(var == F("mqttServerPort"))               return itoa(mqttServerPort, buffer, 10);
+  if(var == F("mqttUsername"))                 return mqttUsername;
+  if(var == F("mqttPassword"))                 return mqttPassword;
+  if(var == F("mqttDevicePrefix"))             return MQTTGlobalPrefix;
+  if(var == F("mqttTextTopicZone0"))           return MQTTZones[0].message;
+  if(var == F("mqttTextTopicZone1"))           return MQTTZones[1].message;
+  if(var == F("mqttTextTopicZone2"))           return MQTTZones[2].message;
 //  if(var == "mqttTextTopicZone3")           return MQTTZones[3].message;
-  if(var == "mqttPostfixZone0")             return zones[0].mqttPostfix;
-  if(var == "mqttPostfixZone1")             return zones[1].mqttPostfix;
-  if(var == "mqttPostfixZone2")             return zones[2].mqttPostfix;
+  if(var == F("mqttPostfixZone0"))             return zones[0].mqttPostfix;
+  if(var == F("mqttPostfixZone1"))             return zones[1].mqttPostfix;
+  if(var == F("mqttPostfixZone2"))             return zones[2].mqttPostfix;
 //  if(var == "mqttPostfixZone3")             return zones[3].mqttPostfix;
-  if(var == "ntpTimeZone")                  return itoa(ntpTimeZone, buffer, 10);
-  if(var == "clockDisplayFormatZone0")      return zones[0].clockDisplayFormat;
-  if(var == "clockDisplayFormatZone1")      return zones[1].clockDisplayFormat;
-  if(var == "clockDisplayFormatZone2")      return zones[2].clockDisplayFormat;
+  if(var == F("ntpTimeZone"))                  return itoa(ntpTimeZone, buffer, 10);
+  if(var == F("clockDisplayFormatZone0"))      return zones[0].clockDisplayFormat;
+  if(var == F("clockDisplayFormatZone1"))      return zones[1].clockDisplayFormat;
+  if(var == F("clockDisplayFormatZone2"))      return zones[2].clockDisplayFormat;
 //  if(var == "clockDisplayFormatZone3")      return zones[3].clockDisplayFormat;
-  if(var == "owmApiToken")                  return owmApiToken;
-  if(var == "owmUnitsFormat")               return owmUnitsFormat;
-  if(var == "owmUpdateInterval")            return itoa(owmUpdateInterval, buffer, 10);
-  if(var == "owmWhatToDisplayZone0")        return zones[0].owmWhatToDisplay;
-  if(var == "owmWhatToDisplayZone1")        return zones[1].owmWhatToDisplay;
-  if(var == "owmWhatToDisplayZone2")        return zones[2].owmWhatToDisplay;
+  if(var == F("owmApiToken"))                  return owmApiToken;
+  if(var == F("owmUnitsFormat"))               return owmUnitsFormat;
+  if(var == F("owmUpdateInterval"))            return itoa(owmUpdateInterval, buffer, 10);
+  if(var == F("owmWhatToDisplayZone0"))        return zones[0].owmWhatToDisplay;
+  if(var == F("owmWhatToDisplayZone1"))        return zones[1].owmWhatToDisplay;
+  if(var == F("owmWhatToDisplayZone2"))        return zones[2].owmWhatToDisplay;
 //  if(var == "owmWhatToDisplayZone3")        return zones[3].owmWhatToDisplay;
-  if(var == "owmCity")                      return owmCity;
-  if(var == "fontZone0")                    return zones[0].font;
-  if(var == "fontZone1")                    return zones[1].font;
-  if(var == "fontZone2")                    return zones[2].font;
+  if(var == F("owmCity"))                      return owmCity;
+  if(var == F("fontZone0"))                    return zones[0].font;
+  if(var == F("fontZone1"))                    return zones[1].font;
+  if(var == F("fontZone2"))                    return zones[2].font;
 //  if(var == "fontZone3")                    return zones[3].font;
-  if(var == "haAddr")                       return haAddr;
-  if(var == "haApiToken")                   return haApiToken;
-  if(var == "haApiHttpType")                return haApiHttpType;
-  if(var == "haApiPort")                    return itoa(haApiPort, buffer, 10);
-  if(var == "haSensorIdZone0")              return zones[0].haSensorId;
-  if(var == "haSensorIdZone1")              return zones[1].haSensorId;
-  if(var == "haSensorIdZone2")              return zones[2].haSensorId;
+  if(var == F("haAddr"))                       return haAddr;
+  if(var == F("haApiToken"))                   return haApiToken;
+  if(var == F("haApiHttpType"))                return haApiHttpType;
+  if(var == F("haApiPort"))                    return itoa(haApiPort, buffer, 10);
+  if(var == F("haSensorIdZone0"))              return zones[0].haSensorId;
+  if(var == F("haSensorIdZone1"))              return zones[1].haSensorId;
+  if(var == F("haSensorIdZone2"))              return zones[2].haSensorId;
 //  if(var == "haSensorIdZone3")              return zones[3].haSensorId;
-  if(var == "haSensorPostfixZone0")         return zones[0].haSensorPostfix;
-  if(var == "haSensorPostfixZone1")         return zones[1].haSensorPostfix;
-  if(var == "haSensorPostfixZone2")         return zones[2].haSensorPostfix;
+  if(var == F("haSensorPostfixZone0"))         return zones[0].haSensorPostfix;
+  if(var == F("haSensorPostfixZone1"))         return zones[1].haSensorPostfix;
+  if(var == F("haSensorPostfixZone2"))         return zones[2].haSensorPostfix;
 //  if(var == "haSensorPostfixZone3")         return zones[3].haSensorPostfix;
-  if(var == "haUpdateInterval")             return itoa(haUpdateInterval, buffer, 10);
-  if(var == "charspacingZone0")             return itoa(zones[0].charspacing, buffer, 10);
-  if(var == "charspacingZone1")             return itoa(zones[1].charspacing, buffer, 10);
-  if(var == "charspacingZone2")             return itoa(zones[2].charspacing, buffer, 10);
+  if(var == F("haUpdateInterval"))             return itoa(haUpdateInterval, buffer, 10);
+  if(var == F("charspacingZone0"))             return itoa(zones[0].charspacing, buffer, 10);
+  if(var == F("charspacingZone1"))             return itoa(zones[1].charspacing, buffer, 10);
+  if(var == F("charspacingZone2"))             return itoa(zones[2].charspacing, buffer, 10);
 //  if(var == "charspacingZone3")             return itoa(zones[3].charspacing, buffer, 10);
-  if(var == "firmwareVer")                  return firmwareVer;
-  if(var == "deviceName")                   return shortMACaddr;
-  if(var == "disableServiceMessages")       return String(disableServiceMessages);
-  if(var == "disableDotsBlink")             return String(disableDotsBlink);
-  if(var == "ds18b20Enable")                return String(ds18b20Enable);
-  if(var == "ds18b20Temp")                  return String(dsTemp);
-  if(var == "ds18b20UpdateInterval")        return itoa(ds18b20UpdateInterval, buffer, 10);
-  if(var == "ds18b20UnitsFormat")           return ds18b20UnitsFormat;
-  if(var == "ds18b20PostfixZone0")          return zones[0].ds18b20Postfix;
-  if(var == "ds18b20PostfixZone1")          return zones[1].ds18b20Postfix;
-  if(var == "ds18b20PostfixZone2")          return zones[2].ds18b20Postfix;
+  if(var == F("firmwareVer"))                  return firmwareVer;
+  if(var == F("deviceName"))                   return shortMACaddr;
+  if(var == F("disableServiceMessages"))       return String(disableServiceMessages);
+  if(var == F("disableDotsBlink"))             return String(disableDotsBlink);
+  if(var == F("ds18b20Enable"))                return String(ds18b20Enable);
+  if(var == F("ds18b20Temp"))                  return String(dsTemp);
+  if(var == F("ds18b20UpdateInterval"))        return itoa(ds18b20UpdateInterval, buffer, 10);
+  if(var == F("ds18b20UnitsFormat"))           return ds18b20UnitsFormat;
+  if(var == F("ds18b20PostfixZone0"))          return zones[0].ds18b20Postfix;
+  if(var == F("ds18b20PostfixZone1"))          return zones[1].ds18b20Postfix;
+  if(var == F("ds18b20PostfixZone2"))          return zones[2].ds18b20Postfix;
 //  if(var == "ds18b20PostfixZone3")          return zones[3].ds18b20Postfix;
   return String();
 }
 
 void MQTTPublishHADiscovry(String zone, String device_type) {
   if (mqttClient.connected()) {
-    DynamicJsonDocument  root(ESP.getMaxFreeBlockSize() - 512);
+    DynamicJsonDocument  root(1024);
     char topic_config[100];
-    //char buffer[1024];
+    char buffer[1024];
     boolean result;
 
     // device block
@@ -315,7 +315,7 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
     arrDevice.add(MQTTGlobalPrefix); 
     device["mf"]                      = "widapro";
     device["mdl"]                     = "wledPixel-v2"; 
-    device["name"]                    = MQTTGlobalPrefix;
+    device["name"]                    = "wledPixel" + shortMACaddr;
     device["sw"]                      = firmwareVer;
 
     // availability block
@@ -496,18 +496,26 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
       root["unit_of_measurement"] = "°C";
     }  
 
-    result = mqttClient.beginPublish(topic_config, measureJson(root), true);
-    if( result == false ) Serial.println( "MQTT HA config error begin!" );  
-    serializeJson(root, mqttClient);
+    //result = mqttClient.beginPublish(topic_config, measureJson(root), true);
+    //if( result == false ) Serial.println(F( "MQTT HA config error begin!" ));
+    //serializeJson(root, mqttClient);
     //root.shrinkToFit();
     //root.garbageCollect();
+
+    size_t n = serializeJson(root, buffer);
+    
+    Serial.print(F("MQTT publish HA device state: "));
+    mqttPublished = mqttClient.publish(topic_config, buffer, n);
+    if (mqttPublished) Serial.println(F("OK"));
+    else Serial.println(F("fail"));
+
     result = mqttClient.endPublish();
-    if( result == false ) Serial.println( "MQTT HA config error end!" ); 
+    if( result == false ) Serial.print(F( "MQTT HA config error end!" ));
   }
 }
 
 void MQTTPublishState() {
-  Serial.printf("\n MQTT pub state func");
+  Serial.print(F("MQTT pub state func"));
   if (mqttClient.connected()) {
     DynamicJsonDocument doc(1024);
     char buffer[1024];
@@ -531,10 +539,10 @@ void MQTTPublishState() {
     doc.garbageCollect();
     size_t n = serializeJson(doc, buffer);
     
-    Serial.printf("\nMQTT publish device state: ");
+    Serial.print(F("MQTT publish device state: "));
     mqttPublished = mqttClient.publish(MQTTStateTopic.c_str(), buffer, n);
-    if (mqttPublished) Serial.println("OK");
-    else Serial.println("fail");
+    if (mqttPublished) Serial.println(F("OK"));
+    else Serial.println(F("fail"));
   }
 }
 
@@ -740,9 +748,10 @@ void MQTTCallback(char* topic, byte* payload, int length) {
 
   for (int i = 0; i < length; i++) { PayloadString = PayloadString + (char)payload[i]; }
 
-  Serial.printf("\nMQTT new message arrived");  
-  Serial.printf("\nTopic: %s\n", topic);
-  Serial.println(PayloadString);
+  Serial.print(F("\nMQTT new message arrived"));
+  Serial.print(F("\nTopic: "));
+  Serial.println(topic);
+  Serial.print(PayloadString);
 
   if (topicStr == MQTTIntensity) {
     if (isNumeric(PayloadString)) {
@@ -750,7 +759,7 @@ void MQTTCallback(char* topic, byte* payload, int length) {
       P.setIntensity(intensity);
       saveVarsToConfFile("intensity", 99);
     } else {
-      Serial.print("Supports are only numeric values");
+      Serial.print(F("Supports are only numeric values"));
     }
     
   }
@@ -814,14 +823,8 @@ boolean reconnect() {
 
   // Attempt to connect
   if (mqttClient.connect(MQTTGlobalPrefix.c_str(), mqttUsername.c_str(),mqttPassword.c_str())) {
-    //MQTTPublishHADiscovry("0", "light");
-    Serial.printf("\n MQTT reconnect func");
-    MQTTPublishState();
-
-    Serial.printf("\nMQTT subscribe objects");
-    mqttClient.subscribe((char*) MQTTIntensity.c_str());
-    mqttClient.subscribe((char*) MQTTPower.c_str());
-    
+    MQTTPublishHADiscovry("0", "light");
+   
     for ( uint8_t n = 0; n < zoneNumbers; n++) {
       MQTTPublishHADiscovry(String(n), "scrollAlign");
       MQTTPublishHADiscovry(String(n), "charspacing");
@@ -841,12 +844,14 @@ boolean reconnect() {
       mqttClient.subscribe((char*) MQTTZones[n].charspacing.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].workMode.c_str());
     }
-  }
-  else
-  {
-    Serial.printf("\nMQTT failed, rc=");
-    Serial.print(mqttClient.state());
-    Serial.println(" try again in 5 seconds");
+    MQTTPublishState();
+    Serial.println(F("MQTT subscribe objects"));
+    mqttClient.subscribe((char*) MQTTIntensity.c_str());
+    mqttClient.subscribe((char*) MQTTPower.c_str());
+  }  else  {
+    Serial.print(F("MQTT failed, rc= "));
+    Serial.println(mqttClient.state());
+    Serial.print(F(" try again in 5 seconds"));
     P.setTextBuffer(0, "mq err");
     P.displayReset(0);
   }
@@ -929,21 +934,24 @@ String flashClockDots(String t) {
 void displayAnimation() {
   if (P.displayAnimate()) {
     if (zones[0].newMessageAvailable && P.getZoneStatus(0)) {
-        Serial.printf("\nzone0Message availabel: %s", zone0Message);
+        Serial.print(F("\nzone0 Message availabel: "));
+        Serial.println(zone0Message);
         zones[0].newMessageAvailable = false;
         P.setTextBuffer(0, zone0Message);
         P.displayReset(0);
     }
 
     if (zones[1].newMessageAvailable && P.getZoneStatus(1)) {
-        Serial.printf("\nzone1Message availabel: %s", zone1Message);
+        Serial.print(F("\nzone1 Message availabel: "));
+        Serial.println(zone1Message);
         zones[1].newMessageAvailable = false;
         P.setTextBuffer(1, zone1Message);
         P.displayReset(1);
     }
 
     if (zones[2].newMessageAvailable && P.getZoneStatus(2)) {
-        Serial.printf("\nzone2Message availabel: %s", zone2Message);
+        Serial.print(F("\nzone2 Message availabel: "));
+        Serial.println(zone2Message);
         zones[2].newMessageAvailable = false;
         P.setTextBuffer(2, zone2Message);
         P.displayReset(2);
@@ -969,7 +977,7 @@ String haApiGet(String sensorId, String sensorPostfix) {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Start serial....");
+  Serial.print(F("Start serial...."));
   
   //WiFi.mode(WIFI_STA);
   //WiFi.persistent(true);
@@ -977,14 +985,21 @@ void setup() {
   wifiManager.setAPCallback(wifiApWelcomeMessage);
   wifiManager.autoConnect(MQTTGlobalPrefix.c_str(), wifiAPpassword);
   WiFi.hostname(MQTTGlobalPrefix.c_str());
-  Serial.println("");
-  Serial.printf("Wifi connected to SSID: %s\n", WiFi.SSID().c_str());
-  Serial.printf("Local ip: %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-  Serial.printf("Subnet: %s\n", WiFi.subnetMask().toString().c_str());
-  Serial.printf("DNS: %s\n", WiFi.dnsIP().toString().c_str());
-  Serial.printf("HostName: %s\n", MQTTGlobalPrefix.c_str());
-  Serial.printf("MQTT Device Prefix: %s\n", MQTTGlobalPrefix.c_str());
+  Serial.print(F(""));
+  Serial.print(F("Wifi connected to SSID: "));
+  Serial.println(WiFi.SSID().c_str());
+  Serial.print(F("Local ip: "));
+  Serial.println(WiFi.localIP().toString().c_str());
+  Serial.print(F("Gateway: "));
+  Serial.println(WiFi.gatewayIP().toString().c_str());
+  Serial.print(F("Subnet: "));
+  Serial.println(WiFi.subnetMask().toString().c_str());
+  Serial.print(F("DNS: "));
+  Serial.println(WiFi.dnsIP().toString().c_str());
+  Serial.print(F("HostName: "));
+  Serial.println(MQTTGlobalPrefix.c_str());
+  Serial.print(F("MQTT Device Prefix: "));
+  Serial.println(MQTTGlobalPrefix.c_str());
 
   readAllConfig();
   
@@ -999,7 +1014,7 @@ void setup() {
   if (mqttEnable) {
     mqttClient.setServer(mqttServerAddress.c_str(), mqttServerPort);
     mqttClient.setCallback(MQTTCallback);
-    mqttClient.setBufferSize(2048);
+    mqttClient.setBufferSize(4096);
   }  
   
   // start NTP client
@@ -1014,23 +1029,24 @@ void setup() {
   //}
 
   // Web server routings
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", indexPage, processor);
   });
 
-  server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+  server.on("/settings", HTTP_ANY, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", settingsPage, processor);
   });
 
-  server.on("/api/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
-    if (ds18b20Enable) request->send_P(200, "text/plain", String(dsTemp).c_str());
+  server.on("/api/temperature", HTTP_ANY, [](AsyncWebServerRequest *request){
+    if (ds18b20Enable) request->send(200, "text/plain", String(dsTemp).c_str());
     else request->send(404);
   });
   
-  server.on("/api/message", HTTP_POST, [](AsyncWebServerRequest *request){
-    Serial.printf("\nAPI request received ");
+  server.on("/api/message", HTTP_ANY, [](AsyncWebServerRequest *request){
+    Serial.print(F("API request received "));
       int params = request->params();
-      Serial.printf("%d params sent in\n", params);
+      Serial.print(params);
+      Serial.println(F(" params sent in"));
 
       for(int i=0;i<params;i++){
         AsyncWebParameter* p = request->getParam(i);
@@ -1047,10 +1063,11 @@ void setup() {
   });
 
 
-  server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {
-      Serial.printf("\nAPI request received ");
+  server.on("/api/config", HTTP_ANY, [](AsyncWebServerRequest *request) {
+      Serial.print(F("API request received "));
       int params = request->params();
-      Serial.printf("%d params sent in\n", params);
+      Serial.print(params);
+      Serial.println(F(" params sent in"));
       AsyncWebParameter* key = request->getParam(0);
       uint8_t n = 99;
       bool finishRequest = false;
@@ -1272,7 +1289,7 @@ void loop() {
 
   // handle a restart ESP request
   if (restartESP) {
-    Serial.println("Rebooting ESP...");
+    Serial.print(F("Rebooting ESP..."));
     delay(1000);
     ESP.restart();
   }
@@ -1294,7 +1311,7 @@ void loop() {
 
   // apply saved config for display
   if (initConfig) {
-    Serial.printf("\nInit configuration");
+    Serial.print(F("Init configuration"));
     initConfig = false;
     readAllConfig();
     
@@ -1354,7 +1371,7 @@ void loop() {
         sensors.requestTemperatures();
         float dsTempC = sensors.getTempC(dsAddr);
         if (dsTempC == -127.00) {
-          Serial.printf("\n ds18b20 Error getting temperature");
+          Serial.print(F("ds18b20 Error getting temperature"));
         } else {
           dsTempToDisplay = true;
           if (ds18b20UnitsFormat == "Fahrenheit") {
@@ -1426,7 +1443,7 @@ void loop() {
           }
         } else {
           zoneNewMessage(n, "err", "");
-          Serial.printf("\nOpen Weather Map config error");
+          Serial.print(F("Open Weather Map config error"));
         }
       }
 

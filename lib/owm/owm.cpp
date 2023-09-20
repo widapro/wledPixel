@@ -8,7 +8,7 @@ int             owmTemperature;
 
 
 void owmWeatherUpdate(String city, String unitsFormat, String token) {
-  Serial.printf("\nGetting weather from Open Weather Map\n");
+  Serial.print(F("Getting weather from Open Weather Map"));
   StaticJsonDocument<512> owmWeatherPostObj = httpsRequest("api.openweathermap.org", 443, "/data/2.5/weather?q=" + city + "&units=" + unitsFormat + "&appid=" + token, "", true);
 
   owmHumidity       = owmWeatherPostObj[F("main")][F("humidity")].as<byte>();
@@ -41,6 +41,6 @@ String openWetherMapGetWeather(String whatToDisplay, String unitsFormat) {
     if(owmWeatherIcon == "13d" || owmWeatherIcon == "13n") return "F";  // 70   - 'F'   snow
     if(owmWeatherIcon == "50d" || owmWeatherIcon == "50n") return "f";  // 102  - 'f'   mist (fog)
   }
-  Serial.printf("Error getting weather from open weather map");
+  Serial.print(F("Error getting weather from open weather map"));
   return "err";
 }
