@@ -26,7 +26,7 @@ Preferences preferences;
 WiFiClient mqttEspClient;
 
 /// GLOBAL ///
-const char* firmwareVer = "2.6";
+const char* firmwareVer = "2.6.1";
 int nLoop = 0;
 bool restartESP         = false;
 bool allTestsFinish     = false;
@@ -98,9 +98,9 @@ typedef struct {
 
 // structure:
 ZoneData zones[] = {
-  {0, 2, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
-  {3, 4, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
-  {5, 6, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
+  {0, 2, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
+  {3, 4, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
+  {5, 6, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
 //  {7, 7, 35, 1, 3000, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", ""},
 };
 
@@ -116,10 +116,12 @@ char zone2Message[100] = "zone2";
 //char zone3Message[50] = "zone3";
 
 // Initialize NTP
-String ntpServerAddress = "pool.ntp.org";
+String ntpServer = "pool.ntp.org";
 int8_t ntpTimeZone = 3;
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, ntpServerAddress.c_str());
+unsigned long previousNTPsyncMillis = millis();
+uint16_t ntpUpdateInterval = 6; // in hours
+NTPClient timeClient(ntpUDP, ntpServer.c_str(), ntpTimeZone * 3600, ntpUpdateInterval * 3600);
 
 AsyncWebServer server(80);
 DNSServer dns;
@@ -254,6 +256,8 @@ String processor(const String& var){
   if(var == F("mqttPostfixZone2"))             return zones[2].mqttPostfix;
 //  if(var == "mqttPostfixZone3")             return zones[3].mqttPostfix;
   if(var == F("ntpTimeZone"))                  return itoa(ntpTimeZone, buffer, 10);
+  if(var == F("ntpUpdateInterval"))            return itoa(ntpUpdateInterval, buffer, 10);
+  if(var == F("ntpServer"))                    return ntpServer;
   if(var == F("clockDisplayFormatZone0"))      return zones[0].clockDisplayFormat;
   if(var == F("clockDisplayFormatZone1"))      return zones[1].clockDisplayFormat;
   if(var == F("clockDisplayFormatZone2"))      return zones[2].clockDisplayFormat;
@@ -304,9 +308,9 @@ String processor(const String& var){
 
 void MQTTPublishHADiscovry(String zone, String device_type) {
   if (mqttClient.connected()) {
-    DynamicJsonDocument  root(1024);
-    char topic_config[100];
-    char buffer[1024];
+    DynamicJsonDocument  root(1072);
+    char topic_config[120];
+    char buffer[1072];
     boolean result;
 
     // device block
@@ -354,12 +358,13 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
       root["stat_t"]          = "wledPixel-" + shortMACaddr + "/state";
       root["val_tpl"]         = "{{ value_json['zone" + zone + "']['workMode'] }}";
       root["entity_category"] = "config";
-      JsonArray arrOptions    = root.createNestedArray("options"); 
-      arrOptions.add("mqttClient"); 
-      arrOptions.add("manualInput"); 
-      arrOptions.add("wallClock"); 
-      arrOptions.add("owmWeather"); 
-      arrOptions.add("haClient"); 
+      JsonArray arrOptions    = root.createNestedArray("options");
+      arrOptions.add("manualInput");
+      arrOptions.add("wallClock");
+      arrOptions.add("haClient");
+      arrOptions.add("mqttClient");
+      arrOptions.add("owmWeather");
+      arrOptions.add("intTempSensor");
     }
 
     if (device_type == "scrollAlign") {
@@ -499,18 +504,20 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
     //result = mqttClient.beginPublish(topic_config, measureJson(root), true);
     //if( result == false ) Serial.println(F( "MQTT HA config error begin!" ));
     //serializeJson(root, mqttClient);
-    //root.shrinkToFit();
-    //root.garbageCollect();
+    
 
     size_t n = serializeJson(root, buffer);
     
-    Serial.print(F("MQTT publish HA device state: "));
+    Serial.print(F("\nMQTT publish HA device state: "));
     mqttPublished = mqttClient.publish(topic_config, buffer, n);
     if (mqttPublished) Serial.println(F("OK"));
     else Serial.println(F("fail"));
 
     result = mqttClient.endPublish();
-    if( result == false ) Serial.print(F( "MQTT HA config error end!" ));
+    if( result == false ) Serial.print(F("\nERROR: MQTT HA config error end!" ));
+
+    root.shrinkToFit();
+    root.garbageCollect();
   }
 }
 
@@ -591,8 +598,10 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
   }
 
   if (groupName == "wallClockSettings") {
-    preferences.putChar("ntpTimeZone",       ntpTimeZone);
-    preferences.putBool("disableDotsBlink",  disableDotsBlink);
+    preferences.putChar("ntpTimeZone",         ntpTimeZone);
+    preferences.putBool("disableDotsBlink",    disableDotsBlink);
+    preferences.putUShort("ntpUpdateInterval", ntpUpdateInterval);
+    preferences.putString("ntpServer",         ntpServer);
   }
 
   if (groupName == "owmSettings") {
@@ -669,8 +678,10 @@ void readConfig(String groupName, uint8_t n) {
   }
 
   if (groupName == "wallClockSettings") {
-    ntpTimeZone      = preferences.getChar("ntpTimeZone",       ntpTimeZone);
-    disableDotsBlink = preferences.getBool("disableDotsBlink",  disableDotsBlink);
+    ntpTimeZone       = preferences.getChar("ntpTimeZone",         ntpTimeZone);
+    disableDotsBlink  = preferences.getBool("disableDotsBlink",    disableDotsBlink);
+    ntpUpdateInterval = preferences.getUShort("ntpUpdateInterval", ntpUpdateInterval);
+    ntpServer         = preferences.getString("ntpServer",         ntpServer);
   }
 
   if (groupName == "owmSettings") {
@@ -742,6 +753,18 @@ bool isNumeric(String str){
   return false;
 }
 
+void ntpUpdateTime() {
+  if (timeClient.update()) {
+    previousNTPsyncMillis = currentMillis;
+    Serial.print(F("\nNTP time synchronized successfully"));
+  } else {
+    previousNTPsyncMillis = -10000000;
+    timeClient.forceUpdate();
+    delay(1000);
+    Serial.print(F("\nERROR: NTP time synchronization failed"));
+  }
+}
+
 void MQTTCallback(char* topic, byte* payload, int length) {
   String topicStr(topic);
   String PayloadString = "";
@@ -811,6 +834,13 @@ void MQTTCallback(char* topic, byte* payload, int length) {
     if (topicStr == MQTTZones[n].workMode) {
       zones[n].workMode = PayloadString.c_str();
       zones[n].owmWhatToDisplay = "owmTemperature";
+
+      if (zones[n].workMode == "wallClock") {
+          timeClient.setTimeOffset(ntpTimeZone * 3600);
+          ntpUpdateTime();
+          zones[n].previousMillis = -1000000;
+      }
+
       zoneSettingsChanged = true;
     }
     if (zoneSettingsChanged) saveVarsToConfFile("zoneSettings", n);
@@ -873,6 +903,8 @@ void wifiApWelcomeMessage(AsyncWiFiManager *wifiManager) {
 }
 
 String getCurTime(String curZoneFont, String displayFormat) {
+      if (currentMillis - previousNTPsyncMillis >= (unsigned)ntpUpdateInterval * 3600 * 1000) ntpUpdateTime();
+
       String t = (String)timeClient.getFormattedTime(); // returns HH:MM:SS
       
       if (displayFormat == "HHMM") {
@@ -1020,7 +1052,9 @@ void setup() {
   // start NTP client
   timeClient.begin();
   timeClient.setTimeOffset(ntpTimeZone * 3600);
-  timeClient.update();
+  timeClient.setUpdateInterval(ntpUpdateInterval * 3600);
+  timeClient.setPoolServerName(ntpServer.c_str());
+  ntpUpdateTime();
 
   // Start Dallas ds18b20
   //if (ds18b20Enable) {
@@ -1064,7 +1098,7 @@ void setup() {
 
 
   server.on("/api/config", HTTP_ANY, [](AsyncWebServerRequest *request) {
-      Serial.print(F("API request received "));
+      Serial.print(F("\nAPI request received "));
       int params = request->params();
       Serial.print(params);
       Serial.println(F(" params sent in"));
@@ -1108,7 +1142,7 @@ void setup() {
                   if (zones[n].workMode == "mqttClient" && mqttEnable) mqttClient.disconnect();
                   if (zones[n].workMode == "wallClock") {
                       timeClient.setTimeOffset(ntpTimeZone * 3600);
-                      timeClient.update();
+                      ntpUpdateTime();
                       zones[n].previousMillis = -1000000;
                   }
               }
@@ -1192,7 +1226,6 @@ void setup() {
             if (p->name() == "ntpTimeZone") {
               ntpTimeZone = p->value().toInt();
               timeClient.setTimeOffset(ntpTimeZone * 3600);
-              timeClient.update();
             }
             if (p->name() == "disableDotsBlink") {
               if (strcmp(p->value().c_str(),"true") == 0)   disableDotsBlink = true;
@@ -1201,7 +1234,14 @@ void setup() {
                 zones[i].previousMillis = currentMillis + 60001;
               }
             }
-
+            if (p->name() == "ntpUpdateInterval") {
+              ntpUpdateInterval = p->value().toInt();
+              timeClient.setUpdateInterval(ntpUpdateInterval * 3600);
+            }
+            if (p->name() == "ntpServer") {
+              ntpServer = p->value().c_str();
+              timeClient.setPoolServerName(ntpServer.c_str());
+            }
             finishRequest = true; 
           }
 
@@ -1251,7 +1291,8 @@ void setup() {
       if (finishRequest) {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
         saveVarsToConfFile(key->value(), n);
-        readConfig(key->value(), n);
+        if (key->value() == "wallClockSettings") ntpUpdateTime();
+        //readConfig(key->value(), n);
       }
       
   });
@@ -1261,6 +1302,9 @@ void setup() {
 
   // Start ElegantOTA
   AsyncElegantOTA.begin(&server);
+
+  // Start ds18b20
+  sensors.begin();
 }
 
 void testZones(uint8_t n) {
@@ -1326,8 +1370,6 @@ void loop() {
       applyZoneFont(n, zones[n].font);
 
       if (zones[n].workMode == "wallClock") {
-        timeClient.setTimeOffset(ntpTimeZone * 3600);
-        timeClient.update();
         zones[n].curTime = getCurTime(zones[n].font, zones[n].clockDisplayFormat);
         zones[n].previousMillis = -1000000;
       }
@@ -1363,15 +1405,12 @@ void loop() {
 
     // DS18B20 measurement
     if (ds18b20Enable) {
-      byte dsAddr[8];
-      oneWire.reset();
-      oneWire.search(dsAddr);
       if (currentMillis - previousDsMillis >= (unsigned)ds18b20UpdateInterval * 1000) {
         previousDsMillis = currentMillis;
         sensors.requestTemperatures();
-        float dsTempC = sensors.getTempC(dsAddr);
-        if (dsTempC == -127.00) {
-          Serial.print(F("ds18b20 Error getting temperature"));
+        float dsTempC = sensors.getTempCByIndex(0);
+        if (dsTempC == DEVICE_DISCONNECTED_C) {
+          Serial.print(F("\nERROR: ds18b20 getting temperature failed"));
         } else {
           dsTempToDisplay = true;
           if (ds18b20UnitsFormat == "Fahrenheit") {
@@ -1443,7 +1482,7 @@ void loop() {
           }
         } else {
           zoneNewMessage(n, "err", "");
-          Serial.print(F("Open Weather Map config error"));
+          Serial.print(F("\nERROR: Open Weather Map config error"));
         }
       }
 
