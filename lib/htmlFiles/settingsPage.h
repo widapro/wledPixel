@@ -988,7 +988,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                 <hr class="my-4">
                   <h3 class="mb-3">MQTT settings</h3>
 
-                  <div class="col-3 align-self-center">
+                  <div class="col-12 align-self-center">
                     <div class="form-check">
                       <input class="form-check-input" type="checkbox" value="mqttEnable" id="mqttEnable">
                       <label class="form-check-label" for="mqttEnable">
@@ -997,14 +997,14 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-6">
                     <label for="mqttServerAddress" class="form-label">Server address</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="mqttServerAddress" value="%mqttServerAddress%">
                     </div>
                   </div>
                   
-                  <div class="col-4">
+                  <div class="col-6">
                     <label for="mqttServerPort" class="form-label">Server port</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="mqttServerPort" value="%mqttServerPort%">
@@ -1029,15 +1029,28 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
 
                 
                 <hr class="my-4">
-                  <h3 class="mb-3">Wall clock settings</h3>                 
+                  <h3 class="mb-3">Wall clock settings</h3>
                   <div class="col-6">
+                    <label class="form-label">NTP Time server</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="ntpServer" value="%ntpServer%">
+                    </div>
+                  </div>
+                  <div class="col-3">
                     <label for="timeZone" class="form-label">Time zone</label>
                     <div class="input-group mb-3">
                         <span class="input-group-text">UTC</span>
                         <input type="text" class="form-control" id="ntpTimeZone" value="%ntpTimeZone%">
                     </div>
                   </div>
-                  <div class="col-6 align-self-center">
+                  <div class="col-3">
+                    <label for="timeZone" class="form-label">Update interval</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="ntpUpdateInterval" value="%ntpUpdateInterval%">
+                        <span class="input-group-text">Hours</span>
+                    </div>
+                  </div>
+                  <div class="col-12 align-self-center">
                     <div class="form-check">
                       <input class="form-check-input" type="checkbox" value="disableDotsblink" id="disableDotsBlink">
                       <label class="form-check-label" for="disableDotsBlink">
@@ -1247,6 +1260,8 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
      document.getElementById("mqttTextTopicZone2").value = "%mqttTextTopicZone2%";
 //     document.getElementById("mqttTextTopicZone3").value = "%mqttTextTopicZone3%";
      document.getElementById("ntpTimeZone").value = "%ntpTimeZone%";
+     document.getElementById("ntpUpdateInterval").value = "%ntpUpdateInterval%";
+     document.getElementById("ntpServer").value = "%ntpServer%";
      document.getElementById("clockDisplayFormatZone0").value = "%clockDisplayFormatZone0%";
      document.getElementById("clockDisplayFormatZone1").value = "%clockDisplayFormatZone1%";
      document.getElementById("clockDisplayFormatZone2").value = "%clockDisplayFormatZone2%";
@@ -1777,7 +1792,9 @@ workModeZone0.addEventListener('change', function (e) {
             data = {
                 key:                    "wallClockSettings",
                 ntpTimeZone:            document.getElementById("ntpTimeZone").value,
-                disableDotsBlink:       document.querySelector('#disableDotsBlink').checked
+                disableDotsBlink:       document.querySelector('#disableDotsBlink').checked,
+                ntpUpdateInterval:      document.getElementById("ntpUpdateInterval").value,
+                ntpServer:              document.getElementById("ntpServer").value
             }
             sendPost(data);
         }
