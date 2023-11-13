@@ -139,6 +139,10 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
 -->                
                 <div class="col-sm-12"></div>
+                <hr class="my-4">
+                <div class="col-sm-12 text-center">
+                  <a href="https://github.com/widapro/wledPixel" class="text-muted text-decoration-none">GitHub | WledPixel</a>
+                </div>
             </div>
           </div>
     </main>

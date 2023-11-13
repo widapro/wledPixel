@@ -1,5 +1,5 @@
 # wledPixel
-ESP8266 and MAX7219 dot matrix display management
+ESP32 or ESP8266 and MAX7219 dot matrix display management
 
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/main.jpg)
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel-white.jpg)
@@ -24,12 +24,24 @@ ESP8266 and MAX7219 dot matrix display management
 
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
-2. WeMos D1 Mini (esp8266), something like this: https://aliexpress.com/item/32651747570.html
+2. ESP32 or WeMos D1 Mini (ESP8266), something like this: https://aliexpress.com/item/32651747570.html
 
 ## Web UI - Settings
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/SettingsUI.jpg)
 
 ##### Firmware compiled with next parameters:
+**ESP32**
+```
+// Display pinout
+#define DATA_PIN  23         // ESP32 GPIO23
+#define CS_PIN    5          // ESP32 GPIO5
+#define CLK_PIN   18         // ESP32 GPIO18
+
+// Ds18b20 pinout
+const int oneWireBus = 4;    // ESP32 GPIO04
+```
+
+**ESP8266**
 ```
 // Display pinout
 #define DATA_PIN  D7         // WeMos D1 mini or ESP8266 -> GPIO13
@@ -37,7 +49,7 @@ ESP8266 and MAX7219 dot matrix display management
 #define CLK_PIN   D5         // WeMos D1 mini or ESP8266 -> GPIO14
 
 // Ds18b20 pinout
-const int oneWireBus = D4;   // WeMos D1 mini GPIO02
+const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 ```
 
 ## Wiring
@@ -58,7 +70,7 @@ const int oneWireBus = D4;   // WeMos D1 mini GPIO02
 ```
 
 ## Icons in Wled symbol font:
-<img width="898" alt="Screen Shot 2022-07-14 at 23 09 11" src="https://user-images.githubusercontent.com/6948905/179143312-908f9cda-a766-4928-9fb2-5f4c08b55dbc.png">
+<img width="898" alt="Icons in Wled symbol font" src="https://user-images.githubusercontent.com/6948905/179143312-908f9cda-a766-4928-9fb2-5f4c08b55dbc.png">
 
 ```
 1 - "X"

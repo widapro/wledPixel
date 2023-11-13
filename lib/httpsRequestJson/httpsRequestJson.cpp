@@ -6,11 +6,17 @@ JsonObject httpsRequest(String addr, int port, String path, String token, bool h
 
   WiFiClient espClient;
 
-  static BearSSL::WiFiClientSecure httpClientSsl;
+  #if defined(ESP8266)
+    static BearSSL::WiFiClientSecure httpClientSsl;
+    httpClientSsl.setBufferSizes(2048, 1024);
+  #elif defined(ESP32)
+    WiFiClientSecure httpClientSsl;
+  #endif
+
   HTTPClient *httpClient = nullptr; 
   httpClient = new HTTPClient;
   httpClientSsl.setInsecure();
-  httpClientSsl.setBufferSizes(2048, 1024);
+  
   httpClientSsl.setTimeout(2000);
     
   if (https) httpBegin = httpClient->begin(httpClientSsl, addr, port, path, true);
@@ -32,7 +38,7 @@ JsonObject httpsRequest(String addr, int port, String path, String token, bool h
   delete httpClient;
   
   Serial.print(F("\nStart json in httpRequest func"));
-  DynamicJsonDocument httpsRespond(ESP.getMaxFreeBlockSize() - 512);
+  DynamicJsonDocument httpsRespond(2048);
   deserializeJson(httpsRespond, payload);
   JsonObject httpsRespondPostObj = httpsRespond.as<JsonObject>();
   

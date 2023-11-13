@@ -1,5 +1,23 @@
-#include <ESPAsyncTCP.h>
-#include <ESP8266WiFi.h>
+#include <Arduino.h>
+
+#if defined(ESP8266)
+  #pragma message "Compiling for ESP8266 board"
+  #include <ESPAsyncTCP.h>
+  #include <ESP8266WiFi.h>
+  #include <ESP8266HTTPClient.h>
+  #include <WiFiClientSecureBearSSL.h>
+#elif defined(ESP32)
+  #pragma message "Compiling for ESP32 board"
+  #include <AsyncTCP.h>
+  #include <WiFi.h>
+  #include <HTTPClient.h>
+  #include <ArduinoECCX08.h>
+  #include <WiFiClientSecure.h>
+#else
+  #error "This ain't a ESP8266 or ESP32!"
+#endif
+
+
 #include <ESPAsyncWebServer.h>
 #include <ESPAsyncWiFiManager.h>
 #include <ArduinoJson.h>
@@ -8,9 +26,9 @@
 #include <PubSubClient.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
-#include <ESP8266HTTPClient.h>
+
 #include <WiFiClientSecure.h>
-#include <WiFiClientSecureBearSSL.h>
+
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <Preferences.h>
@@ -25,8 +43,27 @@
 Preferences preferences;
 WiFiClient mqttEspClient;
 
+/// PINOUT ///
+#if defined(ESP8266)
+  const int oneWireBus = D4;                // WeMos D1 mini GPIO02
+  #define DATA_PIN  D7                      // WeMos D1 mini GPIO13
+  #define CS_PIN    D6                      // WeMos D1 mini GPIO12
+  #define CLK_PIN   D5                      // WeMos D1 mini GPIO14
+#elif defined(ESP32)
+  const int oneWireBus = 4;                 // ESP32 GPIO04
+  #define DATA_PIN       23                 // ESP32 GPIO23
+  #define CS_PIN         5                  // ESP32 GPIO5
+  #define CLK_PIN        18                 // ESP32 GPIO18
+  #define VBAT_PIN 36
+  float battv = 0;
+  unsigned long previousBatVoltMillis = 0;
+  uint16_t BatVoltUpdateInterval = 30; // in seconds
+#else
+  #error "This ain't a ESP8266 or ESP32!"
+#endif
+
 /// GLOBAL ///
-const char* firmwareVer = "2.6.1";
+const char* firmwareVer = "2.7";
 int nLoop = 0;
 bool restartESP         = false;
 bool allTestsFinish     = false;
@@ -37,7 +74,7 @@ unsigned long previousMillis = 0;
 
 
 //// DS18B20 ////
-const int oneWireBus = D4;  // WeMos D1 mini GPIO02
+
 OneWire oneWire(oneWireBus); // WeMos D1 mini GPIO02
 DallasTemperature sensors(&oneWire);
 bool ds18b20Enable = false;
@@ -81,9 +118,7 @@ bool mqttPublished    = false;
 // Display config
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW // type of device hardware https://majicdesigns.github.io/MD_MAX72XX/page_hardware.html
 //// Display pinout
-#define DATA_PIN  D7                      // WeMos D1 mini GPIO13
-#define CS_PIN    D6                      // WeMos D1 mini GPIO12
-#define CLK_PIN   D5                      // WeMos D1 mini GPIO14
+
 uint8_t MAX_DEVICES = 16;                 // number of device segments
 MD_Parola P = MD_Parola(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
@@ -98,9 +133,9 @@ typedef struct {
 
 // structure:
 ZoneData zones[] = {
-  {0, 2, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
-  {3, 4, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
-  {5, 6, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
+  {0, 3, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
+  {4, 5, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
+  {6, 7, 35, 1, 3, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont_cyrillic", "manualInput", "HHMM", "", "", "owmTemperature", "", "", "", false},
 //  {7, 7, 35, 1, 3000, 0, "PA_CENTER", "PA_SCROLL_DOWN", "PA_NO_EFFECT", "wledFont", "manualInput", "HHMM", "", "", "owmTemperature", "", "", ""},
 };
 
@@ -116,7 +151,7 @@ char zone2Message[100] = "zone2";
 //char zone3Message[50] = "zone3";
 
 // Initialize NTP
-String ntpServer = "pool.ntp.org";
+String ntpServer = "us.pool.ntp.org";
 int8_t ntpTimeZone = 3;
 WiFiUDP ntpUDP;
 unsigned long previousNTPsyncMillis = millis();
@@ -125,7 +160,7 @@ NTPClient timeClient(ntpUDP, ntpServer.c_str(), ntpTimeZone * 3600, ntpUpdateInt
 
 AsyncWebServer server(80);
 DNSServer dns;
-AsyncWiFiManager wifiManager(&server,&dns);
+//AsyncWiFiManager wifiManager(&server,&dns);
 
 //flag for saving wifi data
 bool shouldSaveConfig   = false;
@@ -558,7 +593,7 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
 
   if (groupName == "systemSettings") {
     preferences.putString("deviceName",           shortMACaddr);
-    preferences.putBool("disableServiceMessages", disableServiceMessages);
+    preferences.putBool("disablServMess", disableServiceMessages);
   }
 
   if (groupName == "displaySettings") {
@@ -573,41 +608,41 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
 
   if (groupName == "zoneSettings") {
     preferences.putString((String("zone") + n + "WorkMode").c_str(),            zones[n].workMode);
-    preferences.putUChar((String("zone")  + n + "ScrollSpeed").c_str(),         zones[n].scrollSpeed);
-    preferences.putUChar((String("zone")  + n + "ScrollPause").c_str(),         zones[n].scrollPause);
-    preferences.putString((String("zone") + n + "ScrollAlign").c_str(),         zones[n].scrollAlign);
-    preferences.putString((String("zone") + n + "ScrollEffectIn").c_str(),      zones[n].scrollEffectIn);
-    preferences.putString((String("zone") + n + "ScrollEffectOut").c_str(),     zones[n].scrollEffectOut);
+    preferences.putUChar((String("zone")  + n + "ScrolSpeed").c_str(),         zones[n].scrollSpeed);
+    preferences.putUChar((String("zone")  + n + "ScrolPause").c_str(),         zones[n].scrollPause);
+    preferences.putString((String("zone") + n + "ScrolAlign").c_str(),         zones[n].scrollAlign);
+    preferences.putString((String("zone") + n + "ScrolEfIn").c_str(),      zones[n].scrollEffectIn);
+    preferences.putString((String("zone") + n + "ScrolEfOut").c_str(),     zones[n].scrollEffectOut);
     preferences.putString((String("zone") + n + "Font").c_str(),                zones[n].font);
-    preferences.putUChar((String("zone")  + n + "Charspacing").c_str(),         zones[n].charspacing);
-    preferences.putString((String("zone") + n + "mqttTextTopic").c_str(),       MQTTZones[n].message);
-    preferences.putString((String("zone") + n + "mqttPostfix").c_str(),         zones[n].mqttPostfix);
-    preferences.putString((String("zone") + n + "ClockDisplayFormat").c_str(),  zones[n].clockDisplayFormat);
-    preferences.putString((String("zone") + n + "OwmWhatToDisplay").c_str(),    zones[n].owmWhatToDisplay);
+    preferences.putUChar((String("zone")  + n + "Charspac").c_str(),         zones[n].charspacing);
+    preferences.putString((String("zone") + n + "mqttTexTop").c_str(),       MQTTZones[n].message);
+    preferences.putString((String("zone") + n + "mqttPosfix").c_str(),         zones[n].mqttPostfix);
+    preferences.putString((String("zone") + n + "ClDispForm").c_str(),  zones[n].clockDisplayFormat);
+    preferences.putString((String("zone") + n + "OwmWhDisp").c_str(),    zones[n].owmWhatToDisplay);
     preferences.putString((String("zone") + n + "HaSensorId").c_str(),          zones[n].haSensorId);
-    preferences.putString((String("zone") + n + "HaSensorPostfix").c_str(),     zones[n].haSensorPostfix);
-    preferences.putString((String("zone") + n + "Ds18b20Postfix").c_str(),      zones[n].ds18b20Postfix);
+    preferences.putString((String("zone") + n + "HaSensorPf").c_str(),     zones[n].haSensorPostfix);
+    preferences.putString((String("zone") + n + "Ds18b20Pf").c_str(),      zones[n].ds18b20Postfix);
   }
 
   if (groupName == "mqttSettings") {
     preferences.putBool("mqttEnable",           mqttEnable);
-    preferences.putString("mqttServerAddress",  mqttServerAddress);
+    preferences.putString("mqttServerAddr",  mqttServerAddress);
     preferences.putUShort("mqttServerPort",     mqttServerPort);
     preferences.putString("mqttUsername",       mqttUsername);
     preferences.putString("mqttPassword",       mqttPassword);
   }
 
-  if (groupName == "wallClockSettings") {
+  if (groupName == "wallClockSett") {
     preferences.putChar("ntpTimeZone",         ntpTimeZone);
-    preferences.putBool("disableDotsBlink",    disableDotsBlink);
-    preferences.putUShort("ntpUpdateInterval", ntpUpdateInterval);
+    preferences.putBool("disableDotBlink",    disableDotsBlink);
+    preferences.putUShort("ntpUpdateInt", ntpUpdateInterval);
     preferences.putString("ntpServer",         ntpServer);
   }
 
   if (groupName == "owmSettings") {
     preferences.putString("owmApiToken",        owmApiToken);
     preferences.putString("owmUnitsFormat",     owmUnitsFormat);
-    preferences.putUShort("owmUpdateInterval",  owmUpdateInterval);
+    preferences.putUShort("owmUpdateInt",  owmUpdateInterval);
     preferences.putString("owmCity",            owmCity);
   }
 
@@ -616,13 +651,13 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
     preferences.putString("haApiToken",       haApiToken);
     preferences.putString("haApiHttpType",    haApiHttpType);
     preferences.putUShort("haApiPort",        haApiPort);
-    preferences.putUShort("haUpdateInterval", haUpdateInterval);
+    preferences.putUShort("haUpdateInt", haUpdateInterval);
   }
 
   if (groupName == "ds18b20Settings") {
     preferences.putBool("ds18b20Enable",           ds18b20Enable);
-    preferences.putUShort("ds18b20UpdateInterval", ds18b20UpdateInterval);
-    preferences.putString("ds18b20UnitsFormat",    ds18b20UnitsFormat);
+    preferences.putUShort("ds18b20UpdInt", ds18b20UpdateInterval);
+    preferences.putString("ds18b20UnitFr",    ds18b20UnitsFormat);
   }
 
   if (groupName == "intensity") {
@@ -637,7 +672,7 @@ void readConfig(String groupName, uint8_t n) {
 
   if (groupName == "systemSettings") {
     shortMACaddr           = preferences.getString("deviceName", shortMACaddr);
-    disableServiceMessages = preferences.getBool("disableServiceMessages", disableServiceMessages);
+    disableServiceMessages = preferences.getBool("disablServMess", disableServiceMessages);
   }
 
   if (groupName == "displaySettings") {
@@ -653,41 +688,41 @@ void readConfig(String groupName, uint8_t n) {
 
   if (groupName == "zoneSettings") {
     zones[n].workMode            = preferences.getString((String("zone") + n + "WorkMode").c_str(), zones[n].workMode);
-    zones[n].scrollSpeed         = preferences.getUChar((String("zone")  + n + "ScrollSpeed").c_str(), zones[n].scrollSpeed);
-    zones[n].scrollPause         = preferences.getUChar((String("zone")  + n + "ScrollPause").c_str(), zones[n].scrollPause);
-    zones[n].scrollAlign         = preferences.getString((String("zone") + n + "ScrollAlign").c_str(), zones[n].scrollAlign);
-    zones[n].scrollEffectIn      = preferences.getString((String("zone") + n + "ScrollEffectIn").c_str(), zones[n].scrollEffectIn);
-    zones[n].scrollEffectOut     = preferences.getString((String("zone") + n + "ScrollEffectOut").c_str(), zones[n].scrollEffectOut);
+    zones[n].scrollSpeed         = preferences.getUChar((String("zone")  + n + "ScrolSpeed").c_str(), zones[n].scrollSpeed);
+    zones[n].scrollPause         = preferences.getUChar((String("zone")  + n + "ScrolPause").c_str(), zones[n].scrollPause);
+    zones[n].scrollAlign         = preferences.getString((String("zone") + n + "ScrolAlign").c_str(), zones[n].scrollAlign);
+    zones[n].scrollEffectIn      = preferences.getString((String("zone") + n + "ScrolEfIn").c_str(), zones[n].scrollEffectIn);
+    zones[n].scrollEffectOut     = preferences.getString((String("zone") + n + "ScrolEfOut").c_str(), zones[n].scrollEffectOut);
     zones[n].font                = preferences.getString((String("zone") + n + "Font").c_str(), zones[n].font);
-    zones[n].charspacing         = preferences.getUChar((String("zone")  + n + "Charspacing").c_str(), zones[n].charspacing);
-    MQTTZones[n].message         = preferences.getString((String("zone") + n + "mqttTextTopic").c_str(), MQTTZones[n].message);
-    zones[n].mqttPostfix         = preferences.getString((String("zone") + n + "mqttPostfix").c_str(), zones[n].mqttPostfix);
-    zones[n].clockDisplayFormat  = preferences.getString((String("zone") + n + "ClockDisplayFormat").c_str(), zones[n].clockDisplayFormat);
-    zones[n].owmWhatToDisplay    = preferences.getString((String("zone") + n + "OwmWhatToDisplay").c_str(), zones[n].owmWhatToDisplay);
+    zones[n].charspacing         = preferences.getUChar((String("zone")  + n + "Charspac").c_str(), zones[n].charspacing);
+    MQTTZones[n].message         = preferences.getString((String("zone") + n + "mqttTexTop").c_str(), MQTTZones[n].message);
+    zones[n].mqttPostfix         = preferences.getString((String("zone") + n + "mqttPosfix").c_str(), zones[n].mqttPostfix);
+    zones[n].clockDisplayFormat  = preferences.getString((String("zone") + n + "ClDispForm").c_str(), zones[n].clockDisplayFormat);
+    zones[n].owmWhatToDisplay    = preferences.getString((String("zone") + n + "OwmWhDisp").c_str(), zones[n].owmWhatToDisplay);
     zones[n].haSensorId          = preferences.getString((String("zone") + n + "HaSensorId").c_str(), zones[n].haSensorId);
-    zones[n].haSensorPostfix     = preferences.getString((String("zone") + n + "HaSensorPostfix").c_str(), zones[n].haSensorPostfix);
-    zones[n].ds18b20Postfix      = preferences.getString((String("zone") + n + "Ds18b20Postfix").c_str(), zones[n].ds18b20Postfix);
+    zones[n].haSensorPostfix     = preferences.getString((String("zone") + n + "HaSensorPf").c_str(), zones[n].haSensorPostfix);
+    zones[n].ds18b20Postfix      = preferences.getString((String("zone") + n + "Ds18b20Pf").c_str(), zones[n].ds18b20Postfix);
   }
 
   if (groupName == "mqttSettings") {
     mqttEnable        = preferences.getBool("mqttEnable",           mqttEnable);
-    mqttServerAddress = preferences.getString("mqttServerAddress",  mqttServerAddress);
+    mqttServerAddress = preferences.getString("mqttServerAddr",  mqttServerAddress);
     mqttServerPort    = preferences.getUShort("mqttServerPort",     mqttServerPort);
     mqttUsername      = preferences.getString("mqttUsername",       mqttUsername);
     mqttPassword      = preferences.getString("mqttPassword",       mqttPassword);
   }
 
-  if (groupName == "wallClockSettings") {
+  if (groupName == "wallClockSett") {
     ntpTimeZone       = preferences.getChar("ntpTimeZone",         ntpTimeZone);
-    disableDotsBlink  = preferences.getBool("disableDotsBlink",    disableDotsBlink);
-    ntpUpdateInterval = preferences.getUShort("ntpUpdateInterval", ntpUpdateInterval);
+    disableDotsBlink  = preferences.getBool("disableDotBlink",    disableDotsBlink);
+    ntpUpdateInterval = preferences.getUShort("ntpUpdateInt", ntpUpdateInterval);
     ntpServer         = preferences.getString("ntpServer",         ntpServer);
   }
 
   if (groupName == "owmSettings") {
     owmApiToken       = preferences.getString("owmApiToken",        owmApiToken);
     owmUnitsFormat    = preferences.getString("owmUnitsFormat",     owmUnitsFormat);
-    owmUpdateInterval = preferences.getUShort("owmUpdateInterval",  owmUpdateInterval);
+    owmUpdateInterval = preferences.getUShort("owmUpdateInt",  owmUpdateInterval);
     owmCity           = preferences.getString("owmCity",            owmCity);
   }
 
@@ -696,13 +731,13 @@ void readConfig(String groupName, uint8_t n) {
     haApiToken        = preferences.getString("haApiToken",       haApiToken);
     haApiHttpType     = preferences.getString("haApiHttpType",    haApiHttpType);
     haApiPort         = preferences.getUShort("haApiPort",        haApiPort);
-    haUpdateInterval  = preferences.getUShort("haUpdateInterval", haUpdateInterval);
+    haUpdateInterval  = preferences.getUShort("haUpdateInt", haUpdateInterval);
   }
 
   if (groupName == "ds18b20Settings") {
     ds18b20Enable         = preferences.getBool("ds18b20Enable",           ds18b20Enable);
-    ds18b20UpdateInterval = preferences.getUShort("ds18b20UpdateInterval", ds18b20UpdateInterval);
-    ds18b20UnitsFormat    = preferences.getString("ds18b20UnitsFormat",    ds18b20UnitsFormat);
+    ds18b20UpdateInterval = preferences.getUShort("ds18b20UpdInt", ds18b20UpdateInterval);
+    ds18b20UnitsFormat    = preferences.getString("ds18b20UnitFr",    ds18b20UnitsFormat);
   }
 
   if (groupName == "intensity") {
@@ -719,7 +754,7 @@ void readAllConfig() {
     readConfig("zoneSettings", n);
   }
   readConfig("mqttSettings", 99);
-  readConfig("wallClockSettings", 99);
+  readConfig("wallClockSett", 99);
   readConfig("owmSettings", 99);
   readConfig("haSettings", 99);
   readConfig("ds18b20Settings", 99);
@@ -778,9 +813,19 @@ void MQTTCallback(char* topic, byte* payload, int length) {
 
   if (topicStr == MQTTIntensity) {
     if (isNumeric(PayloadString)) {
-      intensity = PayloadString.toInt()-1;
-      P.setIntensity(intensity);
-      saveVarsToConfFile("intensity", 99);
+      if (PayloadString.toInt() > 0) {
+        intensity = PayloadString.toInt()-1;
+        if (!power) {
+          power = true;
+          P.displayShutdown(0);
+        }
+        P.setIntensity(intensity);
+        saveVarsToConfFile("intensity", 99);
+      }
+      if (PayloadString.toInt() == 0) {
+        P.displayShutdown(1);
+        power = false;
+      }
     } else {
       Serial.print(F("Supports are only numeric values"));
     }
@@ -1010,30 +1055,42 @@ String haApiGet(String sensorId, String sensorPostfix) {
 void setup() {
   Serial.begin(115200);
   Serial.print(F("Start serial...."));
-  
-  //WiFi.mode(WIFI_STA);
+
+  readAllConfig();
+ 
+  #if defined(ESP32)
+    WiFi.mode(WIFI_STA);
+    pinMode(VBAT_PIN, INPUT);
+  #endif
+
+  AsyncWiFiManager wifiManager(&server,&dns);
+  bool wifiRes;
   //WiFi.persistent(true);
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setAPCallback(wifiApWelcomeMessage);
-  wifiManager.autoConnect(MQTTGlobalPrefix.c_str(), wifiAPpassword);
-  WiFi.hostname(MQTTGlobalPrefix.c_str());
-  Serial.print(F(""));
-  Serial.print(F("Wifi connected to SSID: "));
-  Serial.println(WiFi.SSID().c_str());
-  Serial.print(F("Local ip: "));
-  Serial.println(WiFi.localIP().toString().c_str());
-  Serial.print(F("Gateway: "));
-  Serial.println(WiFi.gatewayIP().toString().c_str());
-  Serial.print(F("Subnet: "));
-  Serial.println(WiFi.subnetMask().toString().c_str());
-  Serial.print(F("DNS: "));
-  Serial.println(WiFi.dnsIP().toString().c_str());
-  Serial.print(F("HostName: "));
-  Serial.println(MQTTGlobalPrefix.c_str());
-  Serial.print(F("MQTT Device Prefix: "));
-  Serial.println(MQTTGlobalPrefix.c_str());
+  wifiRes = wifiManager.autoConnect(MQTTGlobalPrefix.c_str(), wifiAPpassword);
+  if(!wifiRes) {
+    Serial.print(F("Wifi failed to connect"));
+  } else {
+    WiFi.hostname(MQTTGlobalPrefix.c_str());
+    Serial.print(F(""));
+    Serial.print(F("Wifi connected to SSID: "));
+    Serial.println(WiFi.SSID().c_str());
+    Serial.print(F("Local ip: "));
+    Serial.println(WiFi.localIP().toString().c_str());
+    Serial.print(F("Gateway: "));
+    Serial.println(WiFi.gatewayIP().toString().c_str());
+    Serial.print(F("Subnet: "));
+    Serial.println(WiFi.subnetMask().toString().c_str());
+    Serial.print(F("DNS: "));
+    Serial.println(WiFi.dnsIP().toString().c_str());
+    Serial.print(F("HostName: "));
+    Serial.println(MQTTGlobalPrefix.c_str());
+    Serial.print(F("MQTT Device Prefix: "));
+    Serial.println(MQTTGlobalPrefix.c_str());
+  }
 
-  readAllConfig();
+  
   
   // Initializing display
   P.begin(zoneNumbers);
@@ -1222,7 +1279,7 @@ void setup() {
             finishRequest = true; 
           }
 
-          if (key->value() == "wallClockSettings") {
+          if (key->value() == "wallClockSett") {
             if (p->name() == "ntpTimeZone") {
               ntpTimeZone = p->value().toInt();
               timeClient.setTimeOffset(ntpTimeZone * 3600);
@@ -1278,9 +1335,19 @@ void setup() {
             finishRequest = true; 
           }
           if (key->value() == "intensity") {
-            if (p->name() == "intensity") {  
-              intensity = (p->value()).toInt()-1;
-              P.setIntensity(intensity);
+            if (p->name() == "intensity") {
+              if ((p->value()).toInt() > 0) {
+                intensity = (p->value()).toInt()-1;
+                if (!power) {
+                  power = true;
+                  P.displayShutdown(0);
+                }
+                P.setIntensity(intensity);
+              }
+              if ((p->value()).toInt() == 0) {
+                P.displayShutdown(1);
+                power = false;
+              }
             }
 
             finishRequest = true; 
@@ -1291,7 +1358,7 @@ void setup() {
       if (finishRequest) {
         request->send(200, "application/json", "{\"status\":\"ok\"}");
         saveVarsToConfFile(key->value(), n);
-        if (key->value() == "wallClockSettings") ntpUpdateTime();
+        if (key->value() == "wallClockSett") ntpUpdateTime();
         //readConfig(key->value(), n);
       }
       
@@ -1324,12 +1391,21 @@ void testZones(uint8_t n) {
     P.setFont(0, wledFont_cyrillic);
     P.setSpeed(0, 50);
     P.setTextEffect(0, PA_SCROLL_LEFT, PA_NO_EFFECT);
-  zoneNewMessage(0, "ip: " + WiFi.localIP().toString(), "");
+    zoneNewMessage(0, "ip: " + WiFi.localIP().toString(), "");
   }
 }
 
 void loop() {
   currentMillis = millis();
+  
+  #if defined(ESP32)
+    if (currentMillis - previousBatVoltMillis >= (unsigned)BatVoltUpdateInterval * 1000) {
+      previousBatVoltMillis = currentMillis;
+      battv = ((float)analogRead(VBAT_PIN) / 4095) * 3.3 * 2 * 1.068;
+      Serial.printf("Battery voltage: %f", battv);
+      if (mqttEnable) mqttClient.publish(String("wledPixel-" + shortMACaddr + "/batteryVoltage").c_str(), String(battv).c_str());
+    }
+  #endif
 
   // handle a restart ESP request
   if (restartESP) {
@@ -1341,6 +1417,7 @@ void loop() {
   // init display animation
   if (!allTestsFinish) {
     if (nLoop > zoneNumbers && P.getZoneStatus(0)) {
+      delay(5000);
       allTestsFinish      = true;
       initConfig          = true;
     }

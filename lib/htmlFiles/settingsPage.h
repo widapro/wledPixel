@@ -1175,6 +1175,10 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
 
 
                 <div class="col-sm-12"></div>
+                <hr class="my-4">
+                <div class="col-sm-12 text-center">
+                  <a href="https://github.com/widapro/wledPixel" class="text-muted text-decoration-none">GitHub | WledPixel</a>
+                </div>
               </form>
             </div>
           </div>
@@ -1790,7 +1794,7 @@ workModeZone0.addEventListener('change', function (e) {
 
         if (key == "applyWallClockSettings") {
             data = {
-                key:                    "wallClockSettings",
+                key:                    "wallClockSett",
                 ntpTimeZone:            document.getElementById("ntpTimeZone").value,
                 disableDotsBlink:       document.querySelector('#disableDotsBlink').checked,
                 ntpUpdateInterval:      document.getElementById("ntpUpdateInterval").value,
