@@ -63,7 +63,7 @@ WiFiClient mqttEspClient;
 #endif
 
 /// GLOBAL ///
-const char* firmwareVer = "2.7";
+const char* firmwareVer = "2.7.1";
 int nLoop = 0;
 bool restartESP         = false;
 bool allTestsFinish     = false;
