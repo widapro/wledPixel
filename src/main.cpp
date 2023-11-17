@@ -530,8 +530,7 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
       sprintf( topic_config,  "homeassistant/sensor/%s/temperature/config", shortMACaddr.c_str() );
       root["name"]                = "wledPixel-" + shortMACaddr + "_Temperature";
       root["uniq_id"]             = "wledPixelLight" + shortMACaddr + "Temperature";
-      root["stat_t"]              = "wledPixel-" + shortMACaddr + "/temperature";
-      root["entity_category"]     = "config";
+      root["state_topic"]         = "wledPixel-" + shortMACaddr + "/temperature";
       root["device_class"]        = "temperature";
       root["unit_of_measurement"] = "°C";
     }  
@@ -567,13 +566,13 @@ void MQTTPublishState() {
     doc["brightness"] = intensity;
     doc["wifiSsid"] = WiFi.SSID();
     for ( uint8_t n = 0; n < zoneNumbers; n++) {
-      doc["zone" + String(n)]["workMode"]    = zones[n].workMode;
-      doc["zone" + String(n)]["charspacing"] = zones[n].charspacing;
-      doc["zone" + String(n)]["scrollAlign"] = zones[n].scrollAlign;
-      doc["zone" + String(n)]["scrollPause"] = zones[n].scrollPause;
-      doc["zone" + String(n)]["scrollSpeed"] = zones[n].scrollSpeed;
-      doc["zone" + String(n)]["scrollEffectIn"] = zones[n].scrollEffectIn;
-      doc["zone" + String(n)]["scrollEffectOut"] = zones[n].scrollEffectOut;
+      doc["zone" + String(n)]["workMode"]         = zones[n].workMode;
+      doc["zone" + String(n)]["charspacing"]      = zones[n].charspacing;
+      doc["zone" + String(n)]["scrollAlign"]      = zones[n].scrollAlign;
+      doc["zone" + String(n)]["scrollPause"]      = zones[n].scrollPause;
+      doc["zone" + String(n)]["scrollSpeed"]      = zones[n].scrollSpeed;
+      doc["zone" + String(n)]["scrollEffectIn"]   = zones[n].scrollEffectIn;
+      doc["zone" + String(n)]["scrollEffectOut"]  = zones[n].scrollEffectOut;
     }
 
     serializeJson(doc, Serial);
@@ -607,19 +606,19 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
   }
 
   if (groupName == "zoneSettings") {
-    preferences.putString((String("zone") + n + "WorkMode").c_str(),            zones[n].workMode);
-    preferences.putUChar((String("zone")  + n + "ScrolSpeed").c_str(),         zones[n].scrollSpeed);
-    preferences.putUChar((String("zone")  + n + "ScrolPause").c_str(),         zones[n].scrollPause);
-    preferences.putString((String("zone") + n + "ScrolAlign").c_str(),         zones[n].scrollAlign);
+    preferences.putString((String("zone") + n + "WorkMode").c_str(),       zones[n].workMode);
+    preferences.putUChar((String("zone")  + n + "ScrolSpeed").c_str(),     zones[n].scrollSpeed);
+    preferences.putUChar((String("zone")  + n + "ScrolPause").c_str(),     zones[n].scrollPause);
+    preferences.putString((String("zone") + n + "ScrolAlign").c_str(),     zones[n].scrollAlign);
     preferences.putString((String("zone") + n + "ScrolEfIn").c_str(),      zones[n].scrollEffectIn);
     preferences.putString((String("zone") + n + "ScrolEfOut").c_str(),     zones[n].scrollEffectOut);
-    preferences.putString((String("zone") + n + "Font").c_str(),                zones[n].font);
-    preferences.putUChar((String("zone")  + n + "Charspac").c_str(),         zones[n].charspacing);
-    preferences.putString((String("zone") + n + "mqttTexTop").c_str(),       MQTTZones[n].message);
-    preferences.putString((String("zone") + n + "mqttPosfix").c_str(),         zones[n].mqttPostfix);
-    preferences.putString((String("zone") + n + "ClDispForm").c_str(),  zones[n].clockDisplayFormat);
-    preferences.putString((String("zone") + n + "OwmWhDisp").c_str(),    zones[n].owmWhatToDisplay);
-    preferences.putString((String("zone") + n + "HaSensorId").c_str(),          zones[n].haSensorId);
+    preferences.putString((String("zone") + n + "Font").c_str(),           zones[n].font);
+    preferences.putUChar((String("zone")  + n + "Charspac").c_str(),       zones[n].charspacing);
+    preferences.putString((String("zone") + n + "mqttTexTop").c_str(),     MQTTZones[n].message);
+    preferences.putString((String("zone") + n + "mqttPosfix").c_str(),     zones[n].mqttPostfix);
+    preferences.putString((String("zone") + n + "ClDispForm").c_str(),     zones[n].clockDisplayFormat);
+    preferences.putString((String("zone") + n + "OwmWhDisp").c_str(),      zones[n].owmWhatToDisplay);
+    preferences.putString((String("zone") + n + "HaSensorId").c_str(),     zones[n].haSensorId);
     preferences.putString((String("zone") + n + "HaSensorPf").c_str(),     zones[n].haSensorPostfix);
     preferences.putString((String("zone") + n + "Ds18b20Pf").c_str(),      zones[n].ds18b20Postfix);
   }
@@ -899,7 +898,8 @@ boolean reconnect() {
   // Attempt to connect
   if (mqttClient.connect(MQTTGlobalPrefix.c_str(), mqttUsername.c_str(),mqttPassword.c_str())) {
     MQTTPublishHADiscovry("0", "light");
-   
+    MQTTPublishHADiscovry("0", "ds18b20");
+
     for ( uint8_t n = 0; n < zoneNumbers; n++) {
       MQTTPublishHADiscovry(String(n), "scrollAlign");
       MQTTPublishHADiscovry(String(n), "charspacing");
@@ -908,7 +908,7 @@ boolean reconnect() {
       MQTTPublishHADiscovry(String(n), "scrollSpeed");
       MQTTPublishHADiscovry(String(n), "scrollEffectIn");
       MQTTPublishHADiscovry(String(n), "scrollEffectOut");
-      MQTTPublishHADiscovry(String(n), "ds18b20");
+      
 
       if (zones[n].workMode == "mqttClient" && MQTTZones[n].message != "" && MQTTZones[n].message != " ") mqttClient.subscribe((char*) MQTTZones[n].message.c_str());
       mqttClient.subscribe((char*) MQTTZones[n].scrollEffectIn.c_str());
