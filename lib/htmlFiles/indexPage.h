@@ -60,25 +60,25 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                     <h6 class="my-0">wledPixel</h6>
                     <small class="text-muted">wledPixel dot led Display</small>
                   </div>
-                  <span class="text-muted">%firmwareVer%</span>
+                  <span class="text-muted" id="firmwareVer">...</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">Wifi SSID:</h6>
                     </div>
-                    <span class="text-muted">%wifiSsid%</span>
+                    <span class="text-muted" id="wifiSsid">...</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">Wifi IP:</h6>
                     </div>
-                    <span class="text-muted">%wifiIp%</span>
+                    <span class="text-muted" id="wifiIp">...</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">Wifi Gateway:</h6>
                     </div>
-                    <span class="text-muted">%wifiGateway%</span>
+                    <span class="text-muted" id="wifiGateway">...</span>
                 </li>
               </ul>
               <ul class="list-group mb-3">
@@ -87,14 +87,14 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                     <h7 class="my-0">Zone0</h7>
                     <small class="text-muted">Work mode</small>
                   </div>
-                  <span class="text-muted">%workModeZone0%</span>
+                  <span class="text-muted" id="zone0WorkMode">...</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h7 class="my-0">Zone1</h7>
                       <small class="text-muted">Work mode</small>
                     </div>
-                    <span class="text-muted">%workModeZone1%</span>
+                    <span class="text-muted" id="zone1WorkMode">...</span>
                 </li>
               </ul>
             </div>
@@ -130,19 +130,25 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-2 align-self-end">
                     <button id="postZone2Text" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Send</button>
                   </div>
-<!--                  <div class="col-10">
+                  <div class="col-10">
                     <label for="messageZone3" class="form-label">Zone3 text</label>
                     <input id="messageZone3" class="form-control form-control-lg" type="text" placeholder="Zone3 message">
                   </div>                  
                   <div class="col-2 align-self-end">
                     <button id="postZone3Text" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Send</button>
                   </div>
--->                
+                
                 <div class="col-sm-12"></div>
                 <hr class="my-4">
-                <div class="col-sm-12 text-center">
-                  <a href="https://github.com/widapro/wledPixel" class="text-muted text-decoration-none">GitHub | WledPixel</a>
-                </div>
+                <footer class="my-5 pt-5 text-muted text-center text-small border-top">
+                  <p class="mb-1">&copy; 2025 wledPixel Project</p>
+                  <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
+                  <ul class="list-inline">
+                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
+                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" class="text-decoration-none">Report Bug</a></li>
+                    <li class="list-inline-item"><a href="#" class="text-decoration-none">Support</a></li>
+                  </ul>
+                </footer>
             </div>
           </div>
     </main>
@@ -228,41 +234,61 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
         });
     }
 
-    const zoneNumbers = %zoneNumbers%;
-    const workModeZone0 = "%workModeZone0%"
-    const workModeZone1 = "%workModeZone1%"
-    const workModeZone2 = "%workModeZone2%"
-    const workModeZone3 = "%workModeZone3%"
-    if (workModeZone1 != "manualInput") {
-        document.getElementById('messageZone1').disabled = true;
-        document.getElementById('postZone1Text').disabled = true;
-        document.getElementById('messageZone1').placeholder = "Zone1 is not in a Manual input work mode";
-    }
-    if (workModeZone0 != "manualInput") {
-        document.getElementById('messageZone0').disabled = true;
-        document.getElementById('postZone0Text').disabled = true;
-        document.getElementById('messageZone0').placeholder = "Zone0 is not in a Manual input work mode";
-    }
-    if (workModeZone2 != "manualInput") {
-        document.getElementById('messageZone2').disabled = true;
-        document.getElementById('postZone2Text').disabled = true;
-        document.getElementById('messageZone2').placeholder = "Zone2 is not in a Manual input work mode";
-    }
-    if (workModeZone3 != "manualInput") {
-        document.getElementById('messageZone3').disabled = true;
-        document.getElementById('postZone3Text').disabled = true;
-        document.getElementById('messageZone3').placeholder = "Zone3 is not in a Manual input work mode";
-    }
-    if (zoneNumbers == 1) {
-        document.getElementById('messageZone1').disabled = true;
-        document.getElementById('postZone1Text').disabled = true;
-        document.getElementById('messageZone1').placeholder = "Zone1 is not initialized";
+    // Fetch settings and initialize
+    window.onload = function() {
+        fetch('/api/settings')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('zone0WorkMode').innerText = data.workModeZone0;
+            document.getElementById('zone1WorkMode').innerText = data.workModeZone1;
+            document.getElementById('wifiSsid').innerText = data.wifiSsid;
+            document.getElementById('wifiIp').innerText = data.wifiIp;
+            document.getElementById('wifiGateway').innerText = data.wifiGateway;
+            document.getElementById('firmwareVer').innerText = data.firmwareVer;
 
-        document.getElementById('messageZone2').disabled = true;
-        document.getElementById('postZone2Text').disabled = true;
-        document.getElementById('messageZone2').placeholder = "Zone2 is not initialized";
-    }
-   
+            const workModeZone0 = data.workModeZone0;
+            const workModeZone1 = data.workModeZone1;
+            const workModeZone2 = data.workModeZone2;
+            const workModeZone3 = data.workModeZone3;
+            const zoneNumbers = data.zoneNumbers;
+
+            if (workModeZone1 != "manualInput") {
+                document.getElementById('messageZone1').disabled = true;
+                document.getElementById('postZone1Text').disabled = true;
+                document.getElementById('messageZone1').placeholder = "Zone1 is not in a Manual input work mode";
+            }
+            if (workModeZone0 != "manualInput") {
+                document.getElementById('messageZone0').disabled = true;
+                document.getElementById('postZone0Text').disabled = true;
+                document.getElementById('messageZone0').placeholder = "Zone0 is not in a Manual input work mode";
+            }
+            if (workModeZone2 != "manualInput") {
+                document.getElementById('messageZone2').disabled = true;
+                document.getElementById('postZone2Text').disabled = true;
+                document.getElementById('messageZone2').placeholder = "Zone2 is not in a Manual input work mode";
+            }
+            if (workModeZone3 != "manualInput") {
+                document.getElementById('messageZone3').disabled = true;
+                document.getElementById('postZone3Text').disabled = true;
+                document.getElementById('messageZone3').placeholder = "Zone3 is not in a Manual input work mode";
+            }
+            if (zoneNumbers < 4) {
+                document.getElementById('messageZone3').disabled = true;
+                document.getElementById('postZone3Text').disabled = true;
+                document.getElementById('messageZone3').placeholder = "Zone3 is not initialized";
+            }
+            if (zoneNumbers < 3) {
+                document.getElementById('messageZone2').disabled = true;
+                document.getElementById('postZone2Text').disabled = true;
+                document.getElementById('messageZone2').placeholder = "Zone2 is not initialized";
+            }
+            if (zoneNumbers < 2) {
+                document.getElementById('messageZone1').disabled = true;
+                document.getElementById('postZone1Text').disabled = true;
+                document.getElementById('messageZone1').placeholder = "Zone1 is not initialized";
+            }
+        });
+    };
 </script>
 
 </body>
