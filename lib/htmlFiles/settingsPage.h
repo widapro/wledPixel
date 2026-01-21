@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-const char settingsPage[] PROGMEM = R"=====(<!doctype html>
+const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
 <html lang="en">
   <head>
     <link rel="icon" href="data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3C!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'%3E%3Csvg height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3,9H7V5H3V9M3,14H7V10H3V14M8,14H12V10H8V14M13,14H17V10H13V14M8,9H12V5H8V9M13,5V9H17V5H13M18,14H22V10H18V14M3,19H7V15H3V19M8,19H12V15H8V19M13,19H17V15H13V19M18,19H22V15H18V19M18,5V9H22V5H18Z'/%3E%3C/svg%3E" type="image/svg+xml" />
@@ -62,37 +62,37 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                     <h6 class="my-0">wledPixel</h6>
                     <small class="text-muted">wledPixel dot led Display</small>
                   </div>
-                  <span class="text-muted">%firmwareVer%</span>
+                  <span class="text-muted" id="firmwareVer"></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">Wifi SSID:</h6>
                     </div>
-                    <span class="text-muted">%wifiSsid%</span>
+                    <span class="text-muted" id="wifiSsid"></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">Wifi IP:</h6>
                     </div>
-                    <span class="text-muted">%wifiIp%</span>
+                    <span class="text-muted" id="wifiIp"></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">Wifi Gateway:</h6>
                     </div>
-                    <span class="text-muted">%wifiGateway%</span>
+                    <span class="text-muted" id="wifiGateway"></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">MQTT device prefix:</h6>
                     </div>
-                    <span class="text-muted">%mqttDevicePrefix%</span>
+                    <span class="text-muted" id="mqttDevicePrefixInfo"></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
                       <h6 class="my-0">ds18b20 Temperature:</h6>
                     </div>
-                    <span class="text-muted">%ds18b20Temp%</span>
+                    <span class="text-muted" id="ds18b20TempInfo"></span>
                 </li>
               </ul>
 
@@ -147,7 +147,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                             <li>wallClock</li>
                             <li>owmWeather</li>
                             <li>haClient</li>
-                            <li>intTempSensor</li>
+                            <li>intTempSensor (DS18B20)</li>
                         </ul>
                       <li><b>devicePrefix/zone<i>N</i>/scrolleffectIn</b> - scroll effect <b>IN</b></li>
                       <li><b>devicePrefix/zone<i>N</i>/scrolleffectOut</b> - scroll effect <b>Out</b></li><br>
@@ -187,8 +187,8 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                       <li><b>devicePrefix/zone<i>N</i>/workMode</b> - zone work mode</li>
                       <li><b>devicePrefix/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
                     </ul>
-                      where <b>devicePrefix</b> = %mqttDevicePrefix%
-                      <br><b>zoneN</b> = zone number (e.g. Zone0)
+                      where <b>devicePrefix</b> = <span id="mqttDevicePrefixHelp"></span>
+                      <br><b>zoneN</b> = zone number (e.g. Zone0, Zone1, Zone2, Zone3)
                   </small>
               </div>
       
@@ -201,7 +201,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-6" hidden>
                     <label for="deviceName" class="form-label">Device Name</label>
                     <div class="input-group mb-3">
-                      <input type="text" class="form-control" id="deviceName" value="%deviceName%">
+                      <input type="text" class="form-control" id="deviceName">
                     </div> 
                   </div>
 
@@ -213,7 +213,24 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                       </label>
                     </div>
                   </div>
-                <button id="applySystemSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+                <div class="row">
+                  <div class="col-6">
+                    <button id="applySystemSettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+                  </div>
+                  <div class="col-6">
+                    <button type="button" id="rebootDevice" class="w-100 btn btn-danger btn-lg" onClick="apiRebootDevice();">Reboot Device</button>
+                  </div>
+                </div>
+                <div class="row mt-3">
+                  <div class="col-12">
+                    <button type="button" id="resetWifi" class="w-100 btn btn-warning btn-lg" onClick="apiResetWifi();">Reset WiFi Settings</button>
+                  </div>
+                </div>
+                <div class="row mt-3">
+                  <div class="col-12">
+                    <button type="button" id="factoryReset" class="w-100 btn btn-dark btn-lg" onClick="apiFactoryReset();">Factory Reset (Erase All Settings)</button>
+                  </div>
+                </div>
 
               <hr class="my-4">
 
@@ -225,7 +242,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
-                        <!-- <option value="4">4</option> -->
+                        <option value="4">4</option>
                       </select>
                     <div class="invalid-feedback">
                       Valid first name is required.
@@ -234,50 +251,50 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
       
                   <div class="col-sm-4">
                     <label for="zone0Begin" class="form-label">First module <span class="text-muted">[ zone 0 ]</span></label>
-                    <input type="text" class="form-control" id="zone0Begin" value="%zone0Begin%" >
+                    <input type="text" class="form-control" id="zone0Begin" >
                   </div>
                   <div class="col-sm-4">
                     <label for="zone0End" class="form-label">Last module <span class="text-muted">[ zone 0 ]</span></label>
-                    <input type="text" class="form-control" id="zone0End" value="%zone0End%" >
+                    <input type="text" class="form-control" id="zone0End" >
                   </div>
                   <div class="col-sm-4"></div>
                   <div class="col-sm-4" id="zone1BeginDiv">
                     <label for="zone1Begin" class="form-label">First module <span class="text-muted">[ zone 1 ]</span></label>
-                    <input type="text" class="form-control" id="zone1Begin" value="%zone1Begin%" >
+                    <input type="text" class="form-control" id="zone1Begin" >
                   </div>
                   <div class="col-sm-4" id="zone1EndDiv">
                     <label for="zone1End" class="form-label">Last module <span class="text-muted">[ zone 1 ]</span></label>
-                    <input type="text" class="form-control" id="zone1End" value="%zone1End%" >
+                    <input type="text" class="form-control" id="zone1End" >
                   </div>
                   <div class="col-sm-4"></div>
                   <div class="col-sm-4" id="zone2BeginDiv">
                     <label for="zone2Begin" class="form-label">First module <span class="text-muted">[ zone 2 ]</span></label>
-                    <input type="text" class="form-control" id="zone2Begin" value="%zone2Begin%" >
+                    <input type="text" class="form-control" id="zone2Begin" >
                   </div>
                   <div class="col-sm-4" id="zone2EndDiv">
                     <label for="zone2End" class="form-label">Last module <span class="text-muted">[ zone 2 ]</span></label>
-                    <input type="text" class="form-control" id="zone2End" value="%zone2End%" >
+                    <input type="text" class="form-control" id="zone2End" >
                   </div>
                   <div class="col-sm-4"></div>
-<!--                  <div class="col-sm-4" id="zone3BeginDiv">
+                  <div class="col-sm-4" id="zone3BeginDiv">
                     <label for="zone3Begin" class="form-label">First module <span class="text-muted">[ zone 3 ]</span></label>
-                    <input type="text" class="form-control" id="zone3Begin" value="%zone3Begin%" >
+                    <input type="text" class="form-control" id="zone3Begin" >
                   </div>
                   <div class="col-sm-4" id="zone3EndDiv">
                     <label for="zone3End" class="form-label">Last module <span class="text-muted">[ zone 3 ]</span></label>
-                    <input type="text" class="form-control" id="zone3End" value="%zone3End%" >
+                    <input type="text" class="form-control" id="zone3End" >
                   </div>
--->                
+                
                   <button id="displaySettings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply and reboot</button>
                   
                   <hr class="my-4">
 
                   <div class="col-11">
                     <label for="intensity" class="form-label">Brightness</label>
-                    <input type="range" class="form-range" min="1" max="17" step="1" id="intensity" value="%intensity%" onChange="preparePostRequest(event, this.id, this.value);">
+                    <input type="range" class="form-range" min="1" max="17" step="1" id="intensity" onChange="preparePostRequest(event, this.id, this.value);">
                   </div>
                   <div class="col-1 align-self-end">
-                    <label id="intensityValue" for="intensity" class="form-label text-primary">%intensity%</label>
+                    <label id="intensityValue" for="intensity" class="form-label text-primary"></label>
                   </div>
 
                   <hr class="my-5">
@@ -299,11 +316,11 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7" id="emptyZone0Div"></div>
                   <div class="col-5" id="mqttZone0PrefixDiv" style="display: none;">
                     <label for="mqttZone0Prefix" class="form-label">MQTT zone text topic</label>
-                        <input type="text" class="form-control" id="mqttTextTopicZone0" value="%mqttTextTopicZone0%">
+                        <input type="text" class="form-control" id="mqttTextTopicZone0">
                   </div>
                   <div class="col-2" id="mqttPostfixZone0Div" style="display: none;">
                     <label for="mqttPostfixZone0" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="mqttPostfixZone0" value="%mqttPostfixZone0%">
+                        <input type="text" class="form-control" id="mqttPostfixZone0">
                   </div>
                   <div class="col-12" id="mqttDevicePrefixZone0Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone0/*</b></div>
 
@@ -333,15 +350,15 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
                   <div class="col-5" id="haSensorIdZone0Div" style="display: none;">
                     <label for="haSensorIdZone0" class="form-label">Sensor ID</label>
-                        <input type="text" class="form-control" id="haSensorIdZone0" value="%haSensorIdZone0%">
+                        <input type="text" class="form-control" id="haSensorIdZone0">
                   </div>
                   <div class="col-2" id="haSensorPostfixZone0Div" style="display: none;">
                     <label for="haSensorPostfixZone0" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="haSensorPostfixZone0" value="%haSensorPostfixZone0%">
+                        <input type="text" class="form-control" id="haSensorPostfixZone0">
                   </div>
                   <div class="col-7" id="ds18b20PostfixZone0Div" style="display: none;">
                     <label for="ds18b20PostfixZone0" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="ds18b20PostfixZone0" value="%ds18b20PostfixZone0%">
+                        <input type="text" class="form-control" id="ds18b20PostfixZone0">
                   </div>
 
                   <div class="col-5" id="fontZone0div">
@@ -400,7 +417,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                       <label for="scrollSpeedZone0" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
-                          <input type="text" class="form-control" id="scrollSpeedZone0" value="%scrollSpeedZone0%" aria-describedby="scrollSpeedZone0Help">
+                          <input type="text" class="form-control" id="scrollSpeedZone0" aria-describedby="scrollSpeedZone0Help">
                           <span class="input-group-text">ms</span>
                       </div>
                   </div>
@@ -440,7 +457,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                     <label for="scrollPauseZone0" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="scrollPauseZone0" value="%scrollPauseZone0%">
+                        <input type="text" class="form-control" id="scrollPauseZone0">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -475,11 +492,11 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7" id="emptyZone1Div"></div>
                   <div class="col-5" id="mqttZone1PrefixDiv" style="display: none;">
                     <label for="mqttZone1Prefix" class="form-label">MQTT zone text topic</label>
-                        <input type="text" class="form-control" id="mqttTextTopicZone1" value="%mqttTextTopicZone1%">
+                        <input type="text" class="form-control" id="mqttTextTopicZone1">
                   </div>
                   <div class="col-2" id="mqttPostfixZone1Div" style="display: none;">
                     <label for="mqttPostfixZone1" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="mqttPostfixZone1" value="%mqttPostfixZone1%">
+                        <input type="text" class="form-control" id="mqttPostfixZone1">
                   </div>
                   <div class="col-12" id="mqttDevicePrefixZone1Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone1/*</b></div>
 
@@ -509,15 +526,15 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
                   <div class="col-5" id="haSensorIdZone1Div" style="display: none;">
                     <label for="haSensorIdZone1" class="form-label">Sensor ID</label>
-                        <input type="text" class="form-control" id="haSensorIdZone1" value="%haSensorIdZone1%">
+                        <input type="text" class="form-control" id="haSensorIdZone1">
                   </div>
                   <div class="col-2" id="haSensorPostfixZone1Div" style="display: none;">
                     <label for="haSensorPostfixZone1" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="haSensorPostfixZone1" value="%haSensorPostfixZone1%">
+                        <input type="text" class="form-control" id="haSensorPostfixZone1">
                   </div>
                   <div class="col-7" id="ds18b20PostfixZone1Div" style="display: none;">
                     <label for="ds18b20PostfixZone1" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="ds18b20PostfixZone1" value="%ds18b20PostfixZone1%">
+                        <input type="text" class="form-control" id="ds18b20PostfixZone1">
                   </div>
 
                   <div class="col-5" id="fontZone1div">
@@ -576,7 +593,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                       <label for="scrollSpeedZone1" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
-                          <input type="text" class="form-control" id="scrollSpeedZone1" value="%scrollSpeedZone1%" aria-describedby="scrollSpeedZone1Help">
+                          <input type="text" class="form-control" id="scrollSpeedZone1" aria-describedby="scrollSpeedZone1Help">
                           <span class="input-group-text">ms</span>
                       </div>
                   </div>
@@ -616,7 +633,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                     <label for="scrollPauseZone1" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="scrollPauseZone1" value="%scrollPauseZone1%">
+                        <input type="text" class="form-control" id="scrollPauseZone1">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -652,11 +669,11 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7" id="emptyZone2Div"></div>
                   <div class="col-5" id="mqttZone2PrefixDiv" style="display: none;">
                     <label for="mqttZone2Prefix" class="form-label">MQTT zone text topic</label>
-                        <input type="text" class="form-control" id="mqttTextTopicZone2" value="%mqttTextTopicZone2%">
+                        <input type="text" class="form-control" id="mqttTextTopicZone2">
                   </div>
                   <div class="col-2" id="mqttPostfixZone2Div" style="display: none;">
                     <label for="mqttPostfixZone2" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="mqttPostfixZone2" value="%mqttPostfixZone2%">
+                        <input type="text" class="form-control" id="mqttPostfixZone2">
                   </div>
                   <div class="col-12" id="mqttDevicePrefixZone2Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone2/*</b></div>
 
@@ -686,15 +703,15 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
                   <div class="col-5" id="haSensorIdZone2Div" style="display: none;">
                     <label for="haSensorIdZone2" class="form-label">Sensor ID</label>
-                        <input type="text" class="form-control" id="haSensorIdZone2" value="%haSensorIdZone2%">
+                        <input type="text" class="form-control" id="haSensorIdZone2">
                   </div>
                   <div class="col-2" id="haSensorPostfixZone2Div" style="display: none;">
                     <label for="haSensorPostfixZone2" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="haSensorPostfixZone2" value="%haSensorPostfixZone2%">
+                        <input type="text" class="form-control" id="haSensorPostfixZone2">
                   </div>
                   <div class="col-7" id="ds18b20PostfixZone2Div" style="display: none;">
                     <label for="ds18b20PostfixZone2" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="ds18b20PostfixZone2" value="%ds18b20PostfixZone2%">
+                        <input type="text" class="form-control" id="ds18b20PostfixZone2">
                   </div>
 
                   <div class="col-5" id="fontZone2div">
@@ -753,7 +770,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                       <label for="scrollSpeedZone2" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
-                          <input type="text" class="form-control" id="scrollSpeedZone2" value="%scrollSpeedZone2%" aria-describedby="scrollSpeedZone2Help">
+                          <input type="text" class="form-control" id="scrollSpeedZone2" aria-describedby="scrollSpeedZone2Help">
                           <span class="input-group-text">ms</span>
                       </div>
                   </div>
@@ -793,7 +810,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                     <label for="scrollPauseZone2" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="scrollPauseZone2" value="%scrollPauseZone2%">
+                        <input type="text" class="form-control" id="scrollPauseZone2">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -808,7 +825,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
       
                 <button id="zone2Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
-<!-- disable zone3
+
                 <hr class="my-4">
                   <h3 class="mb-3">Zone 3</h3>
 
@@ -827,11 +844,11 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7" id="emptyZone3Div"></div>
                   <div class="col-5" id="mqttZone3PrefixDiv" style="display: none;">
                     <label for="mqttZone3Prefix" class="form-label">MQTT zone text topic</label>
-                        <input type="text" class="form-control" id="mqttTextTopicZone3" value="%mqttTextTopicZone3%">
+                        <input type="text" class="form-control" id="mqttTextTopicZone3">
                   </div>
                   <div class="col-2" id="mqttPostfixZone3Div" style="display: none;">
                     <label for="mqttPostfixZone3" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="mqttPostfixZone3" value="%mqttPostfixZone3%">
+                        <input type="text" class="form-control" id="mqttPostfixZone3">
                   </div>
                   <div class="col-12" id="mqttDevicePrefixZone3Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone3/*</b></div>
 
@@ -861,15 +878,15 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
                   <div class="col-5" id="haSensorIdZone3Div" style="display: none;">
                     <label for="haSensorIdZone3" class="form-label">Sensor ID</label>
-                        <input type="text" class="form-control" id="haSensorIdZone3" value="%haSensorIdZone3%">
+                        <input type="text" class="form-control" id="haSensorIdZone3">
                   </div>
                   <div class="col-2" id="haSensorPostfixZone3Div" style="display: none;">
                     <label for="haSensorPostfixZone3" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="haSensorPostfixZone3" value="%haSensorPostfixZone3%">
+                        <input type="text" class="form-control" id="haSensorPostfixZone3">
                   </div>
                   <div class="col-7" id="ds18b20PostfixZone3Div" style="display: none;">
                     <label for="ds18b20PostfixZone3" class="form-label">Postfix</label>
-                        <input type="text" class="form-control" id="ds18b20PostfixZone3" value="%ds18b20PostfixZone3%">
+                        <input type="text" class="form-control" id="ds18b20PostfixZone3">
                   </div>
 
                   <div class="col-5" id="fontZone3div">
@@ -928,7 +945,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                       <label for="scrollSpeedZone3" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
-                          <input type="text" class="form-control" id="scrollSpeedZone3" value="%scrollSpeedZone3%" aria-describedby="scrollSpeedZone3Help">
+                          <input type="text" class="form-control" id="scrollSpeedZone3" aria-describedby="scrollSpeedZone3Help">
                           <span class="input-group-text">ms</span>
                       </div>
                   </div>
@@ -968,7 +985,7 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-7">
                     <label for="scrollPauseZone3" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="scrollPauseZone3" value="%scrollPauseZone3%">
+                        <input type="text" class="form-control" id="scrollPauseZone3">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -981,9 +998,18 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_RIGHT">Right</option>
                       </select>
                   </div>
+                  
+                  <!-- SPLIT POINT -->
+                  
+                  </div>)=====";
+
+const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
+                    <div class="col-12">
       
                 <button id="zone3Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
--->
+                    </div>
+                 </div>
+
 
                 <hr class="my-4">
                   <h3 class="mb-3">MQTT settings</h3>
@@ -1000,28 +1026,28 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-6">
                     <label for="mqttServerAddress" class="form-label">Server address</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="mqttServerAddress" value="%mqttServerAddress%">
+                        <input type="text" class="form-control" id="mqttServerAddress">
                     </div>
                   </div>
                   
                   <div class="col-6">
                     <label for="mqttServerPort" class="form-label">Server port</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="mqttServerPort" value="%mqttServerPort%">
+                        <input type="text" class="form-control" id="mqttServerPort">
                     </div>
                   </div>
                   
                   <div class="col-6">
                     <label for="mqttUsername" class="form-label">Username</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="mqttUsername" value="%mqttUsername%">
+                        <input type="text" class="form-control" id="mqttUsername">
                     </div>
                   </div>
                   
                   <div class="col-6">
                     <label for="mqttPassword" class="form-label">Password</label>
                     <div class="input-group mb-3">
-                        <input type="password" class="form-control" id="mqttPassword" value="%mqttPassword%">
+                        <input type="password" class="form-control" id="mqttPassword">
                     </div>
                   </div>
 
@@ -1033,20 +1059,20 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-6">
                     <label class="form-label">NTP Time server</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="ntpServer" value="%ntpServer%">
+                        <input type="text" class="form-control" id="ntpServer">
                     </div>
                   </div>
                   <div class="col-3">
                     <label for="timeZone" class="form-label">Time zone</label>
                     <div class="input-group mb-3">
                         <span class="input-group-text">UTC</span>
-                        <input type="text" class="form-control" id="ntpTimeZone" value="%ntpTimeZone%">
+                        <input type="text" class="form-control" id="ntpTimeZone">
                     </div>
                   </div>
                   <div class="col-3">
                     <label for="timeZone" class="form-label">Update interval</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="ntpUpdateInterval" value="%ntpUpdateInterval%">
+                        <input type="text" class="form-control" id="ntpUpdateInterval">
                         <span class="input-group-text">Hours</span>
                     </div>
                   </div>
@@ -1068,20 +1094,20 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-6">
                     <label for="owmCity" class="form-label">City <small>Name</small></label>
                     <div class="input-group mb-4">
-                        <input type="text" class="form-control" id="owmCity" value="%owmCity%">
+                        <input type="text" class="form-control" id="owmCity">
                     </div>
                   </div>
                   <div class="col-6">
                     <label for="owmApiToken" class="form-label">API token</label>
                     <div class="input-group mb-4">
-                        <input type="password" class="form-control" id="owmApiToken" value="%owmApiToken%">
+                        <input type="password" class="form-control" id="owmApiToken">
                     </div>
                   </div>
 
                   <div class="col-6">
                     <label class="form-label">Update interval</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="owmUpdateInterval" value="%owmUpdateInterval%">
+                        <input type="text" class="form-control" id="owmUpdateInterval">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -1113,26 +1139,26 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-6">
                     <label for="haAddr" class="form-label">HA address</label><small class="form-text text-muted"> [without HTTPS or HTTP or / ]</small>
                     <div class="input-group mb-4">
-                        <input type="text" class="form-control" id="haAddr" value="%haAddr%">
+                        <input type="text" class="form-control" id="haAddr">
                     </div>
                   </div>
                   <div class="col-3">
                     <label for="haApiPort" class="form-label">API port</label>
                     <div class="input-group mb-4">
-                        <input type="text" class="form-control" id="haApiPort" value="%haApiPort%">
+                        <input type="text" class="form-control" id="haApiPort">
                     </div>
                   </div>                  
  
                   <div class="col-9">
                     <label for="haApiToken" class="form-label">API token</label>
                     <div class="input-group mb-4">
-                        <input type="password" class="form-control" id="haApiToken" value="%haApiToken%">
+                        <input type="password" class="form-control" id="haApiToken">
                     </div>
                   </div>
                   <div class="col-3">
                     <label for="haUpdateInterval" class="form-label">Update interval</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="haUpdateInterval" value="%haUpdateInterval%">
+                        <input type="text" class="form-control" id="haUpdateInterval">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -1152,12 +1178,12 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
                   <div class="col-6 align-self-center">
-                        <label for="haApiToken" class="form-label">Measured temperature: %ds18b20Temp%</label>
+                        <label for="haApiToken" class="form-label">Measured temperature: <span id="ds18b20TempVal">Loading...</span></label>
                   </div>
                   <div class="col-6">
                     <label class="form-label">Update interval</label>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" id="ds18b20UpdateInterval" value="%ds18b20UpdateInterval%">
+                        <input type="text" class="form-control" id="ds18b20UpdateInterval">
                         <span class="input-group-text">s</span>
                     </div>
                   </div>
@@ -1176,9 +1202,14 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
 
                 <div class="col-sm-12"></div>
                 <hr class="my-4">
-                <div class="col-sm-12 text-center">
-                  <a href="https://github.com/widapro/wledPixel" class="text-muted text-decoration-none">GitHub | WledPixel</a>
-                </div>
+                <footer class="my-5 pt-5 text-muted text-center text-small border-top">
+                  <p class="mb-1">&copy; 2026 wledPixel</p>
+                  <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
+                  <ul class="list-inline">
+                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
+                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" class="text-decoration-none">Report Bug</a></li>
+                  </ul>
+                </footer>
               </form>
             </div>
           </div>
@@ -1213,249 +1244,206 @@ const char settingsPage[] PROGMEM = R"=====(<!doctype html>
 
 
 <script>
-    window.onload = function(e){ 
-     document.getElementById("workModeZone0").value = "%workModeZone0%";
-     document.getElementById("workModeZone1").value = "%workModeZone1%";
-     document.getElementById("workModeZone2").value = "%workModeZone2%";
-//     document.getElementById("workModeZone3").value = "%workModeZone3%";
-     document.getElementById("zoneNumbers").value = "%zoneNumbers%";
-     document.getElementById("zone0Begin").value = "%zone0Begin%";
-     document.getElementById("zone0End").value = "%zone0End%";
-     document.getElementById("zone1Begin").value = "%zone1Begin%";
-     document.getElementById("zone1End").value = "%zone1End%";
-     document.getElementById("zone2Begin").value = "%zone2Begin%";
-     document.getElementById("zone2End").value = "%zone2End%";
-//     document.getElementById("zone3Begin").value = "%zone3Begin%";
-//     document.getElementById("zone3End").value = "%zone3End%";
-     document.getElementById("intensity").value = "%intensity%";
-     document.getElementById("intensityValue").value = "%intensity%";
-     document.getElementById("scrollSpeedZone0").value = "%scrollSpeedZone0%";
-     document.getElementById("scrollSpeedZone1").value = "%scrollSpeedZone1%";
-     document.getElementById("scrollSpeedZone2").value = "%scrollSpeedZone2%";
-//     document.getElementById("scrollSpeedZone3").value = "%scrollSpeedZone3%";
-     document.getElementById("scrollPauseZone0").value = "%scrollPauseZone0%";
-     document.getElementById("scrollPauseZone1").value = "%scrollPauseZone1%";
-     document.getElementById("scrollPauseZone2").value = "%scrollPauseZone2%";
-//     document.getElementById("scrollPauseZone3").value = "%scrollPauseZone3%";
-     document.getElementById("scrollAlignZone0").value = "%scrollAlignZone0%";
-     document.getElementById("scrollAlignZone1").value = "%scrollAlignZone1%";
-     document.getElementById("scrollAlignZone2").value = "%scrollAlignZone2%";
-//     document.getElementById("scrollAlignZone3").value = "%scrollAlignZone3%";
-     document.getElementById("scrollEffectZone0In").value = "%scrollEffectZone0In%";
-     document.getElementById("scrollEffectZone0Out").value = "%scrollEffectZone0Out%";
-     document.getElementById("scrollEffectZone1In").value = "%scrollEffectZone1In%";
-     document.getElementById("scrollEffectZone1Out").value = "%scrollEffectZone1Out%";
-     document.getElementById("scrollEffectZone2In").value = "%scrollEffectZone2In%";
-     document.getElementById("scrollEffectZone2Out").value = "%scrollEffectZone2Out%";
-//     document.getElementById("scrollEffectZone3In").value = "%scrollEffectZone3In%";
-//     document.getElementById("scrollEffectZone3Out").value = "%scrollEffectZone3Out%";
-     if (%mqttEnable%) {
-      document.getElementById("mqttEnable").checked = true;
-     } else {
-      document.getElementById("mqttEnable").checked = false;
-     }
-     document.getElementById("mqttServerAddress").value = "%mqttServerAddress%";
-     document.getElementById("mqttServerPort").value = "%mqttServerPort%";
-     document.getElementById("mqttUsername").value = "%mqttUsername%";
-//     document.getElementById("mqttDevicePrefix").value = "%mqttDevicePrefix%";
-//     document.getElementById("ds18b20Temp").value = "%ds18b20Temp%";
-     document.getElementById("mqttTextTopicZone0").value = "%mqttTextTopicZone0%";
-     document.getElementById("mqttTextTopicZone1").value = "%mqttTextTopicZone1%";
-     document.getElementById("mqttTextTopicZone2").value = "%mqttTextTopicZone2%";
-//     document.getElementById("mqttTextTopicZone3").value = "%mqttTextTopicZone3%";
-     document.getElementById("ntpTimeZone").value = "%ntpTimeZone%";
-     document.getElementById("ntpUpdateInterval").value = "%ntpUpdateInterval%";
-     document.getElementById("ntpServer").value = "%ntpServer%";
-     document.getElementById("clockDisplayFormatZone0").value = "%clockDisplayFormatZone0%";
-     document.getElementById("clockDisplayFormatZone1").value = "%clockDisplayFormatZone1%";
-     document.getElementById("clockDisplayFormatZone2").value = "%clockDisplayFormatZone2%";
-//     document.getElementById("clockDisplayFormatZone3").value = "%clockDisplayFormatZone3%";
-     document.getElementById("owmWhatToDisplayZone0").value = "%owmWhatToDisplayZone0%";
-     document.getElementById("owmWhatToDisplayZone1").value = "%owmWhatToDisplayZone1%";
-     document.getElementById("owmWhatToDisplayZone2").value = "%owmWhatToDisplayZone2%";
-//     document.getElementById("owmWhatToDisplayZone3").value = "%owmWhatToDisplayZone3%";
-     document.getElementById("owmApiToken").value = "%owmApiToken%";
-     document.getElementById("owmUnitsFormat").value = "%owmUnitsFormat%";
-     document.getElementById("owmUpdateInterval").value = "%owmUpdateInterval%";
-     document.getElementById("owmCity").value = "%owmCity%";
-     document.getElementById("fontZone0").value = "%fontZone0%";
-     document.getElementById("fontZone1").value = "%fontZone1%";
-     document.getElementById("fontZone2").value = "%fontZone2%";
-//     document.getElementById("fontZone3").value = "%fontZone3%";
-     document.getElementById("haAddr").value = "%haAddr%";
-     document.getElementById("haApiHttpType").value = "%haApiHttpType%";
-     document.getElementById("haApiToken").value = "%haApiToken%";
-     document.getElementById("haApiPort").value = "%haApiPort%";
-     document.getElementById("haUpdateInterval").value = "%haUpdateInterval%";
-     document.getElementById("haSensorIdZone0").value = "%haSensorIdZone0%";
-     document.getElementById("haSensorIdZone1").value = "%haSensorIdZone1%";
-     document.getElementById("haSensorIdZone2").value = "%haSensorIdZone2%";
-//     document.getElementById("haSensorIdZone3").value = "%haSensorIdZone3%";
-     document.getElementById("haSensorPostfixZone0").value = "%haSensorPostfixZone0%";
-     document.getElementById("haSensorPostfixZone1").value = "%haSensorPostfixZone1%";
-     document.getElementById("haSensorPostfixZone2").value = "%haSensorPostfixZone2%";
-//     document.getElementById("haSensorPostfixZone3").value = "%haSensorPostfixZone3%";
-     document.getElementById("mqttPostfixZone0").value = "%mqttPostfixZone0%";
-     document.getElementById("mqttPostfixZone1").value = "%mqttPostfixZone1%";
-     document.getElementById("mqttPostfixZone2").value = "%mqttPostfixZone2%";
-//     document.getElementById("mqttPostfixZone3").value = "%mqttPostfixZone3%";
-     document.getElementById("ds18b20PostfixZone0").value = "%ds18b20PostfixZone0%";
-     document.getElementById("ds18b20PostfixZone1").value = "%ds18b20PostfixZone1%";
-     document.getElementById("ds18b20PostfixZone2").value = "%ds18b20PostfixZone2%";
-//     document.getElementById("ds18b20PostfixZone3").value = "%ds18b20PostfixZone3%";
-     document.getElementById("charspacingZone0").value = "%charspacingZone0%";
-     document.getElementById("charspacingZone1").value = "%charspacingZone1%";
-     document.getElementById("charspacingZone2").value = "%charspacingZone2%";
-//     document.getElementById("charspacingZone3").value = "%charspacingZone3%";
-     document.getElementById("deviceName").value = "%deviceName%";
-     document.getElementById("ds18b20UpdateInterval").value = "%ds18b20UpdateInterval%";
-     document.getElementById("ds18b20UnitsFormat").value = "%ds18b20UnitsFormat%";
-     if (%disableServiceMessages% == "1") {
-      document.getElementById("disableServiceMessages").checked = true;
-     } else {
-      document.getElementById("disableServiceMessages").checked = false;
-     }
-     if (%disableDotsBlink% == "1") {
-      document.getElementById("disableDotsBlink").checked = true;
-     } else {
-      document.getElementById("disableDotsBlink").checked = false;
-     }
-     if (%ds18b20Enable% == "1") {
-      document.getElementById("ds18b20Enable").checked = true;
-     } else {
-      document.getElementById("ds18b20Enable").checked = false;
-     }
+    window.onload = function(e){
+      // Fetch settings from API
+      fetch('/api/settings')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Settings loaded:', data);
+            
+            // Populate fields
+            document.getElementById("workModeZone0").value = data.workModeZone0;
+            document.getElementById("workModeZone1").value = data.workModeZone1;
+            document.getElementById("workModeZone2").value = data.workModeZone2;
+            document.getElementById("workModeZone3").value = data.workModeZone3;
+            document.getElementById("zoneNumbers").value = data.zoneNumbers;
+            document.getElementById("zone0Begin").value = data.zone0Begin;
+            document.getElementById("zone0End").value = data.zone0End;
+            document.getElementById("zone1Begin").value = data.zone1Begin;
+            document.getElementById("zone1End").value = data.zone1End;
+            document.getElementById("zone2Begin").value = data.zone2Begin;
+            document.getElementById("zone2End").value = data.zone2End;
+            document.getElementById("zone3Begin").value = data.zone3Begin;
+            document.getElementById("zone3End").value = data.zone3End;
+            document.getElementById("intensity").value = data.intensity;
+            document.getElementById("intensityValue").innerHTML = data.intensity;
+            document.getElementById("scrollSpeedZone0").value = data.scrollSpeedZone0;
+            document.getElementById("scrollSpeedZone1").value = data.scrollSpeedZone1;
+            document.getElementById("scrollSpeedZone2").value = data.scrollSpeedZone2;
+            document.getElementById("scrollSpeedZone3").value = data.scrollSpeedZone3;
+            document.getElementById("scrollPauseZone0").value = data.scrollPauseZone0;
+            document.getElementById("scrollPauseZone1").value = data.scrollPauseZone1;
+            document.getElementById("scrollPauseZone2").value = data.scrollPauseZone2;
+            document.getElementById("scrollPauseZone3").value = data.scrollPauseZone3;
+            document.getElementById("scrollAlignZone0").value = data.scrollAlignZone0;
+            document.getElementById("scrollAlignZone1").value = data.scrollAlignZone1;
+            document.getElementById("scrollAlignZone2").value = data.scrollAlignZone2;
+            document.getElementById("scrollAlignZone3").value = data.scrollAlignZone3;
+            document.getElementById("scrollEffectZone0In").value = data.scrollEffectZone0In;
+            document.getElementById("scrollEffectZone0Out").value = data.scrollEffectZone0Out;
+            document.getElementById("scrollEffectZone1In").value = data.scrollEffectZone1In;
+            document.getElementById("scrollEffectZone1Out").value = data.scrollEffectZone1Out;
+            document.getElementById("scrollEffectZone2In").value = data.scrollEffectZone2In;
+            document.getElementById("scrollEffectZone2Out").value = data.scrollEffectZone2Out;
+            document.getElementById("scrollEffectZone3In").value = data.scrollEffectZone3In;
+            document.getElementById("scrollEffectZone3Out").value = data.scrollEffectZone3Out;
+            
+            document.getElementById("mqttEnable").checked = data.mqttEnable;
+            
+            document.getElementById("mqttServerAddress").value = data.mqttServerAddress;
+            document.getElementById("mqttServerPort").value = data.mqttServerPort;
+            document.getElementById("mqttUsername").value = data.mqttUsername;
+            // Password is not sent back for security, or handle if needed
+            // document.getElementById("mqttPassword").value = data.mqttPassword; 
+
+            document.getElementById("mqttTextTopicZone0").value = data.mqttTextTopicZone0;
+            document.getElementById("mqttTextTopicZone1").value = data.mqttTextTopicZone1;
+            document.getElementById("mqttTextTopicZone2").value = data.mqttTextTopicZone2;
+            document.getElementById("mqttTextTopicZone3").value = data.mqttTextTopicZone3;
+            document.getElementById("ntpTimeZone").value = data.ntpTimeZone;
+            document.getElementById("ntpUpdateInterval").value = data.ntpUpdateInterval;
+            document.getElementById("ntpServer").value = data.ntpServer;
+            document.getElementById("clockDisplayFormatZone0").value = data.clockDisplayFormatZone0;
+            document.getElementById("clockDisplayFormatZone1").value = data.clockDisplayFormatZone1;
+            document.getElementById("clockDisplayFormatZone2").value = data.clockDisplayFormatZone2;
+            document.getElementById("clockDisplayFormatZone3").value = data.clockDisplayFormatZone3;
+            document.getElementById("owmWhatToDisplayZone0").value = data.owmWhatToDisplayZone0;
+            document.getElementById("owmWhatToDisplayZone1").value = data.owmWhatToDisplayZone1;
+            document.getElementById("owmWhatToDisplayZone2").value = data.owmWhatToDisplayZone2;
+            document.getElementById("owmWhatToDisplayZone3").value = data.owmWhatToDisplayZone3;
+            document.getElementById("owmApiToken").value = data.owmApiToken;
+            document.getElementById("owmUnitsFormat").value = data.owmUnitsFormat;
+            document.getElementById("owmUpdateInterval").value = data.owmUpdateInterval;
+            document.getElementById("owmCity").value = data.owmCity;
+            document.getElementById("fontZone0").value = data.fontZone0;
+            document.getElementById("fontZone1").value = data.fontZone1;
+            document.getElementById("fontZone2").value = data.fontZone2;
+            document.getElementById("fontZone3").value = data.fontZone3;
+            document.getElementById("haAddr").value = data.haAddr;
+            document.getElementById("haApiHttpType").value = data.haApiHttpType;
+            document.getElementById("haApiToken").value = data.haApiToken;
+            document.getElementById("haApiPort").value = data.haApiPort;
+            document.getElementById("haUpdateInterval").value = data.haUpdateInterval;
+            document.getElementById("haSensorIdZone0").value = data.haSensorIdZone0;
+            document.getElementById("haSensorIdZone1").value = data.haSensorIdZone1;
+            document.getElementById("haSensorIdZone2").value = data.haSensorIdZone2;
+            document.getElementById("haSensorIdZone3").value = data.haSensorIdZone3;
+            document.getElementById("haSensorPostfixZone0").value = data.haSensorPostfixZone0;
+            document.getElementById("haSensorPostfixZone1").value = data.haSensorPostfixZone1;
+            document.getElementById("haSensorPostfixZone2").value = data.haSensorPostfixZone2;
+            document.getElementById("haSensorPostfixZone3").value = data.haSensorPostfixZone3;
+            document.getElementById("mqttPostfixZone0").value = data.mqttPostfixZone0;
+            document.getElementById("mqttPostfixZone1").value = data.mqttPostfixZone1;
+            document.getElementById("mqttPostfixZone2").value = data.mqttPostfixZone2;
+            document.getElementById("mqttPostfixZone3").value = data.mqttPostfixZone3;
+            document.getElementById("ds18b20PostfixZone0").value = data.ds18b20PostfixZone0;
+            document.getElementById("ds18b20PostfixZone1").value = data.ds18b20PostfixZone1;
+            document.getElementById("ds18b20PostfixZone2").value = data.ds18b20PostfixZone2;
+            document.getElementById("ds18b20PostfixZone3").value = data.ds18b20PostfixZone3;
+            document.getElementById("charspacingZone0").value = data.charspacingZone0;
+            document.getElementById("charspacingZone1").value = data.charspacingZone1;
+            document.getElementById("charspacingZone2").value = data.charspacingZone2;
+            document.getElementById("charspacingZone3").value = data.charspacingZone3;
+            document.getElementById("deviceName").value = data.deviceName;
+            document.getElementById("ds18b20UpdateInterval").value = data.ds18b20UpdateInterval;
+            document.getElementById("ds18b20UnitsFormat").value = data.ds18b20UnitsFormat;
+            
+            document.getElementById("disableServiceMessages").checked = data.disableServiceMessages;
+            document.getElementById("disableDotsBlink").checked = data.disableDotsBlink;
+            document.getElementById("ds18b20Enable").checked = data.ds18b20Enable;
+            document.getElementById("ds18b20TempVal").innerText = data.ds18b20Temp;
+
+            // Populate Info section
+            document.getElementById("firmwareVer").innerText = data.firmwareVer;
+            document.getElementById("wifiSsid").innerText = data.wifiSsid;
+            document.getElementById("wifiIp").innerText = data.wifiIp;
+            document.getElementById("wifiGateway").innerText = data.wifiGateway;
+            document.getElementById("mqttDevicePrefixInfo").innerText = data.mqttDevicePrefix;
+            document.getElementById("mqttDevicePrefixHelp").innerText = data.mqttDevicePrefix;
+            document.getElementById("ds18b20TempInfo").innerText = data.ds18b20Temp;
+            
+            // Trigger UI updates based on loaded values (Hiding/Showing fields)
+            // Need to manually trigger the logic that was previously in the if-blocks
+            updateUI(data); 
+
+        })
+        .catch(err => {
+            console.error('Error loading settings:', err);
+            // Optionally show error toast
+        });
+    }
+
+    function updateUI(data) {
+     const zoneNumbers = document.getElementById("zoneNumbers").value;
      
-//     const ZoneNumbersFirstValue = "%zoneNumbers%";
-//     if (ZoneNumbersFirstValue == "1") {
-     if (document.getElementById("zoneNumbers").value == "1") {
+     if (zoneNumbers == "1") {
         $(document.getElementById("zone1BeginDiv")).hide();
         $(document.getElementById("zone1EndDiv")).hide();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
-//        $(document.getElementById("zone3BeginDiv")).hide();
-//        $(document.getElementById("zone3EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
-      if (document.getElementById("zoneNumbers").value == "2") {
+      if (zoneNumbers == "2") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
-//        $(document.getElementById("zone3BeginDiv")).hide();
-//        $(document.getElementById("zone3EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
-      if (document.getElementById("zoneNumbers").value == "3") {
+      if (zoneNumbers == "3") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).show();
         $(document.getElementById("zone2EndDiv")).show();
-//        $(document.getElementById("zone3BeginDiv")).hide();
-//        $(document.getElementById("zone3EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
-      if (document.getElementById("zoneNumbers").value == "4") {
+      if (zoneNumbers == "4") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).show();
         $(document.getElementById("zone2EndDiv")).show();
-//        $(document.getElementById("zone3BeginDiv")).show();
-//        $(document.getElementById("zone3EndDiv")).show();
+        $(document.getElementById("zone3BeginDiv")).show();
+        $(document.getElementById("zone3EndDiv")).show();
       }
 
-      if (document.getElementById("workModeZone0").value == "mqttClient") {
-        $(document.getElementById("emptyZone0Div")).hide();
-        $(document.getElementById("mqttZone0PrefixDiv")).show();
-        $(document.getElementById("mqttPostfixZone0Div")).show();
-        $(document.getElementById("mqttDevicePrefixZone0Div")).show();
-      }
-      if (document.getElementById("workModeZone0").value == "owmWeather") {
-        $(document.getElementById("emptyZone0Div")).hide();
-        $(document.getElementById("owmWhatToDisplayZone0div")).show();
-      }
-      if (document.getElementById("workModeZone0").value == "wallClock") {
-        $(document.getElementById("emptyZone0Div")).hide();
-        $(document.getElementById("clockDisplayFormatZone0Div")).show();
-      }
-      if (document.getElementById("workModeZone0").value == "haClient") {
-        $(document.getElementById("emptyZone0Div")).hide();
-        $(document.getElementById("haSensorIdZone0Div")).show();
-        $(document.getElementById("haSensorPostfixZone0Div")).show();
-      }
-      if (document.getElementById("workModeZone0").value == "intTempSensor") {
-        $(document.getElementById("emptyZone0Div")).hide();
-        $(document.getElementById("ds18b20PostfixZone0Div")).show();
-      }
-      if (document.getElementById("workModeZone1").value == "mqttClient") {
-        $(document.getElementById("emptyZone1Div")).hide();
-        $(document.getElementById("mqttZone1PrefixDiv")).show();
-        $(document.getElementById("mqttPostfixZone1Div")).show();
-        $(document.getElementById("mqttDevicePrefixZone1Div")).show();
-      }
-      if (document.getElementById("workModeZone1").value == "owmWeather") {
-        $(document.getElementById("emptyZone1Div")).hide();
-        $(document.getElementById("owmWhatToDisplayZone1div")).show();
-      }
-      if (document.getElementById("workModeZone1").value == "wallClock") {
-        $(document.getElementById("emptyZone1Div")).hide();
-        $(document.getElementById("clockDisplayFormatZone1Div")).show();
-      }
-      if (document.getElementById("workModeZone1").value == "haClient") {
-        $(document.getElementById("emptyZone1Div")).hide();
-        $(document.getElementById("haSensorIdZone1Div")).show();
-        $(document.getElementById("haSensorPostfixZone1Div")).show();
-      }
-      if (document.getElementById("workModeZone1").value == "intTempSensor") {
-        $(document.getElementById("emptyZone1Div")).hide();
-        $(document.getElementById("ds18b20PostfixZone1Div")).show();
+      function updateZoneFields(zoneIndex) {
+          const workMode = document.getElementById("workModeZone" + zoneIndex).value;
+          const zoneDivSuffix = "Zone" + zoneIndex + "Div"; // e.g. Zone0Div
+          
+          if (workMode == "mqttClient") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("mqttZone" + zoneIndex + "PrefixDiv")).show();
+            $(document.getElementById("mqttPostfix" + zoneDivSuffix)).show();
+            $(document.getElementById("mqttDevicePrefix" + zoneDivSuffix)).show();
+          }
+          if (workMode == "owmWeather") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("owmWhatToDisplayZone" + zoneIndex + "div")).show();
+          }
+          if (workMode == "wallClock") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("clockDisplayFormat" + zoneDivSuffix)).show();
+          }
+          if (workMode == "haClient") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("haSensorId" + zoneDivSuffix)).show();
+            $(document.getElementById("haSensorPostfix" + zoneDivSuffix)).show();
+          }
+          if (workMode == "intTempSensor") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("ds18b20Postfix" + zoneDivSuffix)).show();
+          }
       }
 
-      if (document.getElementById("workModeZone2").value == "mqttClient") {
-        $(document.getElementById("emptyZone2Div")).hide();
-        $(document.getElementById("mqttZone2PrefixDiv")).show();
-        $(document.getElementById("mqttPostfixZone2Div")).show();
-        $(document.getElementById("mqttDevicePrefixZone2Div")).show();
-      }
-      if (document.getElementById("workModeZone2").value == "owmWeather") {
-        $(document.getElementById("emptyZone2Div")).hide();
-        $(document.getElementById("owmWhatToDisplayZone2div")).show();
-      }
-      if (document.getElementById("workModeZone2").value == "wallClock") {
-        $(document.getElementById("emptyZone2Div")).hide();
-        $(document.getElementById("clockDisplayFormatZone2Div")).show();
-      }
-      if (document.getElementById("workModeZone2").value == "haClient") {
-        $(document.getElementById("emptyZone2Div")).hide();
-        $(document.getElementById("haSensorIdZone2Div")).show();
-        $(document.getElementById("haSensorPostfixZone2Div")).show();
-      }
-      if (document.getElementById("workModeZone2").value == "intTempSensor") {
-        $(document.getElementById("emptyZone2Div")).hide();
-        $(document.getElementById("ds18b20PostfixZone2Div")).show();
-      }
-      // zone3
-//      if (document.getElementById("workModeZone3").value == "mqttClient") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("mqttZone3PrefixDiv")).show();
-//        $(document.getElementById("mqttPostfixZone3Div")).show();
-//        $(document.getElementById("mqttDevicePrefixZone3Div")).show();
-//      }
-//      if (document.getElementById("workModeZone3").value == "owmWeather") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("owmWhatToDisplayZone3div")).show();
-//      }
-//      if (document.getElementById("workModeZone3").value == "wallClock") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("clockDisplayFormatZone3Div")).show();
-//      }
-//      if (document.getElementById("workModeZone3").value == "haClient") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("haSensorIdZone3Div")).show();
-//        $(document.getElementById("haSensorPostfixZone3Div")).show();
-//      }
-//      if (document.getElementById("workModeZone3").value == "intTempSensor") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("ds18b20PostfixZone3Div")).show();
-//      }
+      updateZoneFields(0);
+      updateZoneFields(1);
+      updateZoneFields(2);
+      updateZoneFields(3);
     }
+
    
 </script>
 
@@ -1586,46 +1574,46 @@ workModeZone0.addEventListener('change', function (e) {
       }
     });
 
-//    workModeZone3.addEventListener('change', function (e) {
-//      $(document.getElementById("emptyZone3Div")).show();
-//      $(document.getElementById("mqttZone3PrefixDiv")).hide();
-//      $(document.getElementById("mqttPostfixZone3Div")).hide();
-//      $(document.getElementById("mqttDevicePrefixZone3Div")).hide();
-//      document.getElementById("scrollPauseZone3").disabled = false;
-//      $(document.getElementById("owmWhatToDisplayZone3div")).hide();
-//      $(document.getElementById("clockDisplayFormatZone3Div")).hide();
-//      $(document.getElementById("haSensorIdZone3Div")).hide();
-//      $(document.getElementById("haSensorPostfixZone3Div")).hide();
-//      $(document.getElementById("ds18b20PostfixZone3Div")).hide();
-//      
-//      if (e.target.value == "mqttClient") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("mqttZone3PrefixDiv")).show();
-//        $(document.getElementById("mqttPostfixZone3Div")).show();
-//        $(document.getElementById("mqttDevicePrefixZone3Div")).show();
-//      }
-//      
-//      if (e.target.value == "wallClock") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("clockDisplayFormatZone3Div")).show();
-//        document.getElementById("scrollPauseZone3").disabled = true;
-//      }
-//
-//      if (e.target.value == "owmWeather") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("owmWhatToDisplayZone3div")).show();
-//      }
-//
-//      if (e.target.value == "haClient") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("haSensorIdZone3Div")).show();
-//        $(document.getElementById("haSensorPostfixZone3Div")).show();
-//      }
-//      if (e.target.value == "intTempSensor") {
-//        $(document.getElementById("emptyZone3Div")).hide();
-//        $(document.getElementById("ds18b20PostfixZone3Div")).show();
-//      }
-//    });
+    workModeZone3.addEventListener('change', function (e) {
+      $(document.getElementById("emptyZone3Div")).show();
+      $(document.getElementById("mqttZone3PrefixDiv")).hide();
+      $(document.getElementById("mqttPostfixZone3Div")).hide();
+      $(document.getElementById("mqttDevicePrefixZone3Div")).hide();
+      document.getElementById("scrollPauseZone3").disabled = false;
+      $(document.getElementById("owmWhatToDisplayZone3div")).hide();
+      $(document.getElementById("clockDisplayFormatZone3Div")).hide();
+      $(document.getElementById("haSensorIdZone3Div")).hide();
+      $(document.getElementById("haSensorPostfixZone3Div")).hide();
+      $(document.getElementById("ds18b20PostfixZone3Div")).hide();
+
+      if (e.target.value == "mqttClient") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("mqttZone3PrefixDiv")).show();
+        $(document.getElementById("mqttPostfixZone3Div")).show();
+        $(document.getElementById("mqttDevicePrefixZone3Div")).show();
+      }
+
+      if (e.target.value == "wallClock") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("clockDisplayFormatZone3Div")).show();
+        document.getElementById("scrollPauseZone3").disabled = true;
+      }
+
+      if (e.target.value == "owmWeather") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("owmWhatToDisplayZone3div")).show();
+      }
+
+      if (e.target.value == "haClient") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("haSensorIdZone3Div")).show();
+        $(document.getElementById("haSensorPostfixZone3Div")).show();
+      }
+      if (e.target.value == "intTempSensor") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("ds18b20PostfixZone3Div")).show();
+      }
+    });
 
     document.getElementById("zoneNumbers").addEventListener('change', function (e) {
       if (e.target.value == "1") {
@@ -1633,32 +1621,32 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("zone1EndDiv")).hide();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
-//        $(document.getElementById("zone3BeginDiv")).hide();
-//        $(document.getElementById("zone3EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (e.target.value == "2") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
-//        $(document.getElementById("zone3BeginDiv")).hide();
-//        $(document.getElementById("zone3EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (e.target.value == "3") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).show();
         $(document.getElementById("zone2EndDiv")).show();
-//        $(document.getElementById("zone3BeginDiv")).hide();
-//        $(document.getElementById("zone3EndDiv")).hide();
+        $(document.getElementById("zone3BeginDiv")).hide();
+        $(document.getElementById("zone3EndDiv")).hide();
       }
       if (e.target.value == "4") {
         $(document.getElementById("zone1BeginDiv")).show();
         $(document.getElementById("zone1EndDiv")).show();
         $(document.getElementById("zone2BeginDiv")).show();
         $(document.getElementById("zone2EndDiv")).show();
-//        $(document.getElementById("zone3BeginDiv")).show();
-//        $(document.getElementById("zone3EndDiv")).show();
+        $(document.getElementById("zone3BeginDiv")).show();
+        $(document.getElementById("zone3EndDiv")).show();
       }
     });
 
@@ -1682,9 +1670,9 @@ workModeZone0.addEventListener('change', function (e) {
                 zone1Begin:   document.getElementById("zone1Begin").value,
                 zone1End:     document.getElementById("zone1End").value,
                 zone2Begin:   document.getElementById("zone2Begin").value,
-                zone2End:     document.getElementById("zone2End").value
-//                zone3Begin:   document.getElementById("zone3Begin").value,
-//                zone3End:     document.getElementById("zone3End").value
+                zone2End:     document.getElementById("zone2End").value,
+                zone3Begin:   document.getElementById("zone3Begin").value,
+                zone3End:     document.getElementById("zone3End").value
             }
             sendPost(data);
         }
@@ -1759,26 +1747,29 @@ workModeZone0.addEventListener('change', function (e) {
             sendPost(data);
         }
 
-//        if (key == "zone3Settings") {
-//            data = {
-//                workModeZone3:              document.getElementById("workModeZone3").value,
-//                owmWhatToDisplayZone3:      document.getElementById("owmWhatToDisplayZone3").value,
-//                haSensorIdZone3:            document.getElementById("haSensorIdZone3").value,
-//                haSensorPostfixZone3:       document.getElementById("haSensorPostfixZone3").value,
-//                clockDisplayFormatZone3:    document.getElementById("clockDisplayFormatZone3").value,
-//                scrollSpeedZone3:           document.getElementById("scrollSpeedZone3").value,
-//                scrollPauseZone3:           document.getElementById("scrollPauseZone3").value,
-//                scrollAlignZone3:           document.getElementById("scrollAlignZone3").value,
-//                scrollEffectZone3In:        document.getElementById("scrollEffectZone3In").value,
-//                scrollEffectZone3Out:       document.getElementById("scrollEffectZone3Out").value,
-//                fontZone3:                  document.getElementById("fontZone3").value,
-//                charspacingZone3:           document.getElementById("charspacingZone3").value,
-//                mqttTextTopicZone3:         document.getElementById("mqttTextTopicZone3").value,
-//                mqttPostfixZone3:           document.getElementById("mqttPostfixZone3").value,
-//                ds18b20PostfixZone3:        document.getElementById("ds18b20PostfixZone3").value
-//            }
-//            sendPost(data);
-//        }
+        if (key == "zone3Settings") {
+            data = {
+                key:                   "zoneSettings",
+                zone:                  3,
+                workMode:              document.getElementById("workModeZone3").value,
+                font:                  document.getElementById("fontZone3").value,
+                owmWhatToDisplay:      document.getElementById("owmWhatToDisplayZone3").value,
+                haSensorId:            document.getElementById("haSensorIdZone3").value,
+                haSensorPostfix:       document.getElementById("haSensorPostfixZone3").value,
+                clockDisplayFormat:    document.getElementById("clockDisplayFormatZone3").value,
+                scrollSpeed:           document.getElementById("scrollSpeedZone3").value,
+                scrollPause:           document.getElementById("scrollPauseZone3").value,
+                scrollAlign:           document.getElementById("scrollAlignZone3").value,
+                scrollEffectIn:        document.getElementById("scrollEffectZone3In").value,
+                scrollEffectOut:       document.getElementById("scrollEffectZone3Out").value,
+                charspacing:           document.getElementById("charspacingZone3").value,
+                mqttTextTopic:         document.getElementById("mqttTextTopicZone3").value,
+                mqttPostfix:           document.getElementById("mqttPostfixZone3").value,
+                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone3").value
+            }
+            sendPost(data);
+        }
+
 
         if (key == "applyMqttSettings") {
             data = {
@@ -1868,10 +1859,54 @@ workModeZone0.addEventListener('change', function (e) {
             toastDanger.show();
         });
     }
+    function apiResetWifi() {
+      if (confirm("This will reset WiFi settings and reboot. You will need to connect to the AP to reconfigure. Are you sure?")) {
+        var request = $.ajax({
+          url: "/api/resetWifi",
+          method: "POST",
+          cache: false
+        });
+        request.done(function( msg ) {
+          // alert("Device is resetting WiFi...");
+        });
+        request.fail(function( jqXHR, textStatus ) {
+          alert( "Request failed: " + textStatus );
+        });
+      }
+    }
+    function apiRebootDevice() {
+      if (confirm("Are you sure you want to reboot the device?")) {
+        var request = $.ajax({
+          url: "/api/reboot",
+          method: "POST",
+          cache: false
+        });
+        request.done(function( msg ) {
+          // alert("Device is rebooting...");
+        });
+        request.fail(function( jqXHR, textStatus ) {
+          alert( "Request failed: " + textStatus );
+        });
+      }
+    }
+    function apiFactoryReset() {
+      if (confirm("WARNING: This will erase ALL settings (WiFi, MQTT, zones, etc.) and reboot. Are you absolutely sure?")) {
+        var request = $.ajax({
+          url: "/api/factory-reset",
+          method: "POST",
+          cache: false
+        });
+        request.done(function( msg ) {
+          alert("Factory reset complete. Device is rebooting...");
+        });
+        request.fail(function( jqXHR, textStatus ) {
+          alert( "Request failed: " + textStatus );
+        });
+      }
+    }
 </script>
 
 </body>
 </html>)=====";
-
 
 #endif

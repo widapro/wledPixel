@@ -1,8 +1,7 @@
 # wledPixel
-ESP32 or ESP8266 and MAX7219 dot matrix display management
+![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel_logoPicS.jpeg)
 
-![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/main.jpg)
-![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel-white.jpg)
+ESP32 and ESP8266 and MAX7219 dot matrix display management
 
 [The latest firmware version can be found in Releases](https://github.com/widapro/wled-pixel-v2/releases)
 
@@ -17,7 +16,7 @@ ESP32 or ESP8266 and MAX7219 dot matrix display management
 8. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
 9. Control display as light in Home Assistant [MQTT setup required]
 10. Initial setup through wifi AP and web UI
-11. Support 3 independent display zones
+11. Support 4 independent display zones
 12. Support up to 12 display segments at the same time [configured in web UI]
 13. Included 3 different fonts
 14. Plus symbols font
@@ -26,8 +25,11 @@ ESP32 or ESP8266 and MAX7219 dot matrix display management
 1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
 2. ESP32 or WeMos D1 Mini (ESP8266), something like this: https://aliexpress.com/item/32651747570.html
 
+### 3D Printed Case
+- **3D Printed Case**: Download from [Printables](https://www.printables.com/model/1565724-wledpixel-smart-wifi-led-matrix-clock-info-display)
+
 ## Web UI - Settings
-![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/SettingsUI.jpg)
+![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel_settingsS.jpeg)
 
 ##### Firmware compiled with next parameters:
 **ESP32**
@@ -63,6 +65,52 @@ const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 > - Connect to this AP and configure your wifi settings (connect to your wifi network)
 > - When the device connects to the WIFI network, the device's IP address will be displayed on the zone0
 > - Open the browser and go to the device IP address
+
+## Building from Source
+
+### Prerequisites
+- [PlatformIO](https://platformio.org/install) (VSCode extension or CLI)
+- Git
+
+### Build Steps
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/widapro/wledPixel.git
+   cd wledPixel
+   ```
+
+2. **Build for ESP32:**
+   ```bash
+   pio run -e esp32
+   ```
+
+3. **Build for ESP8266 (D1 Mini):**
+   ```bash
+   pio run -e d1_mini
+   ```
+
+4. **Upload firmware:**
+   ```bash
+   # For ESP32
+   pio run -e esp32 -t upload
+
+   # For ESP8266
+   pio run -e d1_mini -t upload
+   ```
+
+5. **Monitor serial output:**
+   ```bash
+   pio device monitor -b 115200
+   ```
+
+### Troubleshooting
+
+If the device gets stuck at boot, erase the flash memory:
+```bash
+pio run -e esp32 -t erase
+pio run -e esp32 -t upload
+```
 
 ## API
 ```
