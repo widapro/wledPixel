@@ -148,7 +148,9 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                             <li>owmWeather</li>
                             <li>haClient</li>
                             <li>intTempSensor (DS18B20)</li>
+                            <li>wopr (WarGames effect)</li>
                         </ul>
+                      <li><b>devicePrefix/zone<i>N</i>/text</b> - text to display (for mqttClient mode)</li>
                       <li><b>devicePrefix/zone<i>N</i>/scrolleffectIn</b> - scroll effect <b>IN</b></li>
                       <li><b>devicePrefix/zone<i>N</i>/scrolleffectOut</b> - scroll effect <b>Out</b></li><br>
                       <b>scrolleffectIn</b> and <b>scrolleffectOut</b> support next values:
@@ -184,7 +186,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       <li><b>devicePrefix/zone<i>N</i>/scrollalign</b> - scroll alignment</li>
                       <li><b>devicePrefix/zone<i>N</i>/charspacing</b> - character spacing</li>
                       <li><b>devicePrefix/intensity</b> - brightness</li>
-                      <li><b>devicePrefix/zone<i>N</i>/workMode</b> - zone work mode</li>
+                      <li><b>devicePrefix/zone<i>N</i>/workmode</b> - zone work mode</li>
                       <li><b>devicePrefix/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
                     </ul>
                       where <b>devicePrefix</b> = <span id="mqttDevicePrefixHelp"></span>
@@ -310,6 +312,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
+                        <option value="wopr">WOPR Mode (WarGames)</option>
                     </select>
                   </div>
                   
@@ -486,6 +489,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
+                        <option value="wopr">WOPR Mode (WarGames)</option>
                     </select>
                   </div>
                   
@@ -663,6 +667,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
+                        <option value="wopr">WOPR Mode (WarGames)</option>
                     </select>
                   </div>
                   
@@ -838,6 +843,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="owmWeather">Open Weather map</option>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
+                        <option value="wopr">WOPR Mode (WarGames)</option>
                     </select>
                   </div>
                   

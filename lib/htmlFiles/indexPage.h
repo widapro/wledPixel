@@ -96,6 +96,20 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                     </div>
                     <span class="text-muted" id="zone1WorkMode">...</span>
                 </li>
+                <li class="list-group-item d-flex justify-content-between lh-sm">
+                    <div>
+                      <h7 class="my-0">Zone2</h7>
+                      <small class="text-muted">Work mode</small>
+                    </div>
+                    <span class="text-muted" id="zone2WorkMode">...</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between lh-sm">
+                    <div>
+                      <h7 class="my-0">Zone3</h7>
+                      <small class="text-muted">Work mode</small>
+                    </div>
+                    <span class="text-muted" id="zone3WorkMode">...</span>
+                </li>
               </ul>
             </div>
             <div class="col-md-7 col-lg-8">
@@ -241,6 +255,8 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
         .then(data => {
             document.getElementById('zone0WorkMode').innerText = data.workModeZone0;
             document.getElementById('zone1WorkMode').innerText = data.workModeZone1;
+            document.getElementById('zone2WorkMode').innerText = data.workModeZone2;
+            document.getElementById('zone3WorkMode').innerText = data.workModeZone3;
             document.getElementById('wifiSsid').innerText = data.wifiSsid;
             document.getElementById('wifiIp').innerText = data.wifiIp;
             document.getElementById('wifiGateway').innerText = data.wifiGateway;

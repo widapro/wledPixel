@@ -154,7 +154,7 @@ s - "sun and cloud"
 ```
 
 ## MQTT topics:
-* `devicePrefix/zoneN/workMode`         - zone work mode
+* `devicePrefix/zoneN/text`             - zone text (when workmode=mqttClient)
 * `devicePrefix/zoneN/scrolleffectIn`   - scroll effect IN
 * `devicePrefix/zoneN/scrolleffectOut`  - scroll effect Out
 * `devicePrefix/zoneN/scrollspeed`      - scroll speed
@@ -162,11 +162,11 @@ s - "sun and cloud"
 * `devicePrefix/zoneN/scrollalign`      - scroll alignment
 * `devicePrefix/zoneN/charspacing`      - character spacing
 * `devicePrefix/intensity`              - brightness
-* `devicePrefix/zoneN/workMode`         - zone work mode
+* `devicePrefix/zoneN/workmode`         - zone work mode
 * `devicePrefix/power`                  - display power control, support on / off values
 
 where **devicePrefix** = wledPixel-A071
-**zoneN** = zone number (e.g. Zone0)
+**zoneN** = zone number (e.g. Zone0, Zone1, Zone2, Zone3)
 
 #### Supported workMode:
 workMode supported values:
@@ -175,6 +175,7 @@ workMode supported values:
 * `wallClock`     - NTP sync clock
 * `owmWeather`    - Open Weather Map client
 * `haClient`      - Home Assistant client
+* `wopr`          - WarGames effect
 
 
 ## Wall clock

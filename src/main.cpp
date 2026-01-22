@@ -77,7 +77,7 @@ const int oneWireBus = 4; // ESP32 GPIO04
 #endif
 
 /// GLOBAL ///
-const char *firmwareVer = "3.0";
+const char *firmwareVer = "3.1";
 int nLoop = 0;
 bool restartESP = false;
 bool allTestsFinish = false;
@@ -97,6 +97,20 @@ String ds18b20UnitsFormat = "Celsius";
 String dsTemp = "-127";
 char dsTempBuff[5];
 bool dsTempToDisplay = false;
+
+// WOPR Mode variables
+typedef struct {
+  bool active;
+  unsigned long lastUpdate;
+  uint16_t updateInterval;
+  uint8_t intensity;
+  uint8_t blinkPattern[8];
+} WOPRData;
+
+WOPRData woprZones[4] = {{false, 0, 100, 7, {0}},
+                         {false, 0, 100, 7, {0}},
+                         {false, 0, 100, 7, {0}},
+                         {false, 0, 100, 7, {0}}};
 
 //// MQTT settings ////
 bool mqttEnable = false;
@@ -156,6 +170,8 @@ String MQTTIntensity = MQTTGlobalPrefix + "/intensity";
 String MQTTPower = MQTTGlobalPrefix + "/power";
 String MQTTStateTopic = MQTTGlobalPrefix + "/state";
 bool mqttPublished = false;
+bool shouldMqttPublish = false;
+bool shouldMqttDisconnect = false;
 
 // Display config
 #define HARDWARE_TYPE                                                          \
@@ -591,6 +607,7 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
       arrOptions.add("mqttClient");
       arrOptions.add("owmWeather");
       arrOptions.add("intTempSensor");
+      arrOptions.add("wopr");
     }
 
     if (device_type == "scrollAlign") {
@@ -855,6 +872,8 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
                           zones[n].haSensorPostfix);
     preferences.putString((String("zone") + n + "Ds18b20Pf").c_str(),
                           zones[n].ds18b20Postfix);
+    preferences.putUShort((String("zone") + n + "WoprUpdInt").c_str(),
+                          woprZones[n].updateInterval);
   }
 
   if (groupName == "mqttSettings") {
@@ -953,6 +972,9 @@ void readConfig(String groupName, uint8_t n) {
         (String("zone") + n + "HaSensorPf").c_str(), zones[n].haSensorPostfix);
     zones[n].ds18b20Postfix = preferences.getString(
         (String("zone") + n + "Ds18b20Pf").c_str(), zones[n].ds18b20Postfix);
+    woprZones[n].updateInterval =
+        preferences.getUShort((String("zone") + n + "WoprUpdInt").c_str(),
+                              woprZones[n].updateInterval);
   }
 
   if (groupName == "mqttSettings") {
@@ -1014,6 +1036,7 @@ void readAllConfig() {
   readConfig("owmSettings", 99);
   readConfig("haSettings", 99);
   readConfig("ds18b20Settings", 99);
+  readConfig("intensity", 99);
   readConfig("intensity", 99);
 }
 
@@ -1143,6 +1166,26 @@ void MQTTCallback(char *topic, byte *payload, int length) {
         timeClient.setTimeOffset(ntpTimeZone * 3600);
         ntpUpdateTime();
         zones[n].previousMillis = -1000000;
+        zones[n].curTime = "";
+      }
+      if (zones[n].workMode == "wopr") {
+        woprZones[n].active = true;
+        P.displayClear(n);
+      } else {
+        woprZones[n].active = false;
+      }
+
+      if (!disableServiceMessages) {
+        if (zones[n].workMode == "mqttClient")
+          zoneNewMessage(n, "MQTT", "");
+        if (zones[n].workMode == "manualInput")
+          zoneNewMessage(n, "Manual", "");
+        if (zones[n].workMode == "haClient")
+          zoneNewMessage(n, "HA", "");
+        if (zones[n].workMode == "owmWeather")
+          zoneNewMessage(n, "OWM", "");
+        if (zones[n].workMode == "intTempSensor")
+          zoneNewMessage(n, "TempS", "");
       }
 
       zoneSettingsChanged = true;
@@ -1150,6 +1193,7 @@ void MQTTCallback(char *topic, byte *payload, int length) {
     if (zoneSettingsChanged)
       saveVarsToConfFile("zoneSettings", n);
   }
+  MQTTPublishState();
 }
 
 boolean reconnect() {
@@ -1721,7 +1765,26 @@ void setup() {
             if (zones[n].workMode == "haClient")
               haLastTime = -1000000;
             if (zones[n].workMode == "mqttClient" && mqttEnable)
-              mqttClient.disconnect();
+              shouldMqttDisconnect = true;
+            if (zones[n].workMode == "wopr") {
+              woprZones[n].active = true;
+              P.displayClear(n);
+            } else {
+              woprZones[n].active = false;
+            }
+
+            if (!disableServiceMessages) {
+              if (zones[n].workMode == "mqttClient")
+                zoneNewMessage(n, "MQTT", "");
+              if (zones[n].workMode == "manualInput")
+                zoneNewMessage(n, "Manual", "");
+              if (zones[n].workMode == "haClient")
+                zoneNewMessage(n, "HA", "");
+              if (zones[n].workMode == "owmWeather")
+                zoneNewMessage(n, "OWM", "");
+              if (zones[n].workMode == "intTempSensor")
+                zoneNewMessage(n, "TempS", "");
+            }
             if (zones[n].workMode == "wallClock") {
               timeClient.setTimeOffset(ntpTimeZone * 3600);
               shouldUpdateNtp = true;
@@ -1910,6 +1973,7 @@ void setup() {
     if (finishRequest) {
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       saveVarsToConfFile(key->value(), n);
+      shouldMqttPublish = true;
       if (key->value() == "wallClockSett")
         ntpUpdateTime();
       // readConfig(key->value(), n);
@@ -2018,6 +2082,70 @@ void setup() {
   }
   Serial.println("Setup complete, entering loop");
 }
+void updateWOPREffect(uint8_t zone) {
+  if (!woprZones[zone].active)
+    return;
+
+  if (currentMillis - woprZones[zone].lastUpdate >=
+      woprZones[zone].updateInterval) {
+    woprZones[zone].lastUpdate = currentMillis;
+
+    MD_MAX72XX *mx = P.getGraphicObject();
+    if (!mx)
+      return;
+
+    // Calculate the column range for this zone across ALL modules
+    // Each module is 8 columns wide (COL_SIZE = 8)
+    int startCol = zones[zone].begin * 8;
+    int endCol = (zones[zone].end * 8) + 7;
+
+    // Generate random blinking pattern using their working method
+    for (int col = startCol; col <= endCol; col++) {
+      if (random(0, 100) < 30) { // 30% chance to update this column
+        for (int row = 0; row < 8; row++) {
+          // Create random patterns
+          int pattern = random(0, 4);
+          bool state = false;
+
+          switch (pattern) {
+          case 0:                     // Full random - their method
+            state = random(100) < 65; // 65% chance ON like theirs
+            break;
+          case 1: // Horizontal sweep
+            state = (currentMillis / 100 + col) % 2;
+            break;
+          case 2: // Vertical sweep
+            state = (currentMillis / 100 + row) % 2;
+            break;
+          case 3: // Checkerboard flicker
+            state = ((row + col + (currentMillis / 200)) % 2);
+            break;
+          case 4: // Random intensity blocks
+            if (random(0, 100) < 20) {
+              state = true;
+              mx->setPoint(row, col, state);
+              for (int i = 1; i < 3 && row + i < 8; i++) {
+                mx->setPoint(row + i, col, state);
+              }
+              continue;
+            }
+            break;
+          }
+          mx->setPoint(row, col, state);
+        }
+      }
+    }
+
+    // Occasionally flash entire zone
+    if (random(0, 100) < 5) {
+      for (int col = startCol; col <= endCol; col++) {
+        for (int row = 0; row < 8; row++) {
+          mx->setPoint(row, col, true);
+        }
+      }
+    }
+  }
+}
 
 void testZones(uint8_t n) {
   P.displayClear();
@@ -2110,6 +2238,9 @@ void loop() {
         zones[n].curTime = "";
         zones[n].previousMillis = -1000000;
       }
+      if (zones[n].workMode == "wopr") {
+        woprZones[n].active = true;
+      }
 
       if (zones[n].workMode == "mqttClient" && !disableServiceMessages)
         zoneNewMessage(n, "MQTT", "");
@@ -2142,6 +2273,14 @@ void loop() {
         mqttClient.loop();
         if (!mqttPublished)
           MQTTPublishState();
+        if (shouldMqttPublish) {
+          MQTTPublishState();
+          shouldMqttPublish = false;
+        }
+        if (shouldMqttDisconnect) {
+          mqttClient.disconnect();
+          shouldMqttDisconnect = false;
+        }
       }
     }
 
@@ -2188,6 +2327,11 @@ void loop() {
 
     // zones rutines
     for (uint8_t n = 0; n < zoneNumbers; n++) {
+      // WOPR Mode
+      if (zones[n].workMode == "wopr") {
+        updateWOPREffect(n);
+      }
+
       // Wall Clock
       if (zones[n].workMode == "wallClock") {
         String curTimeNew =
