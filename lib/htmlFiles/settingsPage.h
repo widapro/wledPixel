@@ -36,6 +36,11 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                 </span>
               </li>
               <li>
+                <a href="/backup" class="nav-link text-white">
+                  Backup/Restore
+                </a>
+              </li>
+              <li>
                 <a href="/update" class="nav-link text-white">
                   Update firmware
                 </a>
@@ -63,6 +68,12 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <small class="text-muted">wledPixel dot led Display</small>
                   </div>
                   <span class="text-muted" id="firmwareVer"></span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between lh-sm">
+                    <div>
+                      <h6 class="my-0">Platform:</h6>
+                    </div>
+                    <span class="text-muted" id="platform"></span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
@@ -186,12 +197,25 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       <li><b>devicePrefix/zone<i>N</i>/scrollalign</b> - scroll alignment</li>
                       <li><b>devicePrefix/zone<i>N</i>/charspacing</b> - character spacing</li>
                       <li><b>devicePrefix/intensity</b> - brightness</li>
+                      <li><b>devicePrefix/zone<i>N</i>/scrollInfinite</b> - infinite scroll (on/off)</li>
                       <li><b>devicePrefix/zone<i>N</i>/workmode</b> - zone work mode</li>
                       <li><b>devicePrefix/power</b> - display power control, support <b>on</b> / <b>off</b> values</li>
                     </ul>
                       where <b>devicePrefix</b> = <span id="mqttDevicePrefixHelp"></span>
                       <br><b>zoneN</b> = zone number (e.g. Zone0, Zone1, Zone2, Zone3)
                   </small>
+              </div>
+              <hr>
+              <div>
+                <h6 class="my-2">HTTP API</h6>
+                <small class="text-muted">
+                    <b>Manual Message:</b><br>
+                    POST to <b>/api/message</b> with parameters:
+                    <ul>
+                      <li><b>messageZone0</b> ... <b>messageZone3</b> - Text to display</li>
+                    </ul>
+                    Sending the same message again will restart the animation immediately.
+                </small>
               </div>
       
             </div>
@@ -293,7 +317,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
 
                   <div class="col-11">
                     <label for="intensity" class="form-label">Brightness</label>
-                    <input type="range" class="form-range" min="1" max="17" step="1" id="intensity" onChange="preparePostRequest(event, this.id, this.value);">
+                    <input type="range" class="form-range" min="1" max="16" step="1" id="intensity" onChange="preparePostRequest(event, this.id, this.value);">
                   </div>
                   <div class="col-1 align-self-end">
                     <label id="intensityValue" for="intensity" class="form-label text-primary"></label>
@@ -325,7 +349,13 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone0" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone0">
                   </div>
-                  <div class="col-12" id="mqttDevicePrefixZone0Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone0/*</b></div>
+                  <div class="col-12" id="scrollInfiniteZone0Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone0" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone0">Infinite Scroll (loop long messages)</label>
+                    </div>
+                  </div>
+
 
                   <div class="col-7" id="clockDisplayFormatZone0Div" style="display: none;">
                     <label for="clockDisplayFormatZone0" class="form-label">Time format</label>
@@ -394,7 +424,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -415,6 +445,22 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN_RIGHT">SCROLL_DOWN_RIGHT</option>
                         <option value="PA_GROW_UP">GROW_UP</option>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
+                        <option value="MARIO">Mario</option>
+                        <option value="GHOST">Ghost</option>
+                        <option value="DINO">Dino</option>
                       </select>
                   </div>
                   <div class="col-7">
@@ -434,7 +480,22 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
+                        <option value="MARIO">Mario</option>
+                        <option value="GHOST">Ghost</option>
+                        <option value="DINO">Dino</option>
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -502,7 +563,13 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone1" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone1">
                   </div>
-                  <div class="col-12" id="mqttDevicePrefixZone1Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone1/*</b></div>
+                  <div class="col-12" id="scrollInfiniteZone1Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone1" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone1">Infinite Scroll (loop long messages)</label>
+                    </div>
+                  </div>
+
 
                   <div class="col-7" id="clockDisplayFormatZone1Div" style="display: none;">
                     <label for="clockDisplayFormatZone1" class="form-label">Time format</label>
@@ -571,7 +638,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -611,7 +678,19 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -680,7 +759,13 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone2" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone2">
                   </div>
-                  <div class="col-12" id="mqttDevicePrefixZone2Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone2/*</b></div>
+                  <div class="col-12" id="scrollInfiniteZone2Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone2" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone2">Infinite Scroll (loop long messages)</label>
+                    </div>
+                  </div>
+
 
                   <div class="col-7" id="clockDisplayFormatZone2Div" style="display: none;">
                     <label for="clockDisplayFormatZone2" class="form-label">Time format</label>
@@ -749,7 +834,19 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -789,7 +886,19 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -856,7 +965,13 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone3" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone3">
                   </div>
-                  <div class="col-12" id="mqttDevicePrefixZone3Div" class="form-text" style="display: none;">Control topic prefix: <b>%mqttDevicePrefix%/zone3/*</b></div>
+                  <div class="col-12" id="scrollInfiniteZone3Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone3" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone3">Infinite Scroll (loop long messages)</label>
+                    </div>
+                  </div>
+
 
                   <div class="col-7" id="clockDisplayFormatZone3Div" style="display: none;">
                     <label for="clockDisplayFormatZone3" class="form-label">Time format</label>
@@ -925,7 +1040,19 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" >SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -965,7 +1092,19 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_SCROLL_DOWN">SCROLL_DOWN</option>
                         <option value="PA_SCROLL_LEFT" selected>SCROLL_LEFT</option>
                         <option value="PA_SCROLL_RIGHT">SCROLL_RIGHT</option>
-                        <option value="PA_SPRITE">SPRITE</option>
+                        <option value="PACMAN">Pacman</option>
+                        <option value="WAVE">Wave</option>
+                        <option value="ROLL">Roll</option>
+                        <option value="LINES">Lines</option>
+                        <option value="ARROW">Arrow</option>
+                        <option value="SAILBOAT">Sailboat</option>
+                        <option value="STEAMBOAT">Steamboat</option>
+                        <option value="HEART">Heart</option>
+                        <option value="INVADER">Invader</option>
+                        <option value="ROCKET">Rocket</option>
+                        <option value="FBALL">Fireball</option>
+                        <option value="CHEVRON">Chevron</option>
+                        <option value="WALKER">Walker</option>
                         <option value="PA_SLICE">SLICE</option>
                         <option value="PA_MESH">MESH</option>
                         <option value="PA_FADE">FADE</option>
@@ -1069,10 +1208,10 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
                     </div>
                   </div>
                   <div class="col-3">
-                    <label for="timeZone" class="form-label">Time zone</label>
+                    <label for="ntpTimeZone" class="form-label">Time zone</label>
                     <div class="input-group mb-3">
                         <span class="input-group-text">UTC</span>
-                        <input type="text" class="form-control" id="ntpTimeZone">
+                        <input type="number" step="0.25" class="form-control" id="ntpTimeZone">
                     </div>
                   </div>
                   <div class="col-3">
@@ -1207,9 +1346,8 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
 
 
                 <div class="col-sm-12"></div>
-                <hr class="my-4">
                 <footer class="my-5 pt-5 text-muted text-center text-small border-top">
-                  <p class="mb-1">&copy; 2026 wledPixel</p>
+                  <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
                   <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
                   <ul class="list-inline">
                     <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
@@ -1342,6 +1480,10 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
             document.getElementById("mqttPostfixZone1").value = data.mqttPostfixZone1;
             document.getElementById("mqttPostfixZone2").value = data.mqttPostfixZone2;
             document.getElementById("mqttPostfixZone3").value = data.mqttPostfixZone3;
+            document.getElementById("scrollInfiniteZone0").checked = data.scrollInfiniteZone0;
+            document.getElementById("scrollInfiniteZone1").checked = data.scrollInfiniteZone1;
+            document.getElementById("scrollInfiniteZone2").checked = data.scrollInfiniteZone2;
+            document.getElementById("scrollInfiniteZone3").checked = data.scrollInfiniteZone3;
             document.getElementById("ds18b20PostfixZone0").value = data.ds18b20PostfixZone0;
             document.getElementById("ds18b20PostfixZone1").value = data.ds18b20PostfixZone1;
             document.getElementById("ds18b20PostfixZone2").value = data.ds18b20PostfixZone2;
@@ -1361,6 +1503,8 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
 
             // Populate Info section
             document.getElementById("firmwareVer").innerText = data.firmwareVer;
+            document.getElementById("platform").innerText = data.platform;
+            if(document.getElementById("footerFwVer")) document.getElementById("footerFwVer").innerText = data.firmwareVer;
             document.getElementById("wifiSsid").innerText = data.wifiSsid;
             document.getElementById("wifiIp").innerText = data.wifiIp;
             document.getElementById("wifiGateway").innerText = data.wifiGateway;
@@ -1424,6 +1568,7 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
             $(document.getElementById("mqttZone" + zoneIndex + "PrefixDiv")).show();
             $(document.getElementById("mqttPostfix" + zoneDivSuffix)).show();
             $(document.getElementById("mqttDevicePrefix" + zoneDivSuffix)).show();
+            $(document.getElementById("scrollInfinite" + zoneDivSuffix)).show();
           }
           if (workMode == "owmWeather") {
             $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
@@ -1441,6 +1586,10 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
           if (workMode == "intTempSensor") {
             $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
             $(document.getElementById("ds18b20Postfix" + zoneDivSuffix)).show();
+          }
+          if (workMode == "manualInput") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("scrollInfinite" + zoneDivSuffix)).show();
           }
       }
 
@@ -1461,6 +1610,7 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone0Div")).show();
       $(document.getElementById("mqttZone0PrefixDiv")).hide();
       $(document.getElementById("mqttPostfixZone0Div")).hide();
+      $(document.getElementById("scrollInfiniteZone0Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone0Div")).hide();
       document.getElementById("scrollPauseZone0").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone0div")).hide();
@@ -1473,6 +1623,7 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("mqttZone0PrefixDiv")).show();
         $(document.getElementById("mqttPostfixZone0Div")).show();
+        $(document.getElementById("scrollInfiniteZone0Div")).show();
         $(document.getElementById("mqttDevicePrefixZone0Div")).show();
       }
       
@@ -1496,12 +1647,17 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("ds18b20PostfixZone0Div")).show();
       }
+      if (e.target.value == "manualInput") {
+        $(document.getElementById("emptyZone0Div")).hide();
+        $(document.getElementById("scrollInfiniteZone0Div")).show();
+      }
     });
 
     workModeZone1.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone1Div")).show();
       $(document.getElementById("mqttZone1PrefixDiv")).hide();
       $(document.getElementById("mqttPostfixZone1Div")).hide();
+      $(document.getElementById("scrollInfiniteZone1Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone1Div")).hide();
       document.getElementById("scrollPauseZone1").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone1div")).hide();
@@ -1514,6 +1670,7 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("mqttZone1PrefixDiv")).show();
         $(document.getElementById("mqttPostfixZone1Div")).show();
+        $(document.getElementById("scrollInfiniteZone1Div")).show();
         $(document.getElementById("mqttDevicePrefixZone1Div")).show();
       }
       
@@ -1537,12 +1694,17 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("ds18b20PostfixZone1Div")).show();
       }
+      if (e.target.value == "manualInput") {
+        $(document.getElementById("emptyZone1Div")).hide();
+        $(document.getElementById("scrollInfiniteZone1Div")).show();
+      }
     });
 
     workModeZone2.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone2Div")).show();
       $(document.getElementById("mqttZone2PrefixDiv")).hide();
       $(document.getElementById("mqttPostfixZone2Div")).hide();
+      $(document.getElementById("scrollInfiniteZone2Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone2Div")).hide();
       document.getElementById("scrollPauseZone2").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone2div")).hide();
@@ -1555,6 +1717,7 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("mqttZone2PrefixDiv")).show();
         $(document.getElementById("mqttPostfixZone2Div")).show();
+        $(document.getElementById("scrollInfiniteZone2Div")).show();
         $(document.getElementById("mqttDevicePrefixZone2Div")).show();
       }
       
@@ -1578,12 +1741,17 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("ds18b20PostfixZone2Div")).show();
       }
+      if (e.target.value == "manualInput") {
+        $(document.getElementById("emptyZone2Div")).hide();
+        $(document.getElementById("scrollInfiniteZone2Div")).show();
+      }
     });
 
     workModeZone3.addEventListener('change', function (e) {
       $(document.getElementById("emptyZone3Div")).show();
       $(document.getElementById("mqttZone3PrefixDiv")).hide();
       $(document.getElementById("mqttPostfixZone3Div")).hide();
+      $(document.getElementById("scrollInfiniteZone3Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone3Div")).hide();
       document.getElementById("scrollPauseZone3").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone3div")).hide();
@@ -1596,6 +1764,7 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone3Div")).hide();
         $(document.getElementById("mqttZone3PrefixDiv")).show();
         $(document.getElementById("mqttPostfixZone3Div")).show();
+        $(document.getElementById("scrollInfiniteZone3Div")).show();
         $(document.getElementById("mqttDevicePrefixZone3Div")).show();
       }
 
@@ -1618,6 +1787,10 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "intTempSensor") {
         $(document.getElementById("emptyZone3Div")).hide();
         $(document.getElementById("ds18b20PostfixZone3Div")).show();
+      }
+      if (e.target.value == "manualInput") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("scrollInfiniteZone3Div")).show();
       }
     });
 
@@ -1701,6 +1874,7 @@ workModeZone0.addEventListener('change', function (e) {
                 charspacing:           document.getElementById("charspacingZone0").value,
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone0").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone0").value,
+                scrollInfinite:        document.getElementById("scrollInfiniteZone0").checked,
                 ds18b20Postfix:        document.getElementById("ds18b20PostfixZone0").value
                 
             }
@@ -1725,6 +1899,7 @@ workModeZone0.addEventListener('change', function (e) {
                 charspacing:           document.getElementById("charspacingZone1").value,
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone1").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone1").value,
+                scrollInfinite:        document.getElementById("scrollInfiniteZone1").checked,
                 ds18b20Postfix:        document.getElementById("ds18b20PostfixZone1").value
             }
             sendPost(data);
@@ -1748,6 +1923,7 @@ workModeZone0.addEventListener('change', function (e) {
                 charspacing:           document.getElementById("charspacingZone2").value,
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone2").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone2").value,
+                scrollInfinite:        document.getElementById("scrollInfiniteZone2").checked,
                 ds18b20Postfix:        document.getElementById("ds18b20PostfixZone2").value
             }
             sendPost(data);
@@ -1771,6 +1947,7 @@ workModeZone0.addEventListener('change', function (e) {
                 charspacing:           document.getElementById("charspacingZone3").value,
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone3").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone3").value,
+                scrollInfinite:        document.getElementById("scrollInfiniteZone3").checked,
                 ds18b20Postfix:        document.getElementById("ds18b20PostfixZone3").value
             }
             sendPost(data);

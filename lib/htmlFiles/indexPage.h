@@ -35,6 +35,11 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                 </a>
               </li>
               <li>
+                <a href="/backup" class="nav-link text-white">
+                  Backup/Restore
+                </a>
+              </li>
+              <li>
                 <a href="/update" class="nav-link text-white">
                   Update firmware
                 </a>
@@ -153,14 +158,12 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
                   </div>
                 
                 <div class="col-sm-12"></div>
-                <hr class="my-4">
                 <footer class="my-5 pt-5 text-muted text-center text-small border-top">
-                  <p class="mb-1">&copy; 2025 wledPixel Project</p>
+                  <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
                   <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
                   <ul class="list-inline">
                     <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
                     <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" class="text-decoration-none">Report Bug</a></li>
-                    <li class="list-inline-item"><a href="#" class="text-decoration-none">Support</a></li>
                   </ul>
                 </footer>
             </div>
@@ -261,6 +264,7 @@ const char indexPage[] PROGMEM = R"=====(<!doctype html>
             document.getElementById('wifiIp').innerText = data.wifiIp;
             document.getElementById('wifiGateway').innerText = data.wifiGateway;
             document.getElementById('firmwareVer').innerText = data.firmwareVer;
+            if(document.getElementById('footerFwVer')) document.getElementById('footerFwVer').innerText = data.firmwareVer;
 
             const workModeZone0 = data.workModeZone0;
             const workModeZone1 = data.workModeZone1;
