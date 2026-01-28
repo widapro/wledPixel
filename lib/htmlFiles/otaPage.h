@@ -43,6 +43,9 @@ const char otaPage[] PROGMEM = R"=====(<!doctype html>
               <a href="/settings" class="nav-link text-white">Settings</a>
             </li>
             <li>
+              <a href="/backup" class="nav-link text-white">Backup/Restore</a>
+            </li>
+            <li>
               <span class="nav-link text-secondary">Update firmware</span>
             </li>
           </ul>
@@ -56,6 +59,10 @@ const char otaPage[] PROGMEM = R"=====(<!doctype html>
       <div class="py-5 text-center">
         <h2>Firmware Update</h2>
         <p class="lead">Upload a new firmware file to update your device.</p>
+        <div class="mb-4 text-center text-muted">
+          <small>Current version: <span id="currentVer">Loading...</span><br>
+          Platform: <span id="currentPlatform">Loading...</span></small>
+        </div>
       </div>
       
       <div class="row justify-content-center">
@@ -92,12 +99,17 @@ const char otaPage[] PROGMEM = R"=====(<!doctype html>
               
             </div>
           </div>
-          
-          <div class="mt-4 text-center text-muted">
-            <small>Current version: <span id="currentVer">Loading...</span></small>
-          </div>
         </div>
       </div>
+      
+      <footer class="my-5 pt-5 text-muted text-center text-small border-top">
+        <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
+        <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
+        <ul class="list-inline">
+          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
+          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" class="text-decoration-none">Report Bug</a></li>
+        </ul>
+      </footer>
     </main>
   </div>
 
@@ -111,6 +123,12 @@ window.onload = function() {
     .then(data => {
       if (document.getElementById('currentVer')) {
         document.getElementById('currentVer').innerText = data.firmwareVer;
+      }
+      if (document.getElementById('currentPlatform')) {
+        document.getElementById('currentPlatform').innerText = data.platform;
+      }
+      if (document.getElementById('footerFwVer')) {
+        document.getElementById('footerFwVer').innerText = data.firmwareVer;
       }
     })
     .catch(e => console.log('Ver fetch err', e));

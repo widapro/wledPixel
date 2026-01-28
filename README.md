@@ -59,7 +59,7 @@ const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 
 
 ## First boot:
-> - Device will boot in wifi access point mode and write the wifi name and password on the display.
+> - Device will boot in wifi access point mode and show "AP Mode" on the display.
 > - AP wifi name: **wledPixel-[short MAC address]**
 > - AP wifi password: **12345678**
 > - Connect to this AP and configure your wifi settings (connect to your wifi network)
@@ -163,6 +163,7 @@ s - "sun and cloud"
 * `devicePrefix/zoneN/charspacing`      - character spacing
 * `devicePrefix/intensity`              - brightness
 * `devicePrefix/zoneN/workmode`         - zone work mode
+* `devicePrefix/zoneN/scrollInfinite`   - infinite scroll (on/off, true/false, 1/0)
 * `devicePrefix/power`                  - display power control, support on / off values
 
 where **devicePrefix** = wledPixel-A071
@@ -219,6 +220,25 @@ Default effects:
 * `PA_SCROLL_RIGHT`
 * `PA_SLICE`
 * `PA_SCROLL_DOWN`
+* `PA_SPRITE` (Generic)
+
+### Custom Sprites
+* `PACMAN`
+* `WAVE`
+* `ROLL`
+* `LINES`
+* `ARROW`
+* `SAILBOAT`
+* `STEAMBOAT`
+* `HEART`
+* `INVADER`
+* `ROCKET`
+* `FBALL`
+* `CHEVRON`
+* `WALKER`
+* `MARIO` (New!)
+* `GHOST` (New!)
+* `DINO` (New!)
 
 
 ## Home Assistant automation example:
