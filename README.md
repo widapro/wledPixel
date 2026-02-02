@@ -179,6 +179,30 @@ workMode supported values:
 * `wopr`          - WarGames effect
 
 
+## Display Behavior for MQTT and Manual Modes
+
+Both **MQTT Client** and **Manual Input** modes share the same display logic:
+
+### When the message **fits** on the screen:
+- The message appears using the selected **IN effect**.
+- **If Infinite Scroll is DISABLED**:
+  - If **OUT effect** is `NO_EFFECT`: The message stays static on the display until a new message arrives.
+  - If **OUT effect** is any other effect: The animation plays once (**IN** → **Scroll pause** → **OUT**) and then stops. The message does not repeat.
+- **If Infinite Scroll is ENABLED**:
+  - If **OUT effect** is `NO_EFFECT`: The message stays static on the display until a new message arrives.
+  - If **OUT effect** is any other effect: The message loops continuously (**IN** → **Scroll pause** → **OUT** → repeat).
+
+### When the message **does not fit** on the screen:
+- It automatically scrolls to show the full text.
+- If **Infinite Scroll** is enabled: It scrolls in a loop.
+- If **Infinite Scroll** is disabled: It scrolls once and stops.
+
+### Service Messages (e.g., "mqtt ok", "mqtt err", mode names)
+- If a service message doesn't fit, it scrolls once and then remains static.
+- Duplicate status messages are ignored to prevent flickering.
+- Can be completely disabled via the **"Disable service messages"** setting.
+
+
 ## Wall clock
 Wall clock mode support next following display options:
 * `HH:MM`       - Hours : Minutes [21:43]
@@ -189,6 +213,18 @@ Wall clock mode support next following display options:
 * `dd.mm`       - Day.Month [21.06]
 * `dd.mm aa`    - Day.Month weekday name (e.g., Sun) [21.06 Tue] *in Cyrillic font weekday name will be in Cyrillic
 * `aa`          - Weekday name (e.g. Sun) *in Cyrillic font weekday name will be in Cyrillic
+
+### Display Logic
+* **If text fits in the zone:**
+  - Displays statically.
+  - Dots blink (unless disabled).
+* **If text does NOT fit in the zone:**
+  - Text scrolls completely until it disappears.
+  - Screen remains blank for the duration of **Scroll Pause**.
+  - Text starts scrolling again.
+  - Dots do **NOT** blink to prevent interrupting the scroll cycle.
+
+> **Note:** The **Scroll Effect Out** setting in the Web UI is disabled (greyed out) for Wall Clock mode because the loop animation doesn't use an exit effect.
 
 
 ## Scroll effect list
