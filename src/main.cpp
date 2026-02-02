@@ -80,7 +80,7 @@ const int oneWireBus = 4; // ESP32 GPIO04
 #endif
 
 /// GLOBAL ///
-const char *firmwareVer = "v3.2";
+const char *firmwareVer = "v3.3-rc";
 int nLoop = 0;
 bool restartESP = false;
 bool allTestsFinish = false;
@@ -179,6 +179,9 @@ String MQTTStateTopic = MQTTGlobalPrefix + "/state";
 bool mqttPublished = false;
 bool shouldMqttPublish = false;
 bool shouldMqttDisconnect = false;
+bool zoneServiceMessageScrolling[4] = {false, false, false, false};
+unsigned long zoneScrollCompleteTime[4] = {
+    0, 0, 0, 0}; // Time when scroll animation completed
 
 // Display config
 #define HARDWARE_TYPE                                                          \
@@ -1312,6 +1315,8 @@ void readConfig(String groupName, uint8_t n) {
     mqttServerPort = preferences.getUShort("mqttServerPort", mqttServerPort);
     mqttUsername = preferences.getString("mqttUsername", mqttUsername);
     mqttPassword = preferences.getString("mqttPassword", mqttPassword);
+    Serial.print("readConfig: Loaded mqttPassword: ");
+    Serial.println(mqttPassword.length() > 0 ? "EXISTS" : "EMPTY");
   }
 
   if (groupName == "wallClockSett") {
@@ -1376,6 +1381,19 @@ void zoneNewMessage(int zone, String newMessage, String postfix,
   if (zone >= 0 && zone < 4) {
     String fullMessage = newMessage + postfix;
 
+    // Calculate if text fits for display optimization
+    int16_t textWidth = P.getTextColumns(zone, fullMessage.c_str());
+    // Fallback heuristic if getTextColumns returns 0 (e.g. font not loaded or
+    // helper issue)
+    if (textWidth == 0 && fullMessage.length() > 0)
+      textWidth = fullMessage.length() * 6;
+
+    uint16_t startCol, endCol;
+    P.getDisplayExtent(zone, startCol, endCol);
+    int16_t zoneWidth = abs(startCol - endCol) + 1;
+
+    zones[zone].textFits = (textWidth <= zoneWidth);
+
     if (!force) {
       // Check against pending if available, otherwise active
       if (zones[zone].newMessageAvailable) {
@@ -1402,12 +1420,43 @@ void zoneShowModeMessage(int zone, String modeName) {
     Serial.print(" with: ");
     Serial.println(modeName);
 
+    if (disableServiceMessages)
+      return;
+
+    // If the message is already displayed, don't restart the animation/display
+    if (String(zoneMessages[zone]) == modeName) {
+      Serial.println("Debug: Message already displayed, skipping update.");
+      return;
+    }
+
     P.displayClear(zone); // Stop current animation
 
-    // Set effects for brief mode display
-    P.setTextEffect(zone, PA_PRINT, PA_NO_EFFECT);
-    P.setPause(zone, 500); // Brief 0.5 second pause
-    P.setTextAlignment(zone, PA_CENTER);
+    // Calculate text width vs zone width
+    // We need to temporarily set the buffer to measure it properly or use
+    // helper
+    int16_t textWidth = P.getTextColumns(zone, modeName.c_str());
+    // Fallback heuristic if getTextColumns returns 0 (sometimes happens if not
+    // yet displayed)
+    if (textWidth == 0 && modeName.length() > 0)
+      textWidth = modeName.length() * 6; // Approx 6px per char
+
+    uint16_t startCol, endCol;
+    P.getDisplayExtent(zone, startCol, endCol);
+    int16_t zoneWidth = abs(startCol - endCol) + 1;
+
+    if (textWidth <= zoneWidth) {
+      // Fits: Static display
+      P.setTextEffect(zone, PA_PRINT, PA_NO_EFFECT);
+      P.setPause(zone, 500); // Brief 0.5 second pause
+      P.setTextAlignment(zone, PA_CENTER);
+      zoneServiceMessageScrolling[zone] = false;
+    } else {
+      // Doesn't fit: Scroll it
+      P.setTextEffect(zone, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
+      P.setPause(zone, 0);
+      P.setTextAlignment(zone, PA_LEFT);
+      zoneServiceMessageScrolling[zone] = true;
+    }
 
     // Copy message directly to active buffer (bypass pending)
     strcpy(zoneMessages[zone], modeName.c_str());
@@ -1498,7 +1547,8 @@ void MQTTCallback(char *topic, byte *payload, int length) {
   for (uint8_t n = 0; n < zoneNumbers; n++) {
     bool zoneSettingsChanged = false;
     if (zones[n].workMode == "mqttClient" && topicStr == MQTTZones[n].message)
-      zoneNewMessage(n, PayloadString.c_str(), zones[n].mqttPostfix);
+      zoneNewMessage(n, PayloadString.c_str(), zones[n].mqttPostfix, true,
+                     true);
 
     if (topicStr == MQTTZones[n].scrollEffectIn) {
       zones[n].scrollEffectIn = PayloadString.c_str();
@@ -1634,12 +1684,22 @@ boolean reconnect() {
     Serial.println(F("MQTT subscribe objects"));
     mqttClient.subscribe((char *)MQTTIntensity.c_str());
     mqttClient.subscribe((char *)MQTTPower.c_str());
+
+    // Display feedback on MQTT zones
+    for (uint8_t n = 0; n < zoneNumbers; n++) {
+      if (zones[n].workMode == "mqttClient") {
+        zoneShowModeMessage(n, "mqtt ok");
+      }
+    }
   } else {
     Serial.print(F("MQTT failed, rc= "));
     Serial.println(mqttClient.state());
     Serial.print(F(" try again in 5 seconds"));
-    P.setTextBuffer(0, "mq err");
-    P.displayReset(0);
+    for (uint8_t n = 0; n < zoneNumbers; n++) {
+      if (zones[n].workMode == "mqttClient") {
+        zoneShowModeMessage(n, "mqtt err");
+      }
+    }
   }
   return mqttClient.connected();
 }
@@ -1821,14 +1881,14 @@ void displayAnimation() {
             P.setTextAlignment(z, PA_LEFT);
             effIn = PA_SCROLL_LEFT;
             effOut = PA_SCROLL_LEFT;
+            // No mid-scroll pause - for clock, pause will be blank screen
+            // between loops
             P.setPause(z, 0);
             P.displayClear(z);
           } else {
             // Restore standard config
             P.setTextAlignment(z, stringToTextPositionT(zones[z].scrollAlign));
             P.setPause(z, zones[z].scrollPause * 1000);
-            if (zones[z].workMode == "manualInput")
-              effOut = PA_NO_EFFECT;
           }
 
           if (zones[z].scrollEffectIn == "PACMAN" ||
@@ -1895,15 +1955,64 @@ void displayAnimation() {
           if ((zones[z].workMode == "wallClock" ||
                zones[z].workMode == "owmWeather") &&
               allTestsFinish) {
-            P.setTextEffect(z, PA_NO_EFFECT, PA_NO_EFFECT);
+            // Check if text fits - if not, use scroll effects instead of
+            // NO_EFFECT
+            int16_t textWidth = P.getTextColumns(z, zoneMessages[z]);
+            if (textWidth == 0 && strlen(zoneMessages[z]) > 0)
+              textWidth = strlen(zoneMessages[z]) * 7;
+            uint16_t startCol, endCol;
+            P.getDisplayExtent(z, startCol, endCol);
+            int16_t zoneWidth = abs(startCol - endCol) + 1;
+            zones[z].textFits = (textWidth <= zoneWidth);
+
+            if (!zones[z].textFits) {
+              P.setTextAlignment(z, PA_LEFT);
+              P.setTextEffect(z, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
+              P.setPause(z, 0);
+            } else {
+              P.setTextEffect(z, PA_NO_EFFECT, PA_NO_EFFECT);
+            }
           }
         }
         P.setTextBuffer(z, zoneMessages[z]);
         P.displayReset(z);
-      } else if (allTestsFinish && zones[z].scrollInfinite &&
-                 (zones[z].workMode == "mqttClient" ||
-                  (zones[z].workMode == "manualInput" && !zones[z].textFits))) {
+      } else if (zoneServiceMessageScrolling[z]) {
+        // Scroll finished, switch to static display
+        zoneServiceMessageScrolling[z] = false;
+        P.setTextEffect(z, PA_PRINT, PA_NO_EFFECT);
+        P.setTextAlignment(z, PA_LEFT);
         P.displayReset(z);
+      } else if ((allTestsFinish && zones[z].scrollInfinite &&
+                  (zones[z].workMode == "mqttClient" ||
+                   zones[z].workMode == "manualInput")) ||
+                 (allTestsFinish && zones[z].workMode == "wallClock" &&
+                  !zones[z].textFits)) {
+
+        // For wallClock with text that doesn't fit: blank screen pause between
+        // loops
+        if (zones[z].workMode == "wallClock" && !zones[z].textFits) {
+          if (zoneScrollCompleteTime[z] == 0) {
+            // First time detecting scroll complete - record time
+            zoneScrollCompleteTime[z] = millis();
+          }
+          // Wait for scrollPause seconds (blank screen)
+          if (millis() - zoneScrollCompleteTime[z] >=
+              (unsigned long)(zones[z].scrollPause * 1000)) {
+            zoneScrollCompleteTime[z] = 0; // Reset timer
+            P.displayReset(z);
+          }
+          // Else: do nothing, keep screen blank
+        }
+        // Optimization: If static content fits and NO_EFFECT OUT, don't reset
+        // (blink)
+        else if ((zones[z].workMode == "mqttClient" ||
+                  zones[z].workMode == "manualInput") &&
+                 zones[z].textFits &&
+                 zones[z].scrollEffectOut == "PA_NO_EFFECT") {
+          // Do nothing, keep static
+        } else {
+          P.displayReset(z);
+        }
       }
     }
   }
@@ -1923,6 +2032,7 @@ String haApiGet(String sensorId, String sensorPostfix) {
 }
 
 void setup() {
+  readAllConfig();
   Serial.begin(115200);
   Serial.print(F("Start serial...."));
 
@@ -2328,7 +2438,9 @@ void setup() {
     doc["mqttServerAddress"] = mqttServerAddress;
     doc["mqttServerPort"] = mqttServerPort;
     doc["mqttUsername"] = mqttUsername;
-    doc["mqttPassword"] = mqttPassword;
+    doc["mqttPassword"] = (mqttPassword == "") ? "" : "********";
+    Serial.print("API Settings: mqttPassword sentinel sent: ");
+    Serial.println((mqttPassword == "") ? "EMPTY" : "MASKED");
     doc["mqttDevicePrefix"] = MQTTGlobalPrefix;
 
     // NTP
@@ -2337,7 +2449,7 @@ void setup() {
     doc["ntpServer"] = ntpServer;
 
     // OWM
-    doc["owmApiToken"] = owmApiToken;
+    doc["owmApiToken"] = (owmApiToken == "") ? "" : "********";
     doc["owmUnitsFormat"] = owmUnitsFormat;
     doc["owmUpdateInterval"] = owmUpdateInterval;
     doc["owmCity"] = owmCity;
@@ -2345,7 +2457,7 @@ void setup() {
     // HA
     doc["haAddr"] = haAddr;
     doc["haApiHttpType"] = haApiHttpType;
-    doc["haApiToken"] = haApiToken;
+    doc["haApiToken"] = (haApiToken == "") ? "" : "********";
     doc["haApiPort"] = haApiPort;
     doc["haUpdateInterval"] = haUpdateInterval;
 
@@ -2721,14 +2833,78 @@ void setup() {
           finishRequest = true;
         }
       }
+      if (key->value() == "mqttSettings") {
+        if (p->name() == "mqttEnable") {
+          if (strcmp(p->value().c_str(), "true") == 0)
+            mqttEnable = true;
+          if (strcmp(p->value().c_str(), "false") == 0)
+            mqttEnable = false;
+        }
+        if (p->name() == "mqttServerAddress")
+          mqttServerAddress = p->value().c_str();
+        if (p->name() == "mqttServerPort")
+          mqttServerPort = p->value().toInt();
+        if (p->name() == "mqttUsername")
+          mqttUsername = p->value().c_str();
+        if (p->name() == "mqttPassword") {
+          String val = p->value();
+          Serial.print("API Config: Received mqttPassword: ");
+          Serial.println(val);
+          if (val != "********") {
+            mqttPassword = val.c_str();
+          } else {
+            Serial.println("API Config: Ignoring masked password");
+          }
+        }
 
+        finishRequest = true;
+        shouldMqttDisconnect = true;
+      }
+
+      if (key->value() == "wallClockSett") {
+        if (p->name() == "ntpTimeZone")
+          ntpTimeZone = p->value().toFloat();
+        if (p->name() == "disableDotsBlink") {
+          if (strcmp(p->value().c_str(), "true") == 0)
+            disableDotsBlink = true;
+          if (strcmp(p->value().c_str(), "false") == 0)
+            disableDotsBlink = false;
+        }
+        if (p->name() == "ntpUpdateInterval")
+          ntpUpdateInterval = p->value().toInt();
+        if (p->name() == "ntpServer")
+          ntpServer = p->value().c_str();
+
+        finishRequest = true;
+      }
+
+      if (key->value() == "owmSettings") {
+        if (p->name() == "owmApiToken") {
+          String val = p->value();
+          if (val != "********") {
+            owmApiToken = val.c_str();
+          }
+        }
+        if (p->name() == "owmUnitsFormat")
+          owmUnitsFormat = p->value().c_str();
+        if (p->name() == "owmUpdateInterval")
+          owmUpdateInterval = p->value().toInt();
+        if (p->name() == "owmCity")
+          owmCity = p->value().c_str();
+
+        finishRequest = true;
+      }
       if (key->value() == "haSettings") {
         if (p->name() == "haAddr")
           haAddr = p->value().c_str();
         if (p->name() == "haUpdateInterval")
           haUpdateInterval = p->value().toInt();
-        if (p->name() == "haApiToken")
-          haApiToken = p->value().c_str();
+        if (p->name() == "haApiToken") {
+          String val = p->value();
+          if (val != "********") {
+            haApiToken = val.c_str();
+          }
+        }
         if (p->name() == "haApiHttpType")
           haApiHttpType = p->value().c_str();
         if (p->name() == "haApiPort")
@@ -2818,6 +2994,9 @@ void setup() {
       // turning off
       if (key->value() == "zoneSettings" && power) {
         P.displayShutdown(0);
+      }
+      if (key->value() == "displaySettings") {
+        restartESP = true;
       }
       // readConfig(key->value(), n);
     }
@@ -3177,6 +3356,9 @@ void loop() {
         }
         if (shouldMqttDisconnect) {
           mqttClient.disconnect();
+          mqttClient.setServer(mqttServerAddress.c_str(),
+                               mqttServerPort); // Update server params
+          lastReconnectAttempt = 0;             // Trigger immediate reconnect
           shouldMqttDisconnect = false;
         }
       }
@@ -3237,7 +3419,9 @@ void loop() {
         if (zones[n].clockDisplayFormat == "HHMM" ||
             zones[n].clockDisplayFormat == "HHMMSS" ||
             zones[n].clockDisplayFormat == "ddmmaahhmm") {
-          if (!disableDotsBlink) {
+          // Skip blink logic if dots blink is disabled OR if text doesn't fit
+          // (scrolling)
+          if (!disableDotsBlink && zones[n].textFits) {
             if (currentMillis - zones[n].previousMillis >= 1000 ||
                 zones[n].forceUpdate) {
               if ((zones[n].curTime == curTimeNew ||

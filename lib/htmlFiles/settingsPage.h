@@ -352,7 +352,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-12" id="scrollInfiniteZone0Div" style="display: none;">
                     <div class="form-check form-switch pt-4">
                       <input class="form-check-input" type="checkbox" id="scrollInfiniteZone0" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone0">Infinite Scroll (loop long messages)</label>
+                      <label class="form-check-label" for="scrollInfiniteZone0">Infinite Scroll</label>
                     </div>
                   </div>
 
@@ -566,7 +566,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-12" id="scrollInfiniteZone1Div" style="display: none;">
                     <div class="form-check form-switch pt-4">
                       <input class="form-check-input" type="checkbox" id="scrollInfiniteZone1" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone1">Infinite Scroll (loop long messages)</label>
+                      <label class="form-check-label" for="scrollInfiniteZone1">Infinite Scroll</label>
                     </div>
                   </div>
 
@@ -762,7 +762,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-12" id="scrollInfiniteZone2Div" style="display: none;">
                     <div class="form-check form-switch pt-4">
                       <input class="form-check-input" type="checkbox" id="scrollInfiniteZone2" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone2">Infinite Scroll (loop long messages)</label>
+                      <label class="form-check-label" for="scrollInfiniteZone2">Infinite Scroll</label>
                     </div>
                   </div>
 
@@ -968,7 +968,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                   <div class="col-12" id="scrollInfiniteZone3Div" style="display: none;">
                     <div class="form-check form-switch pt-4">
                       <input class="form-check-input" type="checkbox" id="scrollInfiniteZone3" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone3">Infinite Scroll (loop long messages)</label>
+                      <label class="form-check-label" for="scrollInfiniteZone3">Infinite Scroll</label>
                     </div>
                   </div>
 
@@ -1350,8 +1350,9 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
                   <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
                   <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
                   <ul class="list-inline">
-                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
-                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" class="text-decoration-none">Report Bug</a></li>
+                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" target="_blank" class="text-decoration-none">GitHub</a></li>
+                    <li class="list-inline-item">|</li>
+                    <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" target="_blank" class="text-decoration-none">Report Bug</a></li>
                   </ul>
                 </footer>
               </form>
@@ -1438,7 +1439,7 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
             document.getElementById("mqttServerPort").value = data.mqttServerPort;
             document.getElementById("mqttUsername").value = data.mqttUsername;
             // Password is not sent back for security, or handle if needed
-            // document.getElementById("mqttPassword").value = data.mqttPassword; 
+            document.getElementById("mqttPassword").value = data.mqttPassword; 
 
             document.getElementById("mqttTextTopicZone0").value = data.mqttTextTopicZone0;
             document.getElementById("mqttTextTopicZone1").value = data.mqttTextTopicZone1;
@@ -1577,6 +1578,7 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
           if (workMode == "wallClock") {
             $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
             $(document.getElementById("clockDisplayFormat" + zoneDivSuffix)).show();
+            document.getElementById("scrollEffectZone" + zoneIndex + "Out").disabled = true;
           }
           if (workMode == "haClient") {
             $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
@@ -1613,6 +1615,7 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("scrollInfiniteZone0Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone0Div")).hide();
       document.getElementById("scrollPauseZone0").disabled = false;
+      document.getElementById("scrollEffectZone0Out").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone0div")).hide();
       $(document.getElementById("clockDisplayFormatZone0Div")).hide();
       $(document.getElementById("haSensorIdZone0Div")).hide();
@@ -1630,7 +1633,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("clockDisplayFormatZone0Div")).show();
-        document.getElementById("scrollPauseZone0").disabled = true;
+        document.getElementById("scrollEffectZone0Out").disabled = true;
       }
 
       if (e.target.value == "owmWeather") {
@@ -1660,6 +1663,7 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("scrollInfiniteZone1Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone1Div")).hide();
       document.getElementById("scrollPauseZone1").disabled = false;
+      document.getElementById("scrollEffectZone1Out").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone1div")).hide();
       $(document.getElementById("clockDisplayFormatZone1Div")).hide();
       $(document.getElementById("haSensorIdZone1Div")).hide();
@@ -1677,7 +1681,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("clockDisplayFormatZone1Div")).show();
-        document.getElementById("scrollPauseZone1").disabled = true;
+        document.getElementById("scrollEffectZone1Out").disabled = true;
       }
 
       if (e.target.value == "owmWeather") {
@@ -1707,6 +1711,7 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("scrollInfiniteZone2Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone2Div")).hide();
       document.getElementById("scrollPauseZone2").disabled = false;
+      document.getElementById("scrollEffectZone2Out").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone2div")).hide();
       $(document.getElementById("clockDisplayFormatZone2Div")).hide();
       $(document.getElementById("haSensorIdZone2Div")).hide();
@@ -1724,7 +1729,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("clockDisplayFormatZone2Div")).show();
-        document.getElementById("scrollPauseZone2").disabled = true;
+        document.getElementById("scrollEffectZone2Out").disabled = true;
       }
 
       if (e.target.value == "owmWeather") {
@@ -1754,6 +1759,7 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("scrollInfiniteZone3Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone3Div")).hide();
       document.getElementById("scrollPauseZone3").disabled = false;
+      document.getElementById("scrollEffectZone3Out").disabled = false;
       $(document.getElementById("owmWhatToDisplayZone3div")).hide();
       $(document.getElementById("clockDisplayFormatZone3Div")).hide();
       $(document.getElementById("haSensorIdZone3Div")).hide();
@@ -1771,7 +1777,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone3Div")).hide();
         $(document.getElementById("clockDisplayFormatZone3Div")).show();
-        document.getElementById("scrollPauseZone3").disabled = true;
+        document.getElementById("scrollEffectZone3Out").disabled = true;
       }
 
       if (e.target.value == "owmWeather") {

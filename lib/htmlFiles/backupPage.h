@@ -96,8 +96,9 @@ const char backupPage[] PROGMEM = R"=====(<!doctype html>
         <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
         <p class="mb-1">Developed by <a href="https://github.com/widapro" class="text-reset text-decoration-none">widapro</a></p>
         <ul class="list-inline">
-          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" class="text-decoration-none">GitHub</a></li>
-          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" class="text-decoration-none">Report Bug</a></li>
+          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" target="_blank" class="text-decoration-none">GitHub</a></li>
+          <li class="list-inline-item">|</li>
+          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" target="_blank" class="text-decoration-none">Report Bug</a></li>
         </ul>
       </footer>
     </main>
