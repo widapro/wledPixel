@@ -31,8 +31,8 @@ ESP32 and ESP8266 and MAX7219 dot matrix display management
 ## Web UI - Settings
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel_settingsS.jpeg)
 
-##### Firmware compiled with next parameters:
-**ESP32**
+## Hardware GPIO for external devices, hardcoded:
+### ESP32**
 ```
 // Display pinout
 #define DATA_PIN  23         // ESP32 GPIO23
@@ -43,7 +43,7 @@ ESP32 and ESP8266 and MAX7219 dot matrix display management
 const int oneWireBus = 4;    // ESP32 GPIO04
 ```
 
-**ESP8266**
+### ESP8266**
 ```
 // Display pinout
 #define DATA_PIN  D7         // WeMos D1 mini or ESP8266 -> GPIO13
