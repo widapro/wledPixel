@@ -3,7 +3,7 @@
 
 ESP32 and ESP8266 and MAX7219 dot matrix display management
 
-[The latest firmware version can be found in Releases](https://github.com/widapro/wled-pixel-v2/releases)
+<a href="https://github.com/widapro/wled-pixel-v2/releases" target="_blank">The latest firmware version can be found in Releases</a>
 
 ## Supported key features:
 1. **Home Assistant client** [display sensor values]
@@ -22,11 +22,11 @@ ESP32 and ESP8266 and MAX7219 dot matrix display management
 14. Plus symbols font
 
 ##### Ingredients:
-1. Dot matrix display MAX7219, something like this: https://aliexpress.com/item/32618155357.html
-2. ESP32 or WeMos D1 Mini (ESP8266), something like this: https://aliexpress.com/item/32651747570.html
+1. Dot matrix display MAX7219, something like this: <a href="https://aliexpress.com/item/32618155357.html" target="_blank">https://aliexpress.com/item/32618155357.html</a>
+2. ESP32 or WeMos D1 Mini (ESP8266), something like this: <a href="https://aliexpress.com/item/32651747570.html" target="_blank">https://aliexpress.com/item/32651747570.html</a>
 
 ### 3D Printed Case
-- **3D Printed Case**: Download from [Printables](https://www.printables.com/model/1565724-wledpixel-smart-wifi-led-matrix-clock-info-display)
+- **3D Printed Case**: Download from <a href="https://www.printables.com/model/1565724-wledpixel-smart-wifi-led-matrix-clock-info-display" target="_blank">Printables</a>
 
 ## Web UI - Settings
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel_settingsS.jpeg)
@@ -69,7 +69,7 @@ const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 ## Building from Source
 
 ### Prerequisites
-- [PlatformIO](https://platformio.org/install) (VSCode extension or CLI)
+- <a href="https://platformio.org/install" target="_blank">PlatformIO</a> (VSCode extension or CLI)
 - Git
 
 ### Build Steps
@@ -275,6 +275,9 @@ Default effects:
 * `MARIO` (New!)
 * `GHOST` (New!)
 * `DINO` (New!)
+
+## Demo Video
+<a href="https://youtu.be/0IlsjbE2lU0" target="_blank">Watch the effects demo on YouTube</a>
 
 
 ## Home Assistant automation example:
