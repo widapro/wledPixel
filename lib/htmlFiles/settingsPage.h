@@ -95,6 +95,12 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                 </li>
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                     <div>
+                      <h6 class="my-0">Wifi Signal:</h6>
+                    </div>
+                    <span class="text-muted" id="wifiRssi"></span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between lh-sm">
+                    <div>
                       <h6 class="my-0">MQTT device prefix:</h6>
                     </div>
                     <span class="text-muted" id="mqttDevicePrefixInfo"></span>
@@ -349,14 +355,6 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone0" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone0">
                   </div>
-                  <div class="col-12" id="scrollInfiniteZone0Div" style="display: none;">
-                    <div class="form-check form-switch pt-4">
-                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone0" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone0">Infinite Scroll</label>
-                    </div>
-                  </div>
-
-
                   <div class="col-7" id="clockDisplayFormatZone0Div" style="display: none;">
                     <label for="clockDisplayFormatZone0" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone0" class="form-select">
@@ -371,6 +369,14 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                           <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
                   </div>
+                  <div class="col-12" id="scrollInfiniteZone0Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone0" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone0">Infinite Scroll</label>
+                    </div>
+                  </div>
+
+
                   <div class="col-7" id="owmWhatToDisplayZone0div" style="display: none;">
                     <label for="owmWhatToDisplayZone0" class="form-label">What to display</label>
                     <select id="owmWhatToDisplayZone0" class="form-select">
@@ -563,14 +569,6 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone1" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone1">
                   </div>
-                  <div class="col-12" id="scrollInfiniteZone1Div" style="display: none;">
-                    <div class="form-check form-switch pt-4">
-                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone1" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone1">Infinite Scroll</label>
-                    </div>
-                  </div>
-
-
                   <div class="col-7" id="clockDisplayFormatZone1Div" style="display: none;">
                     <label for="clockDisplayFormatZone1" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone1" class="form-select">
@@ -584,6 +582,12 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                           <option value="aa">aa</option>
                           <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
+                  </div>
+                  <div class="col-12" id="scrollInfiniteZone1Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone1" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone1">Infinite Scroll</label>
+                    </div>
                   </div>
                   <div class="col-7" id="owmWhatToDisplayZone1div" style="display: none;">
                     <label for="owmWhatToDisplayZone1" class="form-label">What to display</label>
@@ -759,14 +763,6 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone2" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone2">
                   </div>
-                  <div class="col-12" id="scrollInfiniteZone2Div" style="display: none;">
-                    <div class="form-check form-switch pt-4">
-                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone2" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone2">Infinite Scroll</label>
-                    </div>
-                  </div>
-
-
                   <div class="col-7" id="clockDisplayFormatZone2Div" style="display: none;">
                     <label for="clockDisplayFormatZone2" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone2" class="form-select">
@@ -780,6 +776,12 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                           <option value="aa">aa</option>
                           <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
+                  </div>
+                  <div class="col-12" id="scrollInfiniteZone2Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone2" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone2">Infinite Scroll</label>
+                    </div>
                   </div>
                   <div class="col-7" id="owmWhatToDisplayZone2div" style="display: none;">
                     <label for="owmWhatToDisplayZone2" class="form-label">What to display</label>
@@ -965,14 +967,6 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="mqttPostfixZone3" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="mqttPostfixZone3">
                   </div>
-                  <div class="col-12" id="scrollInfiniteZone3Div" style="display: none;">
-                    <div class="form-check form-switch pt-4">
-                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone3" onChange="preparePostRequest(event, this.id, this.checked);">
-                      <label class="form-check-label" for="scrollInfiniteZone3">Infinite Scroll</label>
-                    </div>
-                  </div>
-
-
                   <div class="col-7" id="clockDisplayFormatZone3Div" style="display: none;">
                     <label for="clockDisplayFormatZone3" class="form-label">Time format</label>
                         <select id="clockDisplayFormatZone3" class="form-select">
@@ -986,6 +980,12 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                           <option value="aa">aa</option>
                           <option value="ddmmaahhmm">ddmmaahhmm</option>
                         </select>
+                  </div>
+                  <div class="col-12" id="scrollInfiniteZone3Div" style="display: none;">
+                    <div class="form-check form-switch pt-4">
+                      <input class="form-check-input" type="checkbox" id="scrollInfiniteZone3" onChange="preparePostRequest(event, this.id, this.checked);">
+                      <label class="form-check-label" for="scrollInfiniteZone3">Infinite Scroll</label>
+                    </div>
                   </div>
                   <div class="col-7" id="owmWhatToDisplayZone3div" style="display: none;">
                     <label for="owmWhatToDisplayZone3" class="form-label">What to display</label>
@@ -1509,6 +1509,7 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
             document.getElementById("wifiSsid").innerText = data.wifiSsid;
             document.getElementById("wifiIp").innerText = data.wifiIp;
             document.getElementById("wifiGateway").innerText = data.wifiGateway;
+            document.getElementById("wifiRssi").innerText = data.wifiRssi + " dBm";
             document.getElementById("mqttDevicePrefixInfo").innerText = data.mqttDevicePrefix;
             document.getElementById("mqttDevicePrefixHelp").innerText = data.mqttDevicePrefix;
             document.getElementById("ds18b20TempInfo").innerText = data.ds18b20Temp;
@@ -1578,6 +1579,7 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
           if (workMode == "wallClock") {
             $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
             $(document.getElementById("clockDisplayFormat" + zoneDivSuffix)).show();
+            $(document.getElementById("scrollInfinite" + zoneDivSuffix)).show();
             document.getElementById("scrollEffectZone" + zoneIndex + "Out").disabled = true;
           }
           if (workMode == "haClient") {
@@ -1633,6 +1635,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("clockDisplayFormatZone0Div")).show();
+        $(document.getElementById("scrollInfiniteZone0Div")).show();
         document.getElementById("scrollEffectZone0Out").disabled = true;
       }
 
@@ -1681,6 +1684,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("clockDisplayFormatZone1Div")).show();
+        $(document.getElementById("scrollInfiniteZone1Div")).show();
         document.getElementById("scrollEffectZone1Out").disabled = true;
       }
 
@@ -1729,6 +1733,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("clockDisplayFormatZone2Div")).show();
+        $(document.getElementById("scrollInfiniteZone2Div")).show();
         document.getElementById("scrollEffectZone2Out").disabled = true;
       }
 
@@ -1777,6 +1782,7 @@ workModeZone0.addEventListener('change', function (e) {
       if (e.target.value == "wallClock") {
         $(document.getElementById("emptyZone3Div")).hide();
         $(document.getElementById("clockDisplayFormatZone3Div")).show();
+        $(document.getElementById("scrollInfiniteZone3Div")).show();
         document.getElementById("scrollEffectZone3Out").disabled = true;
       }
 

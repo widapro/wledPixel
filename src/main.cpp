@@ -80,7 +80,7 @@ const int oneWireBus = 4; // ESP32 GPIO04
 #endif
 
 /// GLOBAL ///
-const char *firmwareVer = "v3.3-rc";
+const char *firmwareVer = "v3.3";
 int nLoop = 0;
 bool restartESP = false;
 bool allTestsFinish = false;
@@ -244,8 +244,8 @@ const uint8_t PROGMEM wave[F_WAVE * W_WAVE] = // triangular wave / worm
 
 const uint8_t F_MARIO = 1;
 const uint8_t W_MARIO = 8;
-const uint8_t PROGMEM mario[F_MARIO * W_MARIO] = {0x00, 0xde, 0x7f, 0x5b,
-                                                  0x57, 0x7b, 0xd6, 0x00};
+const uint8_t PROGMEM mario[F_MARIO * W_MARIO] = {0x00, 0xd6, 0x7b, 0x57,
+                                                  0x5b, 0x7f, 0xde, 0x00};
 
 const uint8_t F_GHOST = 1;
 const uint8_t W_GHOST = 8;
@@ -254,8 +254,8 @@ const uint8_t PROGMEM ghost[F_GHOST * W_GHOST] = {0x7c, 0xbe, 0x77, 0xbf,
 
 const uint8_t F_DINO = 1;
 const uint8_t W_DINO = 8;
-const uint8_t PROGMEM dino[F_DINO * W_DINO] = {0x38, 0x30, 0xe0, 0x30,
-                                               0x38, 0xfe, 0x3b, 0x23};
+const uint8_t PROGMEM dino[F_DINO * W_DINO] = {0x23, 0x3b, 0xfe, 0x38,
+                                               0x30, 0xe0, 0x30, 0x38};
 
 const uint8_t F_ROLL1 = 4;
 const uint8_t W_ROLL1 = 8;
@@ -1877,14 +1877,24 @@ void displayAnimation() {
           zones[z].textFits = (textWidth <= zoneWidth);
 
           if (!zones[z].textFits) {
-            // Force Ticker Mode for wide text
-            P.setTextAlignment(z, PA_LEFT);
-            effIn = PA_SCROLL_LEFT;
-            effOut = PA_SCROLL_LEFT;
-            // No mid-scroll pause - for clock, pause will be blank screen
-            // between loops
-            P.setPause(z, 0);
-            P.displayClear(z);
+            // Check if we should scroll or stay static
+            if (zones[z].workMode == "wallClock" && !zones[z].scrollInfinite) {
+              // Static display for wallClock with scrollInfinite OFF
+              effIn = PA_PRINT;
+              effOut = PA_NO_EFFECT;
+              // Keep standard alignment and pause for static display
+              P.setTextAlignment(z, PA_LEFT);
+              P.setPause(z, 100);
+            } else {
+              // Force Ticker Mode for wide text (scrolling)
+              P.setTextAlignment(z, PA_LEFT);
+              effIn = PA_SCROLL_LEFT;
+              effOut = PA_SCROLL_LEFT;
+              // No mid-scroll pause - for clock, pause will be blank screen
+              // between loops
+              P.setPause(z, 0);
+              P.displayClear(z);
+            }
           } else {
             // Restore standard config
             P.setTextAlignment(z, stringToTextPositionT(zones[z].scrollAlign));
@@ -1966,9 +1976,20 @@ void displayAnimation() {
             zones[z].textFits = (textWidth <= zoneWidth);
 
             if (!zones[z].textFits) {
-              P.setTextAlignment(z, PA_LEFT);
-              P.setTextEffect(z, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
-              P.setPause(z, 0);
+              // For wallClock: only scroll if scrollInfinite is enabled
+              // Otherwise show static (truncated) text with blinking
+              if (zones[z].workMode == "wallClock" &&
+                  !zones[z].scrollInfinite) {
+                // Static display - use PA_PRINT for instant static text, no
+                // animation
+                P.setTextEffect(z, PA_PRINT, PA_NO_EFFECT);
+              } else {
+                // Scroll (owmWeather always, or wallClock with scrollInfinite
+                // ON)
+                P.setTextAlignment(z, PA_LEFT);
+                P.setTextEffect(z, PA_SCROLL_LEFT, PA_SCROLL_LEFT);
+                P.setPause(z, 0);
+              }
             } else {
               P.setTextEffect(z, PA_NO_EFFECT, PA_NO_EFFECT);
             }
@@ -1986,7 +2007,7 @@ void displayAnimation() {
                   (zones[z].workMode == "mqttClient" ||
                    zones[z].workMode == "manualInput")) ||
                  (allTestsFinish && zones[z].workMode == "wallClock" &&
-                  !zones[z].textFits)) {
+                  !zones[z].textFits && zones[z].scrollInfinite)) {
 
         // For wallClock with text that doesn't fit: blank screen pause between
         // loops
@@ -2432,6 +2453,7 @@ void setup() {
     doc["wifiSsid"] = WiFi.SSID();
     doc["wifiIp"] = WiFi.localIP().toString();
     doc["wifiGateway"] = WiFi.gatewayIP().toString();
+    doc["wifiRssi"] = WiFi.RSSI();
 
     // MQTT
     doc["mqttEnable"] = mqttEnable;
@@ -2768,11 +2790,20 @@ void setup() {
               zones[n].newMessageAvailable = false;
               zoneUpdate[n] = true;
             } else {
-              textEffect_t effOut =
-                  stringToTextEffectT(zones[n].scrollEffectOut);
-              P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn),
-                              effOut);
-              P.displayReset(n);
+              // For MQTT/Manual: just store new effects, don't reset display
+              // Effects will be applied when next message is processed
+              // or when animation naturally completes
+              if (zones[n].workMode != "mqttClient" &&
+                  zones[n].workMode != "manualInput") {
+                textEffect_t effOut =
+                    stringToTextEffectT(zones[n].scrollEffectOut);
+                P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn),
+                                effOut);
+                P.displayReset(n);
+              }
+              // For MQTT/Manual: mark that effects changed, will apply on next
+              // message
+              zones[n].restoreEffects = true;
             }
           }
           if (p->name() == "mqttTextTopic") {
@@ -2872,8 +2903,15 @@ void setup() {
         }
         if (p->name() == "ntpUpdateInterval")
           ntpUpdateInterval = p->value().toInt();
-        if (p->name() == "ntpServer")
+        if (p->name() == "ntpServer") {
           ntpServer = p->value().c_str();
+          timeClient.setPoolServerName(ntpServer.c_str());
+        }
+
+        // Apply timezone change to timeClient and schedule NTP update
+        timeClient.setTimeOffset(ntpTimeZone * 3600);
+        timeClient.setUpdateInterval(ntpUpdateInterval * 3600);
+        shouldUpdateNtp = true;
 
         finishRequest = true;
       }
@@ -2988,8 +3026,7 @@ void setup() {
         saveVarsToConfFile(key->value(), n);
       }
       shouldMqttPublish = true;
-      if (key->value() == "wallClockSett")
-        ntpUpdateTime();
+      // NTP update for wallClockSett is now handled via shouldUpdateNtp flag
       // Reinforce power state after zone settings to prevent display
       // turning off
       if (key->value() == "zoneSettings" && power) {
@@ -3419,23 +3456,45 @@ void loop() {
         if (zones[n].clockDisplayFormat == "HHMM" ||
             zones[n].clockDisplayFormat == "HHMMSS" ||
             zones[n].clockDisplayFormat == "ddmmaahhmm") {
-          // Skip blink logic if dots blink is disabled OR if text doesn't fit
-          // (scrolling)
-          if (!disableDotsBlink && zones[n].textFits) {
+          // Skip blink logic if dots blink is disabled OR if scrolling
+          // (textFits false AND scrollInfinite true) Allow blink if: text fits
+          // OR scrollInfinite is OFF (static display)
+          if (!disableDotsBlink &&
+              (zones[n].textFits || !zones[n].scrollInfinite)) {
             if (currentMillis - zones[n].previousMillis >= 1000 ||
                 zones[n].forceUpdate) {
-              if ((zones[n].curTime == curTimeNew ||
-                   zones[n].curTime == flashClockDots(curTimeNew)) &&
-                  !zones[n].forceUpdate) {
+              // For HHMMSS, seconds change every second but we still want colon
+              // blinking So consider it "same minute" for blink purposes if
+              // only seconds changed
+              bool isSameMinuteForBlink = false;
+              if (zones[n].clockDisplayFormat == "HHMMSS") {
+                // Compare just HH:MM part (first 5 chars after removing any
+                // blink char)
+                String curNoSec = zones[n].curTime.substring(0, 5);
+                String newNoSec = curTimeNew.substring(0, 5);
+                curNoSec.replace("¦", ":");
+                newNoSec.replace("¦", ":");
+                isSameMinuteForBlink = (curNoSec == newNoSec);
+              } else {
+                isSameMinuteForBlink =
+                    (zones[n].curTime == curTimeNew ||
+                     zones[n].curTime == flashClockDots(curTimeNew));
+              }
+
+              if (isSameMinuteForBlink && !zones[n].forceUpdate) {
                 // Same minute - blink logic
                 if (!P.getZoneStatus(n))
                   continue; // Skip if animation running
 
                 zones[n].previousMillis = currentMillis;
-                if (zones[n].curTime.indexOf(":") > 0)
+                // Toggle colon visibility
+                if (zones[n].curTime.indexOf(":") > 0) {
                   curTimeNew.replace(":", "¦");
+                } else {
+                  // curTime has ¦, so curTimeNew should have : (already does)
+                }
                 P.setPause(n, 100);
-                P.setTextEffect(n, PA_NO_EFFECT, PA_NO_EFFECT);
+                P.setTextEffect(n, PA_PRINT, PA_NO_EFFECT);
                 zones[n].curTime = curTimeNew;
                 zoneNewMessage(n, zones[n].curTime, "", false);
               } else {
@@ -3443,12 +3502,17 @@ void loop() {
                 zones[n].previousMillis = currentMillis;
                 zones[n].curTime = curTimeNew;
                 P.setPause(n, 100);
-                P.setTextEffect(
-                    n,
-                    zones[n].forceUpdate
-                        ? PA_PRINT
-                        : stringToTextEffectT(zones[n].scrollEffectIn),
-                    PA_NO_EFFECT);
+                // Use PA_PRINT for static display when text doesn't fit and
+                // scrollInfinite is OFF
+                textEffect_t inEffect;
+                if (!zones[n].textFits && !zones[n].scrollInfinite) {
+                  inEffect = PA_PRINT;
+                } else if (zones[n].forceUpdate) {
+                  inEffect = PA_PRINT;
+                } else {
+                  inEffect = stringToTextEffectT(zones[n].scrollEffectIn);
+                }
+                P.setTextEffect(n, inEffect, PA_NO_EFFECT);
                 zones[n].forceUpdate = false;
                 zoneNewMessage(n, zones[n].curTime, "", true, true);
               }
@@ -3456,6 +3520,8 @@ void loop() {
           } else {
             if (zones[n].curTime != curTimeNew) {
               zones[n].curTime = curTimeNew;
+              // For scrolling mode - just update message, let displayAnimation
+              // handle effects
               zoneNewMessage(n, zones[n].curTime, "");
             }
           }
