@@ -60,8 +60,7 @@ const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 
 
 ## Wiring
-![img](https://github.com/widapro/wledPixel/blob/9ea4164575de9fc7c5ffbd9eb50f75493889256c/img/WledPixel%20Wiring800.png)
-
+![Wiring diagram](img/wledPixel_Wiring.png)
 
 ## First boot:
 > - Device will boot in wifi access point mode and show "AP Mode" on the display.
