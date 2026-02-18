@@ -343,10 +343,15 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                         <option value="wopr">WOPR Mode (WarGames)</option>
+                        <option value="countdown">Countdown timer</option>
                     </select>
                   </div>
                   
                   <div class="col-7" id="emptyZone0Div"></div>
+                  <div class="col-7" id="countdownTargetZone0Div" style="display: none;">
+                    <label for="countdownTargetZone0" class="form-label">Target date/time</label>
+                    <input type="datetime-local" class="form-control" id="countdownTargetZone0" step="1">
+                  </div>
                   <div class="col-5" id="mqttZone0PrefixDiv" style="display: none;">
                     <label for="mqttZone0Prefix" class="form-label">MQTT zone text topic</label>
                         <input type="text" class="form-control" id="mqttTextTopicZone0">
@@ -399,6 +404,54 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="ds18b20PostfixZone0" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="ds18b20PostfixZone0">
                   </div>
+                  <!-- Countdown settings Zone 0 -->
+                  <div id="countdownSettingsZone0Div" style="display: none;">
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <label for="countdownFormatZone0" class="form-label">Display format</label>
+                        <select id="countdownFormatZone0" class="form-select">
+                          <option value="auto">Auto</option>
+                          <option value="YY">YY</option>
+                          <option value="YYMM">YY MM</option>
+                          <option value="YYMMDDHHMM">YY MM DD HH MM</option>
+                          <option value="YYMMDDHHMMSS">YY MM DD HH MM SS</option>
+                          <option value="DD">DD</option>
+                          <option value="DDHH">DD HH</option>
+                          <option value="DDHHMM">DD HH MM</option>
+                          <option value="DDHHMMSS">DD HH MM SS</option>
+                          <option value="DDMM">DD MM</option>
+                          <option value="HH">HH</option>
+                          <option value="HHMM">HH MM</option>
+                          <option value="HHMMSS">HH MM SS</option>
+                          <option value="MM">MM</option>
+                          <option value="MMSS">MM SS</option>
+                          <option value="SS">SS</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownFinishZone0" class="form-label">On finish</label>
+                        <select id="countdownFinishZone0" class="form-select">
+                          <option value="blinkForever">Blink forever</option>
+                          <option value="blink3">Blink 3 times</option>
+                          <option value="none">Static</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownPrefixZone0" class="form-label">Prefix text</label>
+                        <input type="text" class="form-control" id="countdownPrefixZone0" maxlength="10">
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownSuffixZone0" class="form-label">Suffix text</label>
+                        <input type="text" class="form-control" id="countdownSuffixZone0" maxlength="10">
+                      </div>
+                      <div class="col-12">
+                        <div class="form-check form-switch pt-2">
+                          <input class="form-check-input" type="checkbox" id="countdownShowUnitsZone0">
+                          <label class="form-check-label" for="countdownShowUnitsZone0">Show units (d, h, m, s)</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div class="col-5" id="fontZone0div">
                     <label for="fontZone0" class="form-label">Font</label>
@@ -407,6 +460,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
+                        <option value="wledFont_CompactSymbols">Compact + Symbols</option>
                     </select>
                   </div>
                   <div class="col-7">
@@ -421,7 +475,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone0InDiv">
                     <label for="scrollEffectZone0In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone0In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -469,7 +523,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="DINO">Dino</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollSpeedZone0Div">
                       <label for="scrollSpeedZone0" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone0" aria-describedby="scrollSpeedZone0Help">
@@ -477,7 +531,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone0OutDiv">
                     <label for="scrollEffectZone0Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone0Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -524,7 +578,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollPauseZone0Div">
                     <label for="scrollPauseZone0" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone0">
@@ -532,7 +586,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollAlignZone0Div">
                     <label for="scrollAlignZone0" class="form-label">Alignment</label>
                     <select id="scrollAlignZone0" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -544,8 +598,9 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
 
                   <button id="zone0Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
-                  <hr class="my-4">
-                  <h3 class="mb-3">Zone 1</h3>
+                  <div id="zone1Wrapper" class="row g-3">
+                  <div class="col-12"><hr class="my-4"></div>
+                  <div class="col-12"><h3 class="mb-3">Zone 1</h3></div>
 
                   <div class="col-5">
                     <label for="workModeZone1" class="form-label">Working mode</label>
@@ -557,10 +612,15 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                         <option value="wopr">WOPR Mode (WarGames)</option>
+                        <option value="countdown">Countdown timer</option>
                     </select>
                   </div>
                   
                   <div class="col-7" id="emptyZone1Div"></div>
+                  <div class="col-7" id="countdownTargetZone1Div" style="display: none;">
+                    <label for="countdownTargetZone1" class="form-label">Target date/time</label>
+                    <input type="datetime-local" class="form-control" id="countdownTargetZone1" step="1">
+                  </div>
                   <div class="col-5" id="mqttZone1PrefixDiv" style="display: none;">
                     <label for="mqttZone1Prefix" class="form-label">MQTT zone text topic</label>
                         <input type="text" class="form-control" id="mqttTextTopicZone1">
@@ -611,6 +671,54 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="ds18b20PostfixZone1" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="ds18b20PostfixZone1">
                   </div>
+                  <!-- Countdown settings Zone 1 -->
+                  <div id="countdownSettingsZone1Div" style="display: none;">
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <label for="countdownFormatZone1" class="form-label">Display format</label>
+                        <select id="countdownFormatZone1" class="form-select">
+                          <option value="auto">Auto</option>
+                          <option value="YY">YY</option>
+                          <option value="YYMM">YY MM</option>
+                          <option value="YYMMDDHHMM">YY MM DD HH MM</option>
+                          <option value="YYMMDDHHMMSS">YY MM DD HH MM SS</option>
+                          <option value="DD">DD</option>
+                          <option value="DDHH">DD HH</option>
+                          <option value="DDHHMM">DD HH MM</option>
+                          <option value="DDHHMMSS">DD HH MM SS</option>
+                          <option value="DDMM">DD MM</option>
+                          <option value="HH">HH</option>
+                          <option value="HHMM">HH MM</option>
+                          <option value="HHMMSS">HH MM SS</option>
+                          <option value="MM">MM</option>
+                          <option value="MMSS">MM SS</option>
+                          <option value="SS">SS</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownFinishZone1" class="form-label">On finish</label>
+                        <select id="countdownFinishZone1" class="form-select">
+                          <option value="blinkForever">Blink forever</option>
+                          <option value="blink3">Blink 3 times</option>
+                          <option value="none">Static</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownPrefixZone1" class="form-label">Prefix text</label>
+                        <input type="text" class="form-control" id="countdownPrefixZone1" maxlength="10">
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownSuffixZone1" class="form-label">Suffix text</label>
+                        <input type="text" class="form-control" id="countdownSuffixZone1" maxlength="10">
+                      </div>
+                      <div class="col-12">
+                        <div class="form-check form-switch pt-2">
+                          <input class="form-check-input" type="checkbox" id="countdownShowUnitsZone1">
+                          <label class="form-check-label" for="countdownShowUnitsZone1">Show units (d, h, m, s)</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div class="col-5" id="fontZone1div">
                     <label for="fontZone1" class="form-label">Font</label>
@@ -619,6 +727,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
+                        <option value="wledFont_CompactSymbols">Compact + Symbols</option>
                     </select>
                   </div>
                   <div class="col-7">
@@ -633,7 +742,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone1InDiv">
                     <label for="scrollEffectZone1In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone1In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -665,7 +774,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollSpeedZone1Div">
                       <label for="scrollSpeedZone1" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone1" aria-describedby="scrollSpeedZone1Help">
@@ -673,7 +782,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone1OutDiv">
                     <label for="scrollEffectZone1Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone1Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -717,7 +826,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollPauseZone1Div">
                     <label for="scrollPauseZone1" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone1">
@@ -725,7 +834,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollAlignZone1Div">
                     <label for="scrollAlignZone1" class="form-label">Alignment</label>
                     <select id="scrollAlignZone1" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -736,10 +845,11 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                   
 
                   <button id="zone1Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+                  </div>
 
-
-                <hr class="my-4">
-                  <h3 class="mb-3">Zone 2</h3>
+                  <div id="zone2Wrapper" class="row g-3">
+                  <div class="col-12"><hr class="my-4"></div>
+                  <div class="col-12"><h3 class="mb-3">Zone 2</h3></div>
 
                   <div class="col-5">
                     <label for="workModeZone2" class="form-label">Working mode</label>
@@ -751,10 +861,15 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                         <option value="wopr">WOPR Mode (WarGames)</option>
+                        <option value="countdown">Countdown timer</option>
                     </select>
                   </div>
                   
                   <div class="col-7" id="emptyZone2Div"></div>
+                  <div class="col-7" id="countdownTargetZone2Div" style="display: none;">
+                    <label for="countdownTargetZone2" class="form-label">Target date/time</label>
+                    <input type="datetime-local" class="form-control" id="countdownTargetZone2" step="1">
+                  </div>
                   <div class="col-5" id="mqttZone2PrefixDiv" style="display: none;">
                     <label for="mqttZone2Prefix" class="form-label">MQTT zone text topic</label>
                         <input type="text" class="form-control" id="mqttTextTopicZone2">
@@ -805,6 +920,54 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="ds18b20PostfixZone2" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="ds18b20PostfixZone2">
                   </div>
+                  <!-- Countdown settings Zone 2 -->
+                  <div id="countdownSettingsZone2Div" style="display: none;">
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <label for="countdownFormatZone2" class="form-label">Display format</label>
+                        <select id="countdownFormatZone2" class="form-select">
+                          <option value="auto">Auto</option>
+                          <option value="YY">YY</option>
+                          <option value="YYMM">YY MM</option>
+                          <option value="YYMMDDHHMM">YY MM DD HH MM</option>
+                          <option value="YYMMDDHHMMSS">YY MM DD HH MM SS</option>
+                          <option value="DD">DD</option>
+                          <option value="DDHH">DD HH</option>
+                          <option value="DDHHMM">DD HH MM</option>
+                          <option value="DDHHMMSS">DD HH MM SS</option>
+                          <option value="DDMM">DD MM</option>
+                          <option value="HH">HH</option>
+                          <option value="HHMM">HH MM</option>
+                          <option value="HHMMSS">HH MM SS</option>
+                          <option value="MM">MM</option>
+                          <option value="MMSS">MM SS</option>
+                          <option value="SS">SS</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownFinishZone2" class="form-label">On finish</label>
+                        <select id="countdownFinishZone2" class="form-select">
+                          <option value="blinkForever">Blink forever</option>
+                          <option value="blink3">Blink 3 times</option>
+                          <option value="none">Static</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownPrefixZone2" class="form-label">Prefix text</label>
+                        <input type="text" class="form-control" id="countdownPrefixZone2" maxlength="10">
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownSuffixZone2" class="form-label">Suffix text</label>
+                        <input type="text" class="form-control" id="countdownSuffixZone2" maxlength="10">
+                      </div>
+                      <div class="col-12">
+                        <div class="form-check form-switch pt-2">
+                          <input class="form-check-input" type="checkbox" id="countdownShowUnitsZone2">
+                          <label class="form-check-label" for="countdownShowUnitsZone2">Show units (d, h, m, s)</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div class="col-5" id="fontZone2div">
                     <label for="fontZone2" class="form-label">Font</label>
@@ -813,6 +976,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
+                        <option value="wledFont_CompactSymbols">Compact + Symbols</option>
                     </select>
                   </div>
                   <div class="col-7">
@@ -827,7 +991,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone2InDiv">
                     <label for="scrollEffectZone2In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone2In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -871,7 +1035,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollSpeedZone2Div">
                       <label for="scrollSpeedZone2" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone2" aria-describedby="scrollSpeedZone2Help">
@@ -879,7 +1043,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone2OutDiv">
                     <label for="scrollEffectZone2Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone2Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -923,7 +1087,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollPauseZone2Div">
                     <label for="scrollPauseZone2" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone2">
@@ -931,7 +1095,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollAlignZone2Div">
                     <label for="scrollAlignZone2" class="form-label">Alignment</label>
                     <select id="scrollAlignZone2" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -940,10 +1104,12 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
       
-                <button id="zone2Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+                  <button id="zone2Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
+                  </div>
 
-                <hr class="my-4">
-                  <h3 class="mb-3">Zone 3</h3>
+                  <div id="zone3WrapperPart1" class="row g-3">
+                  <div class="col-12"><hr class="my-4"></div>
+                  <div class="col-12"><h3 class="mb-3">Zone 3</h3></div>
 
                   <div class="col-5">
                     <label for="workModeZone3" class="form-label">Working mode</label>
@@ -955,10 +1121,15 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="haClient">Home Assistant client</option>
                         <option value="intTempSensor">Internal Temperature sensor (ds18b20)</option>
                         <option value="wopr">WOPR Mode (WarGames)</option>
+                        <option value="countdown">Countdown timer</option>
                     </select>
                   </div>
                   
                   <div class="col-7" id="emptyZone3Div"></div>
+                  <div class="col-7" id="countdownTargetZone3Div" style="display: none;">
+                    <label for="countdownTargetZone3" class="form-label">Target date/time</label>
+                    <input type="datetime-local" class="form-control" id="countdownTargetZone3" step="1">
+                  </div>
                   <div class="col-5" id="mqttZone3PrefixDiv" style="display: none;">
                     <label for="mqttZone3Prefix" class="form-label">MQTT zone text topic</label>
                         <input type="text" class="form-control" id="mqttTextTopicZone3">
@@ -1009,6 +1180,54 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     <label for="ds18b20PostfixZone3" class="form-label">Postfix</label>
                         <input type="text" class="form-control" id="ds18b20PostfixZone3">
                   </div>
+                  <!-- Countdown settings Zone 3 -->
+                  <div id="countdownSettingsZone3Div" style="display: none;">
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <label for="countdownFormatZone3" class="form-label">Display format</label>
+                        <select id="countdownFormatZone3" class="form-select">
+                          <option value="auto">Auto</option>
+                          <option value="YY">YY</option>
+                          <option value="YYMM">YY MM</option>
+                          <option value="YYMMDDHHMM">YY MM DD HH MM</option>
+                          <option value="YYMMDDHHMMSS">YY MM DD HH MM SS</option>
+                          <option value="DD">DD</option>
+                          <option value="DDHH">DD HH</option>
+                          <option value="DDHHMM">DD HH MM</option>
+                          <option value="DDHHMMSS">DD HH MM SS</option>
+                          <option value="DDMM">DD MM</option>
+                          <option value="HH">HH</option>
+                          <option value="HHMM">HH MM</option>
+                          <option value="HHMMSS">HH MM SS</option>
+                          <option value="MM">MM</option>
+                          <option value="MMSS">MM SS</option>
+                          <option value="SS">SS</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownFinishZone3" class="form-label">On finish</label>
+                        <select id="countdownFinishZone3" class="form-select">
+                          <option value="blinkForever">Blink forever</option>
+                          <option value="blink3">Blink 3 times</option>
+                          <option value="none">Static</option>
+                        </select>
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownPrefixZone3" class="form-label">Prefix text</label>
+                        <input type="text" class="form-control" id="countdownPrefixZone3" maxlength="10">
+                      </div>
+                      <div class="col-6">
+                        <label for="countdownSuffixZone3" class="form-label">Suffix text</label>
+                        <input type="text" class="form-control" id="countdownSuffixZone3" maxlength="10">
+                      </div>
+                      <div class="col-12">
+                        <div class="form-check form-switch pt-2">
+                          <input class="form-check-input" type="checkbox" id="countdownShowUnitsZone3">
+                          <label class="form-check-label" for="countdownShowUnitsZone3">Show units (d, h, m, s)</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div class="col-5" id="fontZone3div">
                     <label for="fontZone3" class="form-label">Font</label>
@@ -1017,6 +1236,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="wledFont">Wled font</option>
                         <option value="wledFont_cyrillic">Cyrillic</option>
                         <option value="wledSymbolFont">Wled Symbol Font</option>
+                        <option value="wledFont_CompactSymbols">Compact + Symbols</option>
                     </select>
                   </div>
                   <div class="col-7">
@@ -1031,7 +1251,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone3InDiv">
                     <label for="scrollEffectZone3In" class="form-label">Scroll effect <span class="text-primary"><b>IN</b></span></label>
                     <select id="scrollEffectZone3In" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -1075,7 +1295,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollSpeedZone3Div">
                       <label for="scrollSpeedZone3" class="form-label">Scroll speed</label>
                       <div class="input-group mb-3">
                           <input type="text" class="form-control" id="scrollSpeedZone3" aria-describedby="scrollSpeedZone3Help">
@@ -1083,7 +1303,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollEffectZone3OutDiv">
                     <label for="scrollEffectZone3Out" class="form-label">Scroll effect <span class="text-primary"><b>OUT</b></span></label>
                     <select id="scrollEffectZone3Out" class="form-select">
                         <option value="PA_NO_EFFECT">NO_EFFECT</option>
@@ -1127,7 +1347,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                         <option value="PA_GROW_DOWN">GROW_DOWN</option>
                       </select>
                   </div>
-                  <div class="col-7">
+                  <div class="col-7" id="scrollPauseZone3Div">
                     <label for="scrollPauseZone3" class="form-label">Scroll pause</label>
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" id="scrollPauseZone3">
@@ -1135,7 +1355,7 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                     </div>
                   </div>
 
-                  <div class="col-5">
+                  <div class="col-5" id="scrollAlignZone3Div">
                     <label for="scrollAlignZone3" class="form-label">Alignment</label>
                     <select id="scrollAlignZone3" class="form-select">
                         <option value="PA_LEFT">Left</option>
@@ -1144,15 +1364,16 @@ const char settingsPagePart1[] PROGMEM = R"=====(<!doctype html>
                       </select>
                   </div>
                   
+                  </div>
                   <!-- SPLIT POINT -->
                   
                   </div>)=====";
 
-const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
-                    <div class="col-12">
-      
+const char settingsPagePart2[] PROGMEM =
+    R"=====(<div class="row g-3" id="zone3ApplyRow">
+                <div class="col-12">
                 <button id="zone3Settings" class="w-100 btn btn-primary btn-lg" onClick="preparePostRequest(event, this.id, null);">Apply</button>
-                    </div>
+                </div>
                  </div>
 
 
@@ -1489,6 +1710,31 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
             document.getElementById("ds18b20PostfixZone1").value = data.ds18b20PostfixZone1;
             document.getElementById("ds18b20PostfixZone2").value = data.ds18b20PostfixZone2;
             document.getElementById("ds18b20PostfixZone3").value = data.ds18b20PostfixZone3;
+            // Countdown settings
+            if(data.countdownFormatZone0) document.getElementById("countdownFormatZone0").value = data.countdownFormatZone0;
+            if(data.countdownFormatZone1) document.getElementById("countdownFormatZone1").value = data.countdownFormatZone1;
+            if(data.countdownFormatZone2) document.getElementById("countdownFormatZone2").value = data.countdownFormatZone2;
+            if(data.countdownFormatZone3) document.getElementById("countdownFormatZone3").value = data.countdownFormatZone3;
+            if(data.countdownFinishZone0) document.getElementById("countdownFinishZone0").value = data.countdownFinishZone0;
+            if(data.countdownFinishZone1) document.getElementById("countdownFinishZone1").value = data.countdownFinishZone1;
+            if(data.countdownFinishZone2) document.getElementById("countdownFinishZone2").value = data.countdownFinishZone2;
+            if(data.countdownFinishZone3) document.getElementById("countdownFinishZone3").value = data.countdownFinishZone3;
+            if(data.countdownTargetZone0) document.getElementById("countdownTargetZone0").value = data.countdownTargetZone0;
+            if(data.countdownTargetZone1) document.getElementById("countdownTargetZone1").value = data.countdownTargetZone1;
+            if(data.countdownTargetZone2) document.getElementById("countdownTargetZone2").value = data.countdownTargetZone2;
+            if(data.countdownTargetZone3) document.getElementById("countdownTargetZone3").value = data.countdownTargetZone3;
+            if(data.countdownPrefixZone0) document.getElementById("countdownPrefixZone0").value = data.countdownPrefixZone0;
+            if(data.countdownPrefixZone1) document.getElementById("countdownPrefixZone1").value = data.countdownPrefixZone1;
+            if(data.countdownPrefixZone2) document.getElementById("countdownPrefixZone2").value = data.countdownPrefixZone2;
+            if(data.countdownPrefixZone3) document.getElementById("countdownPrefixZone3").value = data.countdownPrefixZone3;
+            if(data.countdownSuffixZone0) document.getElementById("countdownSuffixZone0").value = data.countdownSuffixZone0;
+            if(data.countdownSuffixZone1) document.getElementById("countdownSuffixZone1").value = data.countdownSuffixZone1;
+            if(data.countdownSuffixZone2) document.getElementById("countdownSuffixZone2").value = data.countdownSuffixZone2;
+            if(data.countdownSuffixZone3) document.getElementById("countdownSuffixZone3").value = data.countdownSuffixZone3;
+            document.getElementById("countdownShowUnitsZone0").checked = !!data.countdownShowUnitsZone0;
+            document.getElementById("countdownShowUnitsZone1").checked = !!data.countdownShowUnitsZone1;
+            document.getElementById("countdownShowUnitsZone2").checked = !!data.countdownShowUnitsZone2;
+            document.getElementById("countdownShowUnitsZone3").checked = !!data.countdownShowUnitsZone3;
             document.getElementById("charspacingZone0").value = data.charspacingZone0;
             document.getElementById("charspacingZone1").value = data.charspacingZone1;
             document.getElementById("charspacingZone2").value = data.charspacingZone2;
@@ -1527,14 +1773,18 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
 
     function updateUI(data) {
      const zoneNumbers = document.getElementById("zoneNumbers").value;
-     
-     if (zoneNumbers == "1") {
+          if (zoneNumbers == "1") {
         $(document.getElementById("zone1BeginDiv")).hide();
         $(document.getElementById("zone1EndDiv")).hide();
         $(document.getElementById("zone2BeginDiv")).hide();
         $(document.getElementById("zone2EndDiv")).hide();
         $(document.getElementById("zone3BeginDiv")).hide();
         $(document.getElementById("zone3EndDiv")).hide();
+
+        $('#zone1Wrapper').addClass('d-none');
+        $('#zone2Wrapper').addClass('d-none');
+        $('#zone3WrapperPart1').addClass('d-none');
+        $('#zone3ApplyRow').addClass('d-none');
       }
       if (zoneNumbers == "2") {
         $(document.getElementById("zone1BeginDiv")).show();
@@ -1543,6 +1793,11 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
         $(document.getElementById("zone2EndDiv")).hide();
         $(document.getElementById("zone3BeginDiv")).hide();
         $(document.getElementById("zone3EndDiv")).hide();
+
+        $('#zone1Wrapper').removeClass('d-none');
+        $('#zone2Wrapper').addClass('d-none');
+        $('#zone3WrapperPart1').addClass('d-none');
+        $('#zone3ApplyRow').addClass('d-none');
       }
       if (zoneNumbers == "3") {
         $(document.getElementById("zone1BeginDiv")).show();
@@ -1551,6 +1806,11 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
         $(document.getElementById("zone2EndDiv")).show();
         $(document.getElementById("zone3BeginDiv")).hide();
         $(document.getElementById("zone3EndDiv")).hide();
+
+        $('#zone1Wrapper').removeClass('d-none');
+        $('#zone2Wrapper').removeClass('d-none');
+        $('#zone3WrapperPart1').addClass('d-none');
+        $('#zone3ApplyRow').addClass('d-none');
       }
       if (zoneNumbers == "4") {
         $(document.getElementById("zone1BeginDiv")).show();
@@ -1559,6 +1819,11 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
         $(document.getElementById("zone2EndDiv")).show();
         $(document.getElementById("zone3BeginDiv")).show();
         $(document.getElementById("zone3EndDiv")).show();
+
+        $('#zone1Wrapper').removeClass('d-none');
+        $('#zone2Wrapper').removeClass('d-none');
+        $('#zone3WrapperPart1').removeClass('d-none');
+        $('#zone3ApplyRow').removeClass('d-none');
       }
 
       function updateZoneFields(zoneIndex) {
@@ -1595,6 +1860,15 @@ const char settingsPagePart2[] PROGMEM = R"=====(<div class="row mt-3">
             $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
             $(document.getElementById("scrollInfinite" + zoneDivSuffix)).show();
           }
+          if (workMode == "countdown") {
+            $(document.getElementById("emptyZone" + zoneIndex + "Div")).hide();
+            $(document.getElementById("countdownTargetZone" + zoneIndex + "Div")).show();
+            $(document.getElementById("countdownSettingsZone" + zoneIndex + "Div")).show();
+            $(document.getElementById("scrollInfinite" + zoneDivSuffix)).show();
+            $(document.getElementById("scrollSpeedZone" + zoneIndex + "Div")).show();
+            $(document.getElementById("scrollAlignZone" + zoneIndex + "Div")).show();
+            document.getElementById("scrollEffectZone" + zoneIndex + "Out").disabled = true;
+          }
       }
 
       updateZoneFields(0);
@@ -1616,13 +1890,18 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("mqttPostfixZone0Div")).hide();
       $(document.getElementById("scrollInfiniteZone0Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone0Div")).hide();
-      document.getElementById("scrollPauseZone0").disabled = false;
-      document.getElementById("scrollEffectZone0Out").disabled = false;
+      $(document.getElementById("scrollPauseZone0Div")).show();
+      $(document.getElementById("scrollEffectZone0InDiv")).show();
+      $(document.getElementById("scrollEffectZone0OutDiv")).show();
+      $(document.getElementById("scrollSpeedZone0Div")).show();
+      $(document.getElementById("scrollAlignZone0Div")).show();
       $(document.getElementById("owmWhatToDisplayZone0div")).hide();
       $(document.getElementById("clockDisplayFormatZone0Div")).hide();
       $(document.getElementById("haSensorIdZone0Div")).hide();
       $(document.getElementById("haSensorPostfixZone0Div")).hide();
       $(document.getElementById("ds18b20PostfixZone0Div")).hide();
+      $(document.getElementById("countdownTargetZone0Div")).hide();
+      $(document.getElementById("countdownSettingsZone0Div")).hide();
       
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone0Div")).hide();
@@ -1657,6 +1936,15 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone0Div")).hide();
         $(document.getElementById("scrollInfiniteZone0Div")).show();
       }
+      if (e.target.value == "countdown") {
+        $(document.getElementById("emptyZone0Div")).hide();
+        $(document.getElementById("countdownTargetZone0Div")).show();
+        $(document.getElementById("countdownSettingsZone0Div")).show();
+        $(document.getElementById("scrollInfiniteZone0Div")).show();
+        $(document.getElementById("scrollSpeedZone0Div")).show();
+        $(document.getElementById("scrollAlignZone0Div")).show();
+        document.getElementById("scrollEffectZone0Out").disabled = true;
+      }
     });
 
     workModeZone1.addEventListener('change', function (e) {
@@ -1665,13 +1953,18 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("mqttPostfixZone1Div")).hide();
       $(document.getElementById("scrollInfiniteZone1Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone1Div")).hide();
-      document.getElementById("scrollPauseZone1").disabled = false;
-      document.getElementById("scrollEffectZone1Out").disabled = false;
+      $(document.getElementById("scrollPauseZone1Div")).show();
+      $(document.getElementById("scrollEffectZone1InDiv")).show();
+      $(document.getElementById("scrollEffectZone1OutDiv")).show();
+      $(document.getElementById("scrollSpeedZone1Div")).show();
+      $(document.getElementById("scrollAlignZone1Div")).show();
       $(document.getElementById("owmWhatToDisplayZone1div")).hide();
       $(document.getElementById("clockDisplayFormatZone1Div")).hide();
       $(document.getElementById("haSensorIdZone1Div")).hide();
       $(document.getElementById("haSensorPostfixZone1Div")).hide();
       $(document.getElementById("ds18b20PostfixZone1Div")).hide();
+      $(document.getElementById("countdownTargetZone1Div")).hide();
+      $(document.getElementById("countdownSettingsZone1Div")).hide();
 
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone1Div")).hide();
@@ -1706,6 +1999,15 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone1Div")).hide();
         $(document.getElementById("scrollInfiniteZone1Div")).show();
       }
+      if (e.target.value == "countdown") {
+        $(document.getElementById("emptyZone1Div")).hide();
+        $(document.getElementById("countdownTargetZone1Div")).show();
+        $(document.getElementById("countdownSettingsZone1Div")).show();
+        $(document.getElementById("scrollInfiniteZone1Div")).show();
+        $(document.getElementById("scrollSpeedZone1Div")).show();
+        $(document.getElementById("scrollAlignZone1Div")).show();
+        document.getElementById("scrollEffectZone1Out").disabled = true;
+      }
     });
 
     workModeZone2.addEventListener('change', function (e) {
@@ -1714,13 +2016,18 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("mqttPostfixZone2Div")).hide();
       $(document.getElementById("scrollInfiniteZone2Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone2Div")).hide();
-      document.getElementById("scrollPauseZone2").disabled = false;
-      document.getElementById("scrollEffectZone2Out").disabled = false;
+      $(document.getElementById("scrollPauseZone2Div")).show();
+      $(document.getElementById("scrollEffectZone2InDiv")).show();
+      $(document.getElementById("scrollEffectZone2OutDiv")).show();
+      $(document.getElementById("scrollSpeedZone2Div")).show();
+      $(document.getElementById("scrollAlignZone2Div")).show();
       $(document.getElementById("owmWhatToDisplayZone2div")).hide();
       $(document.getElementById("clockDisplayFormatZone2Div")).hide();
       $(document.getElementById("haSensorIdZone2Div")).hide();
       $(document.getElementById("haSensorPostfixZone2Div")).hide();
       $(document.getElementById("ds18b20PostfixZone2Div")).hide();
+      $(document.getElementById("countdownTargetZone2Div")).hide();
+      $(document.getElementById("countdownSettingsZone2Div")).hide();
       
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone2Div")).hide();
@@ -1755,6 +2062,15 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone2Div")).hide();
         $(document.getElementById("scrollInfiniteZone2Div")).show();
       }
+      if (e.target.value == "countdown") {
+        $(document.getElementById("emptyZone2Div")).hide();
+        $(document.getElementById("countdownTargetZone2Div")).show();
+        $(document.getElementById("countdownSettingsZone2Div")).show();
+        $(document.getElementById("scrollInfiniteZone2Div")).show();
+        $(document.getElementById("scrollSpeedZone2Div")).show();
+        $(document.getElementById("scrollAlignZone2Div")).show();
+        document.getElementById("scrollEffectZone2Out").disabled = true;
+      }
     });
 
     workModeZone3.addEventListener('change', function (e) {
@@ -1763,13 +2079,18 @@ workModeZone0.addEventListener('change', function (e) {
       $(document.getElementById("mqttPostfixZone3Div")).hide();
       $(document.getElementById("scrollInfiniteZone3Div")).hide();
       $(document.getElementById("mqttDevicePrefixZone3Div")).hide();
-      document.getElementById("scrollPauseZone3").disabled = false;
-      document.getElementById("scrollEffectZone3Out").disabled = false;
+      $(document.getElementById("scrollPauseZone3Div")).show();
+      $(document.getElementById("scrollEffectZone3InDiv")).show();
+      $(document.getElementById("scrollEffectZone3OutDiv")).show();
+      $(document.getElementById("scrollSpeedZone3Div")).show();
+      $(document.getElementById("scrollAlignZone3Div")).show();
       $(document.getElementById("owmWhatToDisplayZone3div")).hide();
       $(document.getElementById("clockDisplayFormatZone3Div")).hide();
       $(document.getElementById("haSensorIdZone3Div")).hide();
       $(document.getElementById("haSensorPostfixZone3Div")).hide();
       $(document.getElementById("ds18b20PostfixZone3Div")).hide();
+      $(document.getElementById("countdownTargetZone3Div")).hide();
+      $(document.getElementById("countdownSettingsZone3Div")).hide();
 
       if (e.target.value == "mqttClient") {
         $(document.getElementById("emptyZone3Div")).hide();
@@ -1804,6 +2125,15 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("emptyZone3Div")).hide();
         $(document.getElementById("scrollInfiniteZone3Div")).show();
       }
+      if (e.target.value == "countdown") {
+        $(document.getElementById("emptyZone3Div")).hide();
+        $(document.getElementById("countdownTargetZone3Div")).show();
+        $(document.getElementById("countdownSettingsZone3Div")).show();
+        $(document.getElementById("scrollInfiniteZone3Div")).show();
+        $(document.getElementById("scrollSpeedZone3Div")).show();
+        $(document.getElementById("scrollAlignZone3Div")).show();
+        document.getElementById("scrollEffectZone3Out").disabled = true;
+      }
     });
 
     document.getElementById("zoneNumbers").addEventListener('change', function (e) {
@@ -1814,6 +2144,11 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("zone2EndDiv")).hide();
         $(document.getElementById("zone3BeginDiv")).hide();
         $(document.getElementById("zone3EndDiv")).hide();
+
+        $('#zone1Wrapper').addClass('d-none');
+        $('#zone2Wrapper').addClass('d-none');
+        $('#zone3WrapperPart1').addClass('d-none');
+        $('#zone3ApplyRow').addClass('d-none');
       }
       if (e.target.value == "2") {
         $(document.getElementById("zone1BeginDiv")).show();
@@ -1822,6 +2157,11 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("zone2EndDiv")).hide();
         $(document.getElementById("zone3BeginDiv")).hide();
         $(document.getElementById("zone3EndDiv")).hide();
+
+        $('#zone1Wrapper').removeClass('d-none');
+        $('#zone2Wrapper').addClass('d-none');
+        $('#zone3WrapperPart1').addClass('d-none');
+        $('#zone3ApplyRow').addClass('d-none');
       }
       if (e.target.value == "3") {
         $(document.getElementById("zone1BeginDiv")).show();
@@ -1830,6 +2170,11 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("zone2EndDiv")).show();
         $(document.getElementById("zone3BeginDiv")).hide();
         $(document.getElementById("zone3EndDiv")).hide();
+
+        $('#zone1Wrapper').removeClass('d-none');
+        $('#zone2Wrapper').removeClass('d-none');
+        $('#zone3WrapperPart1').addClass('d-none');
+        $('#zone3ApplyRow').addClass('d-none');
       }
       if (e.target.value == "4") {
         $(document.getElementById("zone1BeginDiv")).show();
@@ -1838,8 +2183,24 @@ workModeZone0.addEventListener('change', function (e) {
         $(document.getElementById("zone2EndDiv")).show();
         $(document.getElementById("zone3BeginDiv")).show();
         $(document.getElementById("zone3EndDiv")).show();
+
+        $('#zone1Wrapper').removeClass('d-none');
+        $('#zone2Wrapper').removeClass('d-none');
+        $('#zone3WrapperPart1').removeClass('d-none');
+        $('#zone3ApplyRow').removeClass('d-none');
       }
     });
+
+    // Toggle scroll speed based on infinite scroll setting in countdown mode
+    function checkScrollSpeed(zone) {
+      if (document.getElementById("workModeZone" + zone).value == "countdown") {
+        document.getElementById("scrollSpeedZone" + zone).disabled = !document.getElementById("scrollInfiniteZone" + zone).checked;
+      }
+    }
+    document.getElementById("scrollInfiniteZone0").addEventListener('change', function() { checkScrollSpeed(0); });
+    document.getElementById("scrollInfiniteZone1").addEventListener('change', function() { checkScrollSpeed(1); });
+    document.getElementById("scrollInfiniteZone2").addEventListener('change', function() { checkScrollSpeed(2); });
+    document.getElementById("scrollInfiniteZone3").addEventListener('change', function() { checkScrollSpeed(3); });
 
     function preparePostRequest(event, key, val) {
         event.preventDefault(); //This will prevent the default click action
@@ -1887,7 +2248,13 @@ workModeZone0.addEventListener('change', function (e) {
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone0").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone0").value,
                 scrollInfinite:        document.getElementById("scrollInfiniteZone0").checked,
-                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone0").value
+                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone0").value,
+                countdownTarget:       document.getElementById("countdownTargetZone0").value,
+                countdownFormat:       document.getElementById("countdownFormatZone0").value,
+                countdownFinish:       document.getElementById("countdownFinishZone0").value,
+                countdownShowUnits:    document.getElementById("countdownShowUnitsZone0").checked,
+                countdownPrefix:       document.getElementById("countdownPrefixZone0").value,
+                countdownSuffix:       document.getElementById("countdownSuffixZone0").value
                 
             }
             sendPost(data);
@@ -1912,7 +2279,13 @@ workModeZone0.addEventListener('change', function (e) {
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone1").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone1").value,
                 scrollInfinite:        document.getElementById("scrollInfiniteZone1").checked,
-                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone1").value
+                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone1").value,
+                countdownTarget:       document.getElementById("countdownTargetZone1").value,
+                countdownFormat:       document.getElementById("countdownFormatZone1").value,
+                countdownFinish:       document.getElementById("countdownFinishZone1").value,
+                countdownShowUnits:    document.getElementById("countdownShowUnitsZone1").checked,
+                countdownPrefix:       document.getElementById("countdownPrefixZone1").value,
+                countdownSuffix:       document.getElementById("countdownSuffixZone1").value
             }
             sendPost(data);
         }
@@ -1936,7 +2309,13 @@ workModeZone0.addEventListener('change', function (e) {
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone2").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone2").value,
                 scrollInfinite:        document.getElementById("scrollInfiniteZone2").checked,
-                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone2").value
+                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone2").value,
+                countdownTarget:       document.getElementById("countdownTargetZone2").value,
+                countdownFormat:       document.getElementById("countdownFormatZone2").value,
+                countdownFinish:       document.getElementById("countdownFinishZone2").value,
+                countdownShowUnits:    document.getElementById("countdownShowUnitsZone2").checked,
+                countdownPrefix:       document.getElementById("countdownPrefixZone2").value,
+                countdownSuffix:       document.getElementById("countdownSuffixZone2").value
             }
             sendPost(data);
         }
@@ -1960,7 +2339,13 @@ workModeZone0.addEventListener('change', function (e) {
                 mqttTextTopic:         document.getElementById("mqttTextTopicZone3").value,
                 mqttPostfix:           document.getElementById("mqttPostfixZone3").value,
                 scrollInfinite:        document.getElementById("scrollInfiniteZone3").checked,
-                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone3").value
+                ds18b20Postfix:        document.getElementById("ds18b20PostfixZone3").value,
+                countdownTarget:       document.getElementById("countdownTargetZone3").value,
+                countdownFormat:       document.getElementById("countdownFormatZone3").value,
+                countdownFinish:       document.getElementById("countdownFinishZone3").value,
+                countdownShowUnits:    document.getElementById("countdownShowUnitsZone3").checked,
+                countdownPrefix:       document.getElementById("countdownPrefixZone3").value,
+                countdownSuffix:       document.getElementById("countdownSuffixZone3").value
             }
             sendPost(data);
         }
