@@ -1,9 +1,10 @@
 # wledPixel
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel_logoPicS.jpeg)
 
-ESP32 and ESP8266 and MAX7219 dot matrix display management
+MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
 <a href="https://github.com/widapro/wled-pixel-v2/releases" target="_blank">The latest firmware version can be found in Releases</a>
+
 
 ## Supported key features:
 1. **Home Assistant client** [display sensor values]
@@ -28,11 +29,14 @@ ESP32 and ESP8266 and MAX7219 dot matrix display management
 ### 3D Printed Case
 - **3D Printed Case**: Download from <a href="https://www.printables.com/model/1565724-wledpixel-smart-wifi-led-matrix-clock-info-display" target="_blank">Printables</a>
 
+
 ## Web UI - Settings
 ![img](https://raw.githubusercontent.com/widapro/wled-pixel-v2/master/img/wledPixel_settingsS.jpeg)
 
-##### Firmware compiled with next parameters:
-**ESP32**
+
+## Hardware GPIO for external devices, hardcoded:
+
+### ESP32
 ```
 // Display pinout
 #define DATA_PIN  23         // ESP32 GPIO23
@@ -43,7 +47,7 @@ ESP32 and ESP8266 and MAX7219 dot matrix display management
 const int oneWireBus = 4;    // ESP32 GPIO04
 ```
 
-**ESP8266**
+### ESP8266
 ```
 // Display pinout
 #define DATA_PIN  D7         // WeMos D1 mini or ESP8266 -> GPIO13
@@ -54,9 +58,9 @@ const int oneWireBus = 4;    // ESP32 GPIO04
 const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 ```
 
-## Wiring
-![img](https://github.com/widapro/wledPixel/blob/9ea4164575de9fc7c5ffbd9eb50f75493889256c/img/WledPixel%20Wiring800.png)
 
+## Wiring
+![Wiring diagram](img/wledPixel_Wiring.png)
 
 ## First boot:
 > - Device will boot in wifi access point mode and show "AP Mode" on the display.
@@ -112,6 +116,7 @@ pio run -e esp32 -t erase
 pio run -e esp32 -t upload
 ```
 
+
 ## API
 ```
 /api/temperature      - get measured temperature from connected ds18b20 sensor
@@ -152,6 +157,7 @@ r - "rain"
 s - "sun and cloud"
 ° - "degree symbol"
 ```
+
 
 ## MQTT topics:
 * `devicePrefix/zoneN/text`             - zone text (when workmode=mqttClient)
@@ -275,6 +281,7 @@ Default effects:
 * `MARIO` (New!)
 * `GHOST` (New!)
 * `DINO` (New!)
+
 
 ## Demo Video
 <a href="https://youtu.be/0IlsjbE2lU0" target="_blank">Watch the effects demo on YouTube</a>
