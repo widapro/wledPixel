@@ -2,54 +2,113 @@
 #include "ConfigStore.h"
 #include "DisplayUtils.h"
 #include "MqttHandler.h"
+#include <httpsRequestJson.h>
+
+class OomPreFlightHandler : public AsyncWebHandler {
+public:
+  virtual bool canHandle(AsyncWebServerRequest *request) const override final {
+#if defined(ESP8266)
+    // Block POST requests when memory is critically low or TLS is active
+    // (except OTA, reboot, resetWifi, and factory-reset which must always work)
+    if (request->method() == HTTP_POST && request->url() != "/api/ota" &&
+        request->url() != "/api/reboot" &&
+        request->url() != "/api/factory-reset" &&
+        request->url() != "/api/resetWifi" &&
+        (isFetchingHttps || ESP.getFreeHeap() < 15360 ||
+         ESP.getMaxFreeBlockSize() < 8192)) {
+      request->send(503, "application/json",
+                    "{\"error\":\"Device busy, try again\"}");
+      request->client()->close();
+      return true;
+    }
+    // Block heavy GET /api/ requests ONLY during active TLS fetch
+    // (memory thresholds are too tight for normal ESP8266 operation)
+    if (request->method() == HTTP_GET && request->url().startsWith("/api/") &&
+        isFetchingHttps) {
+      request->send(503, "application/json",
+                    "{\"error\":\"Device busy, try again\"}");
+      request->client()->close();
+      return true;
+    }
+#endif
+    return false;
+  }
+  virtual void handleRequest(AsyncWebServerRequest *request) override final {}
+};
 
 void setupWebRoutes() {
+  // Catch OOM conditions on POST requests before body allocation
+  server.addHandler(new OomPreFlightHandler());
+
   // ─── Static Pages ──────────────────────────────────────────────────────────
   server.on("/", HTTP_ANY, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", indexPage);
+    AsyncWebServerResponse *response =
+        request->beginResponse_P(200, "text/html", indexPage, indexPage_len);
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Cache-Control", "max-age=3600");
+    response->addHeader("Connection", "close");
+    request->send(response);
   });
 
-  server.on("/settings", HTTP_ANY, [](AsyncWebServerRequest *request) {
-    AsyncWebServerResponse *response = request->beginChunkedResponse(
-        "text/html",
-        [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-          size_t len1 = strlen_P(settingsPagePart1);
-          size_t len2 = strlen_P(settingsPagePart2);
+  server.on("/zone-settings", HTTP_ANY, [](AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse_P(
+        200, "text/html", zoneSettingsPage, zoneSettingsPage_len);
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Cache-Control", "max-age=3600");
+    response->addHeader("Connection", "close");
+    request->send(response);
+  });
 
-          if (index < len1) {
-            size_t available = len1 - index;
-            size_t toCopy = (available > maxLen) ? maxLen : available;
-            memcpy_P(buffer, settingsPagePart1 + index, toCopy);
-            return toCopy;
-          } else if (index < len1 + len2) {
-            size_t offset = index - len1;
-            size_t available = len2 - offset;
-            size_t toCopy = (available > maxLen) ? maxLen : available;
-            memcpy_P(buffer, settingsPagePart2 + offset, toCopy);
-            return toCopy;
-          }
-          return 0; // End of response
-        });
+  server.on("/service-settings", HTTP_ANY, [](AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse_P(
+        200, "text/html", serviceSettingsPage, serviceSettingsPage_len);
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Cache-Control", "max-age=3600");
+    response->addHeader("Connection", "close");
     request->send(response);
   });
 
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", otaPage);
+#if defined(ESP8266)
+    if (ESP.getFreeHeap() < 12288 || isFetchingHttps) {
+      request->send(503, "text/plain",
+                    "Device busy, please try again in a few seconds.");
+      return;
+    }
+#endif
+    AsyncWebServerResponse *response =
+        request->beginResponse_P(200, "text/html", otaPage, otaPage_len);
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Cache-Control", "max-age=3600");
+    response->addHeader("Connection", "close");
+    request->send(response);
   });
 
   server.on("/backup", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", backupPage);
+    AsyncWebServerResponse *response =
+        request->beginResponse_P(200, "text/html", backupPage, backupPage_len);
+    response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Cache-Control", "max-age=3600");
+    response->addHeader("Connection", "close");
+    request->send(response);
   });
 
   // ─── Backup API ────────────────────────────────────────────────────────────
   server.on("/api/backup", HTTP_GET, [](AsyncWebServerRequest *request) {
+#if defined(ESP8266)
+    if (ESP.getFreeHeap() < 12288 || isFetchingHttps) { // Require at least 10KB
+      request->send(503, "application/json",
+                    "{\"error\":\"Device busy, try again\"}");
+      return;
+    }
+#endif
     AsyncResponseStream *response =
         request->beginResponseStream("application/json");
     String filename = "attachment; filename=wledPixel-";
     filename += shortMACaddr;
     filename += "_backup.json";
     response->addHeader("Content-Disposition", filename);
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(6144);
 
     // System
     doc["deviceName"] = shortMACaddr;
@@ -89,6 +148,10 @@ void setupWebRoutes() {
     doc["ds18b20UpdateInterval"] = ds18b20UpdateInterval;
     doc["ds18b20UnitsFormat"] = ds18b20UnitsFormat;
 
+    // Stock Ticker
+    doc["stockApiToken"] = base64_utils::encode(stockApiToken);
+    doc["stockUpdateInterval"] = stockUpdateInterval;
+
     // Zones
     for (int i = 0; i < 4; i++) {
       String z = "zone" + String(i);
@@ -118,6 +181,12 @@ void setupWebRoutes() {
       doc["countdownPrefixZone" + String(i)] = zones[i].countdownPrefix;
       doc["countdownSuffixZone" + String(i)] = zones[i].countdownSuffix;
       doc["countdownTargetZone" + String(i)] = countdownState[i].targetStr;
+      // Stock
+      doc["stockSymbolsZone" + String(i)] = zones[i].stockSymbols;
+      doc["stockDisplayFormatZone" + String(i)] = zones[i].stockDisplayFormat;
+      doc["stockPrefixZone" + String(i)] = zones[i].stockPrefix;
+      doc["stockPostfixZone" + String(i)] = zones[i].stockPostfix;
+      doc["stockShowArrowsZone" + String(i)] = zones[i].stockShowArrows;
     }
 
     serializeJson(doc, *response);
@@ -128,11 +197,18 @@ void setupWebRoutes() {
   server.on(
       "/api/restore", HTTP_POST,
       [](AsyncWebServerRequest *request) {
+#if defined(ESP8266)
+        if (ESP.getFreeHeap() < 12288 || isFetchingHttps) {
+          request->send(503, "application/json",
+                        "{\"error\":\"Device busy, try again\"}");
+          return;
+        }
+#endif
         if (restoreJsonBuffer.length() == 0) {
           request->send(400, "text/plain", "Empty backup");
           return;
         }
-        DynamicJsonDocument doc(4096);
+        DynamicJsonDocument doc(6144);
         DeserializationError error = deserializeJson(doc, restoreJsonBuffer);
         restoreJsonBuffer = ""; // Free memory
 
@@ -216,6 +292,15 @@ void setupWebRoutes() {
           ds18b20UnitsFormat = doc["ds18b20UnitsFormat"].as<String>();
         saveVarsToConfFile("ds18b20Settings", 0);
 
+        // Restore Stock Ticker
+        if (doc.containsKey("stockApiToken")) {
+          String enc = doc["stockApiToken"].as<String>();
+          stockApiToken = base64_utils::decode(enc);
+        }
+        if (doc.containsKey("stockUpdateInterval"))
+          stockUpdateInterval = doc["stockUpdateInterval"];
+        saveVarsToConfFile("stockSettings", 0);
+
         // Restore Zones
         for (int i = 0; i < 4; i++) {
           String z = "zone" + String(i);
@@ -290,6 +375,21 @@ void setupWebRoutes() {
               parseCountdownTarget(target, i, timeClient.getEpochTime(),
                                    ntpTimeZone);
           }
+          // Stock
+          if (doc.containsKey("stockSymbolsZone" + String(i)))
+            zones[i].stockSymbols =
+                doc["stockSymbolsZone" + String(i)].as<String>();
+          if (doc.containsKey("stockDisplayFormatZone" + String(i)))
+            zones[i].stockDisplayFormat =
+                doc["stockDisplayFormatZone" + String(i)].as<String>();
+          if (doc.containsKey("stockPrefixZone" + String(i)))
+            zones[i].stockPrefix =
+                doc["stockPrefixZone" + String(i)].as<String>();
+          if (doc.containsKey("stockPostfixZone" + String(i)))
+            zones[i].stockPostfix =
+                doc["stockPostfixZone" + String(i)].as<String>();
+          if (doc.containsKey("stockShowArrowsZone" + String(i)))
+            zones[i].stockShowArrows = doc["stockShowArrowsZone" + String(i)];
 
           saveVarsToConfFile("zoneSettings", i);
         }
@@ -319,13 +419,20 @@ void setupWebRoutes() {
     shouldReboot = true;
   });
 
-  // ─── Settings JSON API ────────────────────────────────────────────────────
-  server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+  // ─── Zone Settings JSON API
+  // ──────────────────────────────────────────────────
+  server.on("/api/zone-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+#if defined(ESP8266)
+    if (ESP.getFreeHeap() < 12288 || isFetchingHttps) {
+      request->send(503, "application/json",
+                    "{\"error\":\"Device busy, try again\"}");
+      return;
+    }
+#endif
     AsyncResponseStream *response =
         request->beginResponseStream("application/json");
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(6144);
 
-    // System Settings
     doc["deviceName"] = shortMACaddr;
 #if defined(ESP32)
     doc["platform"] = "ESP32";
@@ -335,50 +442,16 @@ void setupWebRoutes() {
     doc["platform"] = "Unknown";
 #endif
     doc["firmwareVer"] = firmwareVer;
-    doc["disableServiceMessages"] = disableServiceMessages;
-    doc["disableDotsBlink"] = disableDotsBlink;
     doc["zoneNumbers"] = zoneNumbers;
     doc["intensity"] = intensity + 1;
 
-    // WiFi
+    // Info Table
     doc["wifiSsid"] = WiFi.SSID();
     doc["wifiIp"] = WiFi.localIP().toString();
     doc["wifiGateway"] = WiFi.gatewayIP().toString();
     doc["wifiRssi"] = WiFi.RSSI();
-
-    // MQTT
-    doc["mqttEnable"] = mqttEnable;
-    doc["mqttServerAddress"] = mqttServerAddress;
-    doc["mqttServerPort"] = mqttServerPort;
-    doc["mqttUsername"] = mqttUsername;
-    doc["mqttPassword"] = (mqttPassword == "") ? "" : "********";
-    Serial.print("API Settings: mqttPassword sentinel sent: ");
-    Serial.println((mqttPassword == "") ? "EMPTY" : "MASKED");
     doc["mqttDevicePrefix"] = MQTTGlobalPrefix;
-
-    // NTP
-    doc["ntpTimeZone"] = ntpTimeZone;
-    doc["ntpUpdateInterval"] = ntpUpdateInterval;
-    doc["ntpServer"] = ntpServer;
-
-    // OWM
-    doc["owmApiToken"] = (owmApiToken == "") ? "" : "********";
-    doc["owmUnitsFormat"] = owmUnitsFormat;
-    doc["owmUpdateInterval"] = owmUpdateInterval;
-    doc["owmCity"] = owmCity;
-
-    // HA
-    doc["haAddr"] = haAddr;
-    doc["haApiHttpType"] = haApiHttpType;
-    doc["haApiToken"] = (haApiToken == "") ? "" : "********";
-    doc["haApiPort"] = haApiPort;
-    doc["haUpdateInterval"] = haUpdateInterval;
-
-    // DS18B20
-    doc["ds18b20Enable"] = ds18b20Enable;
     doc["ds18b20Temp"] = (dsTemp == "-127") ? "Not connected" : dsTemp;
-    doc["ds18b20UpdateInterval"] = ds18b20UpdateInterval;
-    doc["ds18b20UnitsFormat"] = ds18b20UnitsFormat;
 
     // Zones
     for (int i = 0; i < 4; i++) {
@@ -412,17 +485,98 @@ void setupWebRoutes() {
       doc["countdownPrefixZone" + String(i)] = zones[i].countdownPrefix;
       doc["countdownSuffixZone" + String(i)] = zones[i].countdownSuffix;
       doc["countdownTargetZone" + String(i)] = countdownState[i].targetStr;
+      // Stock
+      doc["stockSymbolsZone" + String(i)] = zones[i].stockSymbols;
+      doc["stockDisplayFormatZone" + String(i)] = zones[i].stockDisplayFormat;
+      doc["stockPrefixZone" + String(i)] = zones[i].stockPrefix;
+      doc["stockPostfixZone" + String(i)] = zones[i].stockPostfix;
+      doc["stockShowArrowsZone" + String(i)] = zones[i].stockShowArrows;
     }
+
+    doc["stockShowArrows"] = zones[0].stockShowArrows;
 
     serializeJson(doc, *response);
     request->send(response);
   });
 
+  // ─── Service Settings JSON API ─────────────────────────────────────────────
+  server.on(
+      "/api/service-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+#if defined(ESP8266)
+        if (ESP.getFreeHeap() < 12288 || isFetchingHttps) {
+          request->send(503, "application/json",
+                        "{\"error\":\"Device busy, try again\"}");
+          return;
+        }
+#endif
+        AsyncResponseStream *response =
+            request->beginResponseStream("application/json");
+        DynamicJsonDocument doc(1536);
+
+        // System Settings
+        doc["deviceName"] = shortMACaddr;
+#if defined(ESP32)
+        doc["platform"] = "ESP32";
+#elif defined(ESP8266)
+        doc["platform"] = "ESP8266";
+#else
+        doc["platform"] = "Unknown";
+#endif
+        doc["firmwareVer"] = firmwareVer;
+        doc["disableServiceMessages"] = disableServiceMessages;
+        doc["disableDotsBlink"] = disableDotsBlink;
+
+        // WiFi
+        doc["wifiSsid"] = WiFi.SSID();
+        doc["wifiIp"] = WiFi.localIP().toString();
+        doc["wifiGateway"] = WiFi.gatewayIP().toString();
+        doc["wifiRssi"] = WiFi.RSSI();
+
+        // MQTT
+        doc["mqttEnable"] = mqttEnable;
+        doc["mqttServerAddress"] = mqttServerAddress;
+        doc["mqttServerPort"] = mqttServerPort;
+        doc["mqttUsername"] = mqttUsername;
+        doc["mqttPassword"] = (mqttPassword == "") ? "" : "********";
+        doc["mqttDevicePrefix"] = MQTTGlobalPrefix;
+
+        // NTP
+        doc["ntpTimeZone"] = ntpTimeZone;
+        doc["ntpUpdateInterval"] = ntpUpdateInterval;
+        doc["ntpServer"] = ntpServer;
+
+        // OWM
+        doc["owmApiToken"] = (owmApiToken == "") ? "" : "********";
+        doc["owmUnitsFormat"] = owmUnitsFormat;
+        doc["owmUpdateInterval"] = owmUpdateInterval;
+        doc["owmCity"] = owmCity;
+
+        // HA
+        doc["haAddr"] = haAddr;
+        doc["haApiHttpType"] = haApiHttpType;
+        doc["haApiToken"] = (haApiToken == "") ? "" : "********";
+        doc["haApiPort"] = haApiPort;
+        doc["haUpdateInterval"] = haUpdateInterval;
+
+        // DS18B20
+        doc["ds18b20Enable"] = ds18b20Enable;
+        doc["ds18b20Temp"] = (dsTemp == "-127") ? "Not connected" : dsTemp;
+        doc["ds18b20UpdateInterval"] = ds18b20UpdateInterval;
+        doc["ds18b20UnitsFormat"] = ds18b20UnitsFormat;
+
+        // Stock Ticker
+        doc["stockApiToken"] = (stockApiToken == "") ? "" : "********";
+        doc["stockUpdateInterval"] = stockUpdateInterval;
+
+        serializeJson(doc, *response);
+        request->send(response);
+      });
+
   // ─── OTA Firmware Upload ──────────────────────────────────────────────────
   server.on(
       "/api/ota", HTTP_POST,
       [](AsyncWebServerRequest *request) {
-        // Get chunk info from query parameters
+        // Check chunk info
         int chunkNum = 0;
         int totalChunks = 1;
 
@@ -431,6 +585,24 @@ void setupWebRoutes() {
         }
         if (request->hasParam("total")) {
           totalChunks = request->getParam("total")->value().toInt();
+        }
+
+        // Platform mismatch detected in upload handler — reject immediately
+        if (otaPlatformMismatch) {
+          otaPlatformMismatch = false;
+#if defined(ESP8266)
+          const char *myPlatform = "ESP8266";
+#elif defined(ESP32)
+          const char *myPlatform = "ESP32";
+#else
+          const char *myPlatform = "Unknown";
+#endif
+          String errMsg = String("{\"status\":\"error\",\"msg\":\"Platform "
+                                 "mismatch! Device is ") +
+                          myPlatform +
+                          ", firmware is for different platform.\"}";
+          request->send(400, "application/json", errMsg);
+          return;
         }
 
         // Check if this is the last chunk
@@ -473,18 +645,125 @@ void setupWebRoutes() {
       },
       [](AsyncWebServerRequest *request, String filename, size_t index,
          uint8_t *data, size_t len, bool final) {
-        // This is called for each data fragment within a single POST request
-
         // Get chunk info from query parameters
         int chunkNum = 0;
         size_t totalSize = 0;
 
-        if (request->hasParam("chunk")) {
+        if (request->hasParam("chunk"))
           chunkNum = request->getParam("chunk")->value().toInt();
-        }
-        if (request->hasParam("size")) {
+        if (request->hasParam("size"))
           totalSize = request->getParam("size")->value().toInt();
+
+      // ── Platform detection: wrong-platform marker ─────────────────────────
+      // The marker strings are XOR-encoded (key=0x5A) so they do NOT appear
+      // as literal text in THIS binary, preventing false-positive self-matches.
+      // "WLEDPIXEL_PLATFORM_ESP32"  is encoded for ESP8266 scanner.
+      // "WLEDPIXEL_PLATFORM_ESP8266" is encoded for ESP32 scanner.
+      // Decoded at runtime into a stack buffer before scanning.
+#if defined(ESP8266)
+        // XOR-encoded "WLEDPIXEL_PLATFORM_ESP32" (key=0x5A), 24 bytes
+        static const uint8_t wrongMarkerEnc[] = {
+            0x0D, 0x16, 0x1F, 0x1E, 0x0A, 0x13, 0x02, 0x1F,
+            0x16, 0x05, 0x0A, 0x16, 0x1B, 0x0E, 0x1C, 0x15,
+            0x08, 0x17, 0x05, 0x1F, 0x09, 0x0A, 0x69, 0x68};
+        const char *deviceName = "ESP8266";
+        const char *wrongPlatform = "ESP32";
+#elif defined(ESP32)
+        // XOR-encoded "WLEDPIXEL_PLATFORM_ESP8266" (key=0x5A), 26 bytes
+        static const uint8_t wrongMarkerEnc[] = {
+            0x0D, 0x16, 0x1F, 0x1E, 0x0A, 0x13, 0x02, 0x1F, 0x16,
+            0x05, 0x0A, 0x16, 0x1B, 0x0E, 0x1C, 0x15, 0x08, 0x17,
+            0x05, 0x1F, 0x09, 0x0A, 0x62, 0x68, 0x6C, 0x6C};
+        const char *deviceName = "ESP32";
+        const char *wrongPlatform = "ESP8266";
+#endif
+        // Decode wrongMarker into stack buffer at runtime
+        const size_t wrongMarkerLen = sizeof(wrongMarkerEnc);
+        char wrongMarkerBuf[28]; // max marker len + 1, fixed size
+        for (size_t i = 0; i < wrongMarkerLen; i++)
+          wrongMarkerBuf[i] = wrongMarkerEnc[i] ^ 0x5A;
+        wrongMarkerBuf[wrongMarkerLen] = '\0';
+        const char *wrongMarker = wrongMarkerBuf;
+        const size_t overlapSize = wrongMarkerLen - 1; // max 30 bytes
+
+        if (chunkNum == 0 && index == 0) {
+          // Reset ALL OTA state for a fresh upload session.
+          // Abort any previous incomplete update so Update.begin() works.
+          if (globalOtaInProgress) {
+#ifdef ESP32
+            Update.abort();
+#else
+            Update.end(false); // ESP8266: end(false) discards without applying
+#endif
+            globalOtaInProgress = false;
+          }
+          otaPlatformOk = true;
+          otaPlatformMismatch = false;
+          otaScanOverlapLen = 0;
         }
+
+        // Only scan if no mismatch found yet
+        if (otaPlatformOk && len > 0) {
+          // Build a scan window: [overlap_from_prev_chunk] + [current_data]
+          // This catches markers that span two chunks.
+          // Use a small stack buffer (overlapSize + len capped) for the join.
+          // Since overlapSize <= 30 and data pointer is directly usable,
+          // we do two passes:
+
+          // Pass 1: scan overlap+start of current data
+          if (otaScanOverlapLen > 0) {
+            // Build a joined buffer of overlapSize + min(len, overlapSize)
+            // bytes
+            uint8_t joinBuf[62]; // 2 * overlapSize max
+            size_t joinLen = otaScanOverlapLen + min(len, overlapSize);
+            memcpy(joinBuf, otaScanOverlap, otaScanOverlapLen);
+            memcpy(joinBuf + otaScanOverlapLen, data, min(len, overlapSize));
+            for (size_t i = 0; i + wrongMarkerLen <= joinLen; i++) {
+              if (memcmp(joinBuf + i, wrongMarker, wrongMarkerLen) == 0) {
+                otaPlatformOk = false;
+                break;
+              }
+            }
+          }
+
+          // Pass 2: scan the current chunk itself
+          if (otaPlatformOk && len >= wrongMarkerLen) {
+            for (size_t i = 0; i <= len - wrongMarkerLen; i++) {
+              if (memcmp(data + i, wrongMarker, wrongMarkerLen) == 0) {
+                otaPlatformOk = false;
+                break;
+              }
+            }
+          }
+
+          // Save tail of current chunk as overlap for next chunk
+          size_t newOverlapLen = min(len, overlapSize);
+          memcpy(otaScanOverlap, data + len - newOverlapLen, newOverlapLen);
+          otaScanOverlapLen = newOverlapLen;
+
+          if (!otaPlatformOk) {
+            Serial.printf(
+                "OTA REJECTED: binary contains '%s' marker, device is %s!\n",
+                wrongPlatform, deviceName);
+            // Abort the Updater so next attempt can call begin() cleanly
+            if (globalOtaInProgress) {
+#ifdef ESP32
+              Update.abort();
+#else
+              Update.end(
+                  false); // ESP8266: end(false) discards without applying
+#endif
+            }
+            otaPlatformMismatch = true;
+            globalOtaInProgress = false;
+            return;
+          }
+        }
+
+        // If mismatch was already detected in a previous index call — stop
+        if (otaPlatformMismatch)
+          return;
+        // ─────────────────────────────────────────────────────────────────
 
         if (chunkNum == 0 && index == 0) {
           globalOtaInProgress = true;
@@ -500,7 +779,7 @@ void setupWebRoutes() {
           }
         }
 
-        // Write data
+        // Write data to flash
         if (len > 0 && globalOtaInProgress) {
           if (Update.write(data, len) != len) {
             globalOtaInProgress = false;
@@ -525,6 +804,13 @@ void setupWebRoutes() {
 
   // ─── Message API ──────────────────────────────────────────────────────────
   server.on("/api/message", HTTP_ANY, [](AsyncWebServerRequest *request) {
+#if defined(ESP8266)
+    if (ESP.getFreeHeap() < 12288 || isFetchingHttps) {
+      request->send(503, "application/json",
+                    "{\"error\":\"Device busy, try again\"}");
+      return;
+    }
+#endif
     Serial.print(F("API request received "));
     int params = request->params();
     Serial.print(params);
@@ -550,6 +836,13 @@ void setupWebRoutes() {
 
   // ─── Config API ───────────────────────────────────────────────────────────
   server.on("/api/config", HTTP_ANY, [](AsyncWebServerRequest *request) {
+#if defined(ESP8266)
+    if (ESP.getFreeHeap() < 12288 || isFetchingHttps) {
+      request->send(503, "application/json",
+                    "{\"error\":\"Device busy, try again\"}");
+      return;
+    }
+#endif
     Serial.print(F("\nAPI request received "));
     int params = request->params();
     Serial.print(params);
@@ -617,11 +910,15 @@ void setupWebRoutes() {
 
           if (n < 4) {
             if (p->name() == "workMode") {
+              String oldWorkMode = zones[n].workMode;
               zones[n].workMode = p->value().c_str();
-              if (zones[n].workMode == "owmWeather")
+              if (zones[n].workMode == "owmWeather" &&
+                  oldWorkMode != "owmWeather")
                 owmLastTime = -1000000;
-              if (zones[n].workMode == "haClient")
+              if (zones[n].workMode == "haClient" && oldWorkMode != "haClient")
                 haLastTime = -1000000;
+              if (zones[n].workMode == "stockTicker")
+                stockLastTime = 0;
               if (zones[n].workMode == "wopr") {
                 woprZones[n].active = true;
                 strcpy(zoneMessages[n], ""); // Clear active text
@@ -644,7 +941,8 @@ void setupWebRoutes() {
                   zones[n].workMode != "owmWeather" &&
                   zones[n].workMode != "haClient" &&
                   zones[n].workMode != "intTempSensor" &&
-                  zones[n].workMode != "wopr") {
+                  zones[n].workMode != "wopr" &&
+                  zones[n].workMode != "stockTicker") {
                 P.displayReset(n);
               }
               zones[n].updateFont = true;
@@ -795,6 +1093,32 @@ void setupWebRoutes() {
             zones[n].countdownSuffix = p->value().c_str();
             zones[n].curTime = "";
           }
+          // Stock ticker settings
+          if (p->name() == "stockSymbols") {
+            zones[n].stockSymbols = p->value().c_str();
+            stockParseSymbols(n, zones[n].stockSymbols);
+            stockLastTime = 0; // Force immediate update
+          }
+          if (p->name() == "stockDisplayFormat") {
+            zones[n].stockDisplayFormat = p->value().c_str();
+            zones[n].curTime = ""; // Force redraw
+          }
+          if (p->name() == "stockPrefix") {
+            zones[n].stockPrefix = p->value().c_str();
+            zones[n].curTime = ""; // Force redraw
+          }
+          if (p->name() == "stockPostfix") {
+            zones[n].stockPostfix = p->value().c_str();
+            zones[n].curTime = ""; // Force redraw
+          }
+          if (p->name() == "stockShowArrows") {
+            String pv = p->value();
+            if (pv.equalsIgnoreCase("true") || pv.equalsIgnoreCase("on") ||
+                pv == "1")
+              zones[n].stockShowArrows = true;
+            else
+              zones[n].stockShowArrows = false;
+          }
 
           finishRequest = true;
         }
@@ -903,6 +1227,18 @@ void setupWebRoutes() {
         finishRequest = true;
       }
 
+      if (key->value() == "stockSettings") {
+        if (p->name() == "stockApiToken") {
+          String val = p->value();
+          if (val != "********") {
+            stockApiToken = val.c_str();
+          }
+        }
+        if (p->name() == "stockUpdateInterval")
+          stockUpdateInterval = p->value().toInt();
+        finishRequest = true;
+      }
+
       if (key->value() == "intensity") {
         if (p->name() == "intensity") {
           if ((p->value()).toInt() > 0) {
@@ -944,6 +1280,10 @@ void setupWebRoutes() {
         }
         if (zones[n].workMode == "intTempSensor")
           zoneShowModeMessage(n, "TempS");
+        if (zones[n].workMode == "stockTicker") {
+          zoneShowModeMessage(n, "Stock");
+          stockLastTime = 0;
+        }
       }
       if (key->value() == "zoneSettings" && zones[n].workMode == "mqttClient") {
         if (mqttClient.connected() && MQTTZones[n].message != "" &&

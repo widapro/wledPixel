@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <link rel="icon"
+    href="data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3Csvg height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3,9H7V5H3V9M3,14H7V10H3V14M8,14H12V10H8V14M13,14H17V10H13V14M8,9H12V5H8V9M13,5V9H17V5H13M18,14H22V10H18V14M3,19H7V15H3V19M8,19H12V15H8V19M13,19H17V15H13V19M18,19H22V15H18V19M18,5V9H22V5H18Z'/%3E%3C/svg%3E"
+    type="image/svg+xml" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+  <title>wledPixel - OTA Update</title>
+  <style>
+    .upload-area {
+      border: 3px dashed #dee2e6;
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      transition: all 0.3s;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    .upload-area:hover {
+      border-color: #0d6efd;
+      background-color: #f8f9fa;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="px-3 py-2 bg-dark text-white">
+      <div class="container">
+        <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
+          <a href="/" class="d-flex align-items-center my-2 my-lg-0 me-lg-auto text-white text-decoration-none">
+            <h1 class="mb-3 fw-bold font-monospace">wledPixel</h1>
+          </a>
+          <ul class="nav col-12 col-lg-auto my-2 justify-content-center my-md-0 text-small">
+            <li>
+              <a href="/" class="nav-link text-white">Home</a>
+            </li>
+            <li>
+              <a href="/zone-settings" class="nav-link text-white">Zone Settings</a>
+            </li>
+            <li>
+              <a href="/service-settings" class="nav-link text-white">Service Settings</a>
+            </li>
+            <li>
+              <a href="/backup" class="nav-link text-white">Backup/Restore</a>
+            </li>
+            <li>
+              <span class="nav-link text-secondary">Update firmware</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <main>
+      <div class="py-5 text-center">
+        <h2>Firmware Update</h2>
+        <p class="lead">Upload a new firmware file to update your device.</p>
+        <div class="mb-4 text-center text-muted">
+          <small>Current version: <span id="currentVer">Loading...</span><br>
+            Platform: <span id="currentPlatform">Loading...</span></small>
+        </div>
+      </div>
+
+      <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+          <div class="card">
+            <div class="card-body">
+
+              <div class="upload-area" onclick="document.getElementById('fw').click()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor"
+                  class="mb-3 text-muted" viewBox="0 0 16 16">
+                  <path fill-rule="evenodd"
+                    d="M7.646 5.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 6.707V10.5a.5.5 0 0 1-1 0V6.707L6.354 7.854a.5.5 0 1 1-.708-.708l2-2z" />
+                  <path
+                    d="M4.406 3.342A5.53 5.53 0 0 1 8 2c2.69 0 4.923 2 5.166 4.579C14.758 6.804 16 8.137 16 9.773 16 11.569 14.502 13 12.687 13H3.781C1.708 13 0 11.366 0 9.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383z" />
+                </svg>
+                <h5>Click to select firmware.bin</h5>
+                <p class="text-muted mb-0">or drag and drop file here</p>
+              </div>
+
+              <input type="file" id="fw" accept=".bin" style="display:none" onchange="fileSelected()">
+
+              <div id="fname" class="alert alert-info mb-3" style="display:none"></div>
+
+              <div id="prog" class="progress mb-3" style="height: 30px; display:none">
+                <div id="pbar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0">0</div>
+              </div>
+
+              <div id="ok" class="alert alert-success" style="display:none">
+                <strong>Success!</strong> Firmware uploaded. Device is restarting...
+              </div>
+
+              <div id="err" class="alert alert-danger" style="display:none"></div>
+
+              <button class="btn btn-primary btn-lg w-100" id="btn" onclick="doUpload()">
+                Upload Firmware
+              </button>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="my-5 pt-5 text-muted text-center text-small border-top">
+        <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
+        <p class="mb-1">Developed by <a href="https://github.com/widapro"
+            class="text-reset text-decoration-none">widapro</a></p>
+        <ul class="list-inline">
+          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel" target="_blank"
+              class="text-decoration-none">GitHub</a></li>
+          <li class="list-inline-item">|</li>
+          <li class="list-inline-item"><a href="https://github.com/widapro/wledPixel/issues" target="_blank"
+              class="text-decoration-none">Report Bug</a></li>
+        </ul>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    var file = null;
+    var chunkSize = 10240;
+    var devicePlatform = null;
+
+    function fetchWithRetry(url, options = {}, retries = 10, delayMs = 2000) {
+      return fetch(url, options).then(res => {
+        if (res.status === 503 && retries > 0) {
+          console.log(`503 received, retrying in ${delayMs}ms...`);
+          return new Promise(resolve => setTimeout(resolve, delayMs))
+            .then(() => fetchWithRetry(url, options, retries - 1, delayMs));
+        }
+        return res;
+      });
+    }
+
+    window.onload = function () {
+      fetchWithRetry('/api/service-settings')
+        .then(r => r.json())
+        .then(data => {
+          devicePlatform = data.platform || null;
+          if (document.getElementById('currentVer')) {
+            document.getElementById('currentVer').innerText = data.firmwareVer;
+          }
+          if (document.getElementById('currentPlatform')) {
+            document.getElementById('currentPlatform').innerText = data.platform;
+          }
+          if (document.getElementById('footerFwVer')) {
+            document.getElementById('footerFwVer').innerText = data.firmwareVer;
+          }
+        })
+        .catch(e => console.log('Ver fetch err', e));
+    };
+
+    function fileSelected() {
+      var f = document.getElementById('fw');
+      if (f.files.length > 0) {
+        file = f.files[0];
+        document.getElementById('fname').style.display = 'block';
+        document.getElementById('fname').innerHTML = 'Selected: <strong>' + file.name + '</strong> (' + Math.round(file.size / 1024) + ' KB)';
+      }
+    }
+
+    async function doUpload() {
+      if (!file) {
+        alert('Please select a firmware file first!');
+        return;
+      }
+
+      // Platform mismatch check (client-side guard)
+      if (devicePlatform) {
+        var fname = file.name.toLowerCase();
+        var wrongPlatform = null;
+        if (devicePlatform === 'ESP8266' && fname.indexOf('esp32') !== -1) {
+          wrongPlatform = 'ESP32';
+        } else if (devicePlatform === 'ESP32' && fname.indexOf('esp8266') !== -1) {
+          wrongPlatform = 'ESP8266';
+        }
+        if (wrongPlatform) {
+          if (!confirm('WARNING: Platform mismatch!\n\n' +
+            'You are trying to flash ' + wrongPlatform + ' firmware onto a ' + devicePlatform + ' device.\n' +
+            'File: ' + file.name + '\n\n' +
+            'This may brick the device.\n\nContinue anyway?')) {
+            return;
+          }
+        }
+      }
+
+      var btn = document.getElementById('btn');
+      var prog = document.getElementById('prog');
+      var pbar = document.getElementById('pbar');
+
+      btn.disabled = true;
+      btn.innerHTML = 'Uploading...';
+      prog.style.display = 'flex';
+      document.getElementById('err').style.display = 'none';
+
+      try {
+        var totalSize = file.size;
+        var offset = 0;
+        var chunkNum = 0;
+        var totalChunks = Math.ceil(totalSize / chunkSize);
+
+        while (offset < totalSize) {
+          var chunk = file.slice(offset, offset + chunkSize);
+          var fd = new FormData();
+          fd.append('firmware', chunk, file.name);
+
+          var response = await fetch('/api/ota?chunk=' + chunkNum + '&total=' + totalChunks + '&size=' + totalSize, {
+            method: 'POST',
+            body: fd
+          });
+
+          if (!response.ok) {
+            let errMsg = 'Upload failed: ' + response.status;
+            try {
+              var errData = await response.json();
+              if (errData.msg) errMsg = errData.msg;
+            } catch (je) { }
+            throw new Error(errMsg);
+          }
+
+          offset += chunkSize;
+          chunkNum++;
+
+          var pct = Math.round((offset / totalSize) * 100);
+          if (pct > 100) pct = 100;
+          pbar.style.width = pct + String.fromCharCode(37);
+          pbar.innerHTML = pct + String.fromCharCode(37);
+
+          // Small delay between chunks to let ESP process
+          await new Promise(r => setTimeout(r, 50));
+        }
+
+        document.getElementById('ok').style.display = 'block';
+
+        var count = 40;
+        var interval = setInterval(function () {
+          count--;
+          btn.innerHTML = 'Restarting... ' + count + 's';
+
+          if (count % 2 === 0) {
+            fetch('/').then(function (r) {
+              if (r.ok) {
+                clearInterval(interval);
+                location.reload();
+              }
+            }).catch(function () { });
+          }
+
+          if (count <= 0) {
+            clearInterval(interval);
+            location.reload();
+          }
+        }, 1000);
+
+      } catch (e) {
+        document.getElementById('err').innerHTML = '<strong>Error!</strong> ' + e.message;
+        document.getElementById('err').style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = 'Upload Firmware';
+      }
+    }
+  </script>
+</body>
+
+</html>

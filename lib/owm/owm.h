@@ -1,11 +1,12 @@
 #ifndef WLEDPIXEL_OWM_H
 #define WLEDPIXEL_OWM_H
 
+#include "httpsRequestJson.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include "httpsRequestJson.h"
 
-void owmWeatherUpdate(String city, String unitsFormat, String token);
+void owmWeatherUpdate(const String &city, const String &unitsFormat,
+                      const String &token);
 String openWetherMapGetWeather(String whatToDisplay, String unitsFormat);
 
 #endif

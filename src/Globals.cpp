@@ -17,11 +17,23 @@ WiFiUDP ntpUDP;
 // ─── Global Flags
 // ──────────────────────────────────────────────────────────────
 bool globalOtaInProgress = false;
+bool otaPlatformMismatch = false;
+bool otaPlatformOk = true;
+uint8_t otaScanOverlap[32] = {0};
+size_t otaScanOverlapLen = 0;
 bool shouldReboot = false;
 bool shouldUpdateNtp = false;
 size_t otaTotalSize = 0;
 String restoreJsonBuffer = "";
-const char *firmwareVer = "v3.4";
+const char *firmwareVer = "v3.5";
+// Platform marker embedded in binary — used for OTA platform validation
+// DO NOT REMOVE: this string is scanned in the binary during OTA upload
+#if defined(ESP8266)
+const char PLATFORM_MARKER[] __attribute__((used)) =
+    "WLEDPIXEL_PLATFORM_ESP8266";
+#elif defined(ESP32)
+const char PLATFORM_MARKER[] __attribute__((used)) = "WLEDPIXEL_PLATFORM_ESP32";
+#endif
 int nLoop = 0;
 bool restartESP = false;
 bool allTestsFinish = false;
@@ -151,6 +163,11 @@ ZoneData zones[] = {
      "",
      "",
      true,
+     "",
+     "namePrice",
+     "",
+     "",
+     true,
      false,
      true,
      false,
@@ -177,6 +194,11 @@ ZoneData zones[] = {
      "",
      "DDHHMMSS",
      "blinkForever",
+     "",
+     "",
+     true,
+     "",
+     "namePrice",
      "",
      "",
      true,
@@ -209,6 +231,11 @@ ZoneData zones[] = {
      "",
      "",
      true,
+     "",
+     "namePrice",
+     "",
+     "",
+     true,
      false,
      true,
      false,
@@ -235,6 +262,11 @@ ZoneData zones[] = {
      "",
      "DDHHMMSS",
      "blinkForever",
+     "",
+     "",
+     true,
+     "",
+     "namePrice",
      "",
      "",
      true,
@@ -271,3 +303,10 @@ String haAddr, haApiHttpType, haApiToken;
 uint16_t haUpdateInterval = 60;
 uint16_t haApiPort = 8123;
 uint32_t haLastTime = 0;
+
+// ─── Stock Ticker
+// ───────────────────────────────────────────────────────────────────
+String stockApiToken;
+uint16_t stockUpdateInterval = 60;
+unsigned long stockLastTime = 0;
+bool stockEnable = false;

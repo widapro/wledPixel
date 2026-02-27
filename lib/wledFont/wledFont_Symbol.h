@@ -24,8 +24,8 @@ const MD_MAX72XX::fontType_t wledSymbolFont[] PROGMEM = {
     0,                            // 21
     0,                            // 22
     0,                            // 23
-    0,                            // 24
-    0,                            // 25
+    5,   8,   4,   126, 4,   8,   // 24  - 'Up Arrow'
+    5,   16,  32,  126, 32,  16,  // 25  - 'Down Arrow'
     0,                            // 26
     0,                            // 27
     0,                            // 28

@@ -278,6 +278,17 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
                           zones[n].countdownSuffix);
     preferences.putString((String("zone") + n + "CdTarget").c_str(),
                           countdownState[n].targetStr);
+    // Stock ticker settings
+    preferences.putString((String("zone") + n + "StockSym").c_str(),
+                          zones[n].stockSymbols);
+    preferences.putString((String("zone") + n + "StockFmt").c_str(),
+                          zones[n].stockDisplayFormat);
+    preferences.putString((String("zone") + n + "StockPre").c_str(),
+                          zones[n].stockPrefix);
+    preferences.putString((String("zone") + n + "StockPst").c_str(),
+                          zones[n].stockPostfix);
+    preferences.putBool((String("zone") + n + "StockArr").c_str(),
+                        zones[n].stockShowArrows);
   }
 
   if (groupName == "mqttSettings") {
@@ -314,6 +325,11 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
     preferences.putBool("ds18b20Enable", ds18b20Enable);
     preferences.putUShort("ds18b20UpdInt", ds18b20UpdateInterval);
     preferences.putString("ds18b20UnitFr", ds18b20UnitsFormat);
+  }
+
+  if (groupName == "stockSettings") {
+    preferences.putString("stApiToken", stockApiToken);
+    preferences.putUShort("stUpdateInt", stockUpdateInterval);
   }
 
   if (groupName == "intensity") {
@@ -400,6 +416,17 @@ void readConfig(String groupName, uint8_t n) {
       parseCountdownTarget(savedTarget, n, timeClient.getEpochTime(),
                            ntpTimeZone);
     }
+    // Stock ticker settings
+    zones[n].stockSymbols = preferences.getString(
+        (String("zone") + n + "StockSym").c_str(), zones[n].stockSymbols);
+    zones[n].stockDisplayFormat = preferences.getString(
+        (String("zone") + n + "StockFmt").c_str(), zones[n].stockDisplayFormat);
+    zones[n].stockPrefix = preferences.getString(
+        (String("zone") + n + "StockPre").c_str(), zones[n].stockPrefix);
+    zones[n].stockPostfix = preferences.getString(
+        (String("zone") + n + "StockPst").c_str(), zones[n].stockPostfix);
+    zones[n].stockShowArrows = preferences.getBool(
+        (String("zone") + n + "StockArr").c_str(), zones[n].stockShowArrows);
   }
 
   if (groupName == "mqttSettings") {
@@ -449,6 +476,12 @@ void readConfig(String groupName, uint8_t n) {
     intensity = preferences.getUChar("intensity", intensity);
   }
 
+  if (groupName == "stockSettings") {
+    stockApiToken = preferences.getString("stApiToken", stockApiToken);
+    stockUpdateInterval =
+        preferences.getUShort("stUpdateInt", stockUpdateInterval);
+  }
+
   preferences.end();
 }
 
@@ -465,6 +498,7 @@ void readAllConfig() {
   readConfig("owmSettings", 99);
   readConfig("haSettings", 99);
   readConfig("ds18b20Settings", 99);
+  readConfig("stockSettings", 99);
   readConfig("intensity", 99);
   readConfig("intensity", 99);
 }

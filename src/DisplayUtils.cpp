@@ -514,8 +514,8 @@ void displayAnimation() {
     // let Phase 3 handle it with displayReset() so the text re-renders.
     if (zones[z].newMessageAvailable && !zones[z].restoreEffects &&
         zones[z].scrollInfinite &&
-        (zones[z].workMode == "wallClock" ||
-         zones[z].workMode == "countdown") &&
+        (zones[z].workMode == "wallClock" || zones[z].workMode == "countdown" ||
+         zones[z].workMode == "stockTicker") &&
         !P.getZoneStatus(z)) {
 
       int16_t oldWidth = P.getTextColumns(z, zoneMessages[z]);
@@ -539,8 +539,6 @@ void displayAnimation() {
 
   // ── Periodic diagnostics ──
   if (currentMillis - lastDiagMs >= 10000) {
-    Serial.printf("[DIAG] frames=%u mid-swaps=%u heap=%u\n", frameCount,
-                  midSwapCount, ESP.getFreeHeap());
     frameCount = 0;
     midSwapCount = 0;
     lastDiagMs = currentMillis;
@@ -560,7 +558,8 @@ void displayAnimation() {
 
     bool isClockInfinite =
         zones[z].scrollInfinite &&
-        (zones[z].workMode == "wallClock" || zones[z].workMode == "countdown");
+        (zones[z].workMode == "wallClock" || zones[z].workMode == "countdown" ||
+         zones[z].workMode == "stockTicker");
     bool scrollFinished = P.getZoneStatus(z);
     bool shouldUpdate = zones[z].newMessageAvailable;
 
@@ -574,6 +573,7 @@ void displayAnimation() {
         // Commit the new message
         strcpy(zoneMessages[z], zoneMessagesPending[z]);
         zones[z].newMessageAvailable = false;
+        zoneServiceMessageScrolling[z] = false;
 
         // Link the buffer to the zone
         P.setTextBuffer(z, zoneMessages[z]);
@@ -594,13 +594,15 @@ void displayAnimation() {
 
           if (zones[z].workMode == "wallClock" ||
               zones[z].workMode == "owmWeather" ||
-              zones[z].workMode == "countdown") {
+              zones[z].workMode == "countdown" ||
+              zones[z].workMode == "stockTicker") {
             effOut = PA_NO_EFFECT;
           }
 
           if (!zones[z].textFits) {
             if ((zones[z].workMode == "wallClock" ||
-                 zones[z].workMode == "countdown") &&
+                 zones[z].workMode == "countdown" ||
+                 zones[z].workMode == "stockTicker") &&
                 !zones[z].scrollInfinite) {
               effIn = PA_PRINT;
               effOut = PA_NO_EFFECT;
@@ -633,11 +635,13 @@ void displayAnimation() {
                      zones[z].workMode == "manualInput")) ||
                    (allTestsFinish &&
                     (zones[z].workMode == "wallClock" ||
-                     zones[z].workMode == "countdown") &&
+                     zones[z].workMode == "countdown" ||
+                     zones[z].workMode == "stockTicker") &&
                     !zones[z].textFits && zones[z].scrollInfinite)) {
 
           if ((zones[z].workMode == "wallClock" ||
-               zones[z].workMode == "countdown") &&
+               zones[z].workMode == "countdown" ||
+               zones[z].workMode == "stockTicker") &&
               !zones[z].textFits) {
             if (zoneScrollCompleteTime[z] == 0) {
               zoneScrollCompleteTime[z] = millis();
@@ -751,15 +755,17 @@ void testZones(uint8_t n) {
 // ────────────────────────────────────────────────────────────────
 String haApiGet(String sensorId, String sensorPostfix) {
   Serial.printf("\nHA updating...");
-  bool https;
-  if (haApiHttpType == "https")
-    https = true;
-  if (haApiHttpType == "http")
-    https = false;
-  JsonObject haApiRespondPostObj =
-      httpsRequest(haAddr, haApiPort, "/api/states/" + sensorId,
-                   "Bearer " + haApiToken, https);
-  return haApiRespondPostObj[F("state")].as<String>() + sensorPostfix;
+  bool https = (haApiHttpType == "https");
+
+  DynamicJsonDocument doc(2048);
+  bool success = httpsRequestToDoc(haAddr, haApiPort, "/api/states/" + sensorId,
+                                   "Bearer " + haApiToken, https, doc);
+  JsonObject haApiRespondPostObj = doc.as<JsonObject>();
+
+  if (success && haApiRespondPostObj.containsKey(F("state"))) {
+    return haApiRespondPostObj[F("state")].as<String>() + sensorPostfix;
+  }
+  return "err";
 }
 
 // ─── WiFi AP Welcome

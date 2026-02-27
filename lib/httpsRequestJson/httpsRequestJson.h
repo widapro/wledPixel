@@ -15,14 +15,14 @@
 #error "This ain't a ESP8266 or ESP32!"
 #endif
 
+extern bool isFetchingHttps;
+
 // Returns true on success, fills the provided JsonDocument with the response
-bool httpsRequestToDoc(String addr, int port, String path, String token,
-                       bool https, JsonDocument &doc);
+bool httpsRequestToDoc(const String &addr, int port, const String &path,
+                       const String &token, bool https, JsonDocument &doc);
 
 // Legacy function - kept for backward compatibility but marked as deprecated
 // WARNING: This function has memory safety issues - use httpsRequestToDoc
 // instead
-JsonObject httpsRequest(String addr, int port, String path, String token,
-                        bool https);
 
 #endif

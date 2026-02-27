@@ -1,80 +1,123 @@
 #include "httpsRequestJson.h"
 
-// Internal helper function to perform the HTTP request
-static String performHttpRequest(String addr, int port, String path,
-                                 String token, bool https) {
-  String payload;
-  bool httpBegin;
-
-  WiFiClient espClient;
-
 #if defined(ESP8266)
-  static BearSSL::WiFiClientSecure httpClientSsl;
-  httpClientSsl.setBufferSizes(2048, 1024);
-#elif defined(ESP32)
-  WiFiClientSecure httpClientSsl;
+// (Unused includes removed to prevent SPI concurrent access issues)
 #endif
 
-  // Use stack-allocated HTTPClient instead of heap
-  HTTPClient httpClient;
-  httpClientSsl.setInsecure();
-  httpClientSsl.setTimeout(2000);
+bool isFetchingHttps = false;
+#include <memory>
 
-  if (https)
-    httpBegin = httpClient.begin(httpClientSsl, addr, port, path, true);
-  else
-    httpBegin = httpClient.begin(espClient, addr, port, path, false);
+struct HttpsGuard {
+  HttpsGuard() { isFetchingHttps = true; }
+  ~HttpsGuard() { isFetchingHttps = false; }
+};
+
+// Internal helper function to perform the HTTP request and parse directly
+static bool performHttpRequestToDoc(const String &addr, int port,
+                                    const String &path, const String &token,
+                                    bool https, JsonDocument &doc) {
+  HttpsGuard guard;
+#if defined(ESP8266)
+  if (https) {
+    uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t maxBlock = ESP.getMaxFreeBlockSize();
+    // Require 18KB total free heap and 9KB max block. BearSSL with reduced
+    // buffer sizes (setBufferSizes 2048+1024) needs ~14-16KB total, but we
+    // keep 18KB headroom to survive heap fragmentation after a prior fetch.
+    // If maxBlock falls below 9KB, BearSSL handshake may throw std::bad_alloc.
+    if (freeHeap < 18432 || maxBlock < 9216) {
+      Serial.printf(
+          "\n[HTTPS] Aborting TLS due to low memory. Heap: %u, MaxBlock: %u\n",
+          freeHeap, maxBlock);
+      return false;
+    }
+  }
+#endif
+
+  bool httpBegin = false;
+  bool success = false;
+  HTTPClient httpClient;
+
+#if defined(ESP8266)
+  std::unique_ptr<BearSSL::WiFiClientSecure> clientSsl;
+#elif defined(ESP32)
+  std::unique_ptr<WiFiClientSecure> clientSsl;
+#endif
+  std::unique_ptr<WiFiClient> espClient;
+
+  if (https) {
+#if defined(ESP8266)
+    // Use std::nothrow to prevent unhandled C++ exceptions (OOM) if memory is
+    // too fragmented
+    clientSsl.reset(new (std::nothrow) BearSSL::WiFiClientSecure);
+    if (!clientSsl) {
+      Serial.println(F("\n[HTTPS] Failed to allocate BearSSL client (OOM)."));
+      return false;
+    }
+    clientSsl->setInsecure();
+    clientSsl->setBufferSizes(2048, 1024);
+    clientSsl->setTimeout(2000);
+#elif defined(ESP32)
+    clientSsl.reset(new (std::nothrow) WiFiClientSecure);
+    if (!clientSsl)
+      return false;
+    clientSsl->setInsecure();
+#endif
+    httpBegin = httpClient.begin(*clientSsl, addr, port, path, true);
+  } else {
+    espClient.reset(new (std::nothrow) WiFiClient);
+    if (!espClient)
+      return false;
+    espClient->setTimeout(2000);
+    httpBegin = httpClient.begin(*espClient, addr, port, path, false);
+  }
 
   if (httpBegin) {
     if (token.length() > 0) {
       httpClient.addHeader("Authorization", token);
     }
+
     int httpCode = httpClient.GET();
+
     if (httpCode == HTTP_CODE_OK) {
-      payload = httpClient.getString();
+      Serial.print(F("\n[HTTPS] Start json parsing from stream"));
+      // Parse directly from stream to avoid massive String heap allocation
+      DeserializationError error = deserializeJson(doc, httpClient.getStream());
+      if (error) {
+        Serial.printf("\n[HTTPS] JSON parse error: %s", error.c_str());
+        success = false;
+      } else {
+        success = true;
+      }
     } else {
-      Serial.printf("api error: %s",
-                    httpClient.errorToString(httpCode).c_str());
-      payload = "err" + String(httpCode);
+      if (httpCode > 0) {
+        Serial.printf("\n[HTTPS] HTTP status error: %d", httpCode);
+      } else {
+        Serial.printf("\n[HTTPS] api error: %s",
+                      httpClient.errorToString(httpCode).c_str());
+      }
+      success = false;
     }
   } else {
-    Serial.print(F("api error start connection"));
-    payload = "err";
+    Serial.print(F("\n[HTTPS] api error start connection"));
+    success = false;
   }
+
   httpClient.end();
 
-  return payload;
+  // Force BearSSL to release its 5KB memory block immediately
+#if defined(ESP8266) || defined(ESP32)
+  if (clientSsl)
+    clientSsl->stop();
+#endif
+  if (espClient)
+    espClient->stop();
+
+  return success;
 }
 
 // New safe function - caller provides the JsonDocument
-bool httpsRequestToDoc(String addr, int port, String path, String token,
-                       bool https, JsonDocument &doc) {
-  String payload = performHttpRequest(addr, port, path, token, https);
-
-  Serial.print(F("\nStart json parsing in httpRequest func"));
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    Serial.printf("\nJSON parse error: %s", error.c_str());
-    return false;
-  }
-  return true;
-}
-
-// Legacy function - kept for backward compatibility
-// Uses a static buffer to avoid returning reference to local variable
-// WARNING: Not thread-safe, buffer is overwritten on each call
-JsonObject httpsRequest(String addr, int port, String path, String token,
-                        bool https) {
-  // Static document persists between calls - prevents memory leak but is NOT
-  // thread-safe
-  static StaticJsonDocument<2048> staticDoc;
-  staticDoc.clear();
-
-  String payload = performHttpRequest(addr, port, path, token, https);
-
-  Serial.print(F("\nStart json in httpRequest func"));
-  deserializeJson(staticDoc, payload);
-
-  return staticDoc.as<JsonObject>();
+bool httpsRequestToDoc(const String &addr, int port, const String &path,
+                       const String &token, bool https, JsonDocument &doc) {
+  return performHttpRequestToDoc(addr, port, path, token, https, doc);
 }

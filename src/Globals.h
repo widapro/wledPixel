@@ -49,8 +49,10 @@
 #include "indexPage.h"
 #include "otaPage.h"
 #include "owm.h"
-#include "settingsPage.h"
+#include "serviceSettingsPage.h"
+#include "stockTicker.h"
 #include "wledFont.h"
+#include "zoneSettingsPage.h"
 
 // ─── Pin Definitions
 // ───────────────────────────────────────────────────────────
@@ -86,6 +88,11 @@ typedef struct {
   // Countdown fields
   String countdownFormat, countdownFinish, countdownPrefix, countdownSuffix;
   bool countdownShowUnits;
+  // Stock ticker fields
+  String stockSymbols;
+  String stockDisplayFormat; // namePrice, priceOnly, changePct
+  String stockPrefix, stockPostfix;
+  bool stockShowArrows;
   bool newMessageAvailable;
   bool scrollInfinite;
   bool restoreEffects;
@@ -127,10 +134,15 @@ extern NTPClient timeClient;
 
 // Global flags
 extern bool globalOtaInProgress;
+extern bool otaPlatformMismatch;
+extern bool otaPlatformOk;
+extern uint8_t otaScanOverlap[32];
+extern size_t otaScanOverlapLen;
 extern bool shouldReboot;
 extern bool shouldUpdateNtp;
 extern size_t otaTotalSize;
 extern String restoreJsonBuffer;
+extern const char PLATFORM_MARKER[];
 extern const char *firmwareVer;
 extern int nLoop;
 extern bool restartESP;
@@ -203,6 +215,12 @@ extern String haAddr, haApiHttpType, haApiToken;
 extern uint16_t haUpdateInterval;
 extern uint16_t haApiPort;
 extern uint32_t haLastTime;
+
+// Stock Ticker
+extern String stockApiToken;
+extern uint16_t stockUpdateInterval;
+extern unsigned long stockLastTime;
+extern bool stockEnable;
 
 // ─── Callback
 // ──────────────────────────────────────────────────────────────────

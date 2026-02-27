@@ -6,13 +6,25 @@ int owmPressure;
 int owmWindSpeed;
 int owmTemperature;
 
-void owmWeatherUpdate(String city, String unitsFormat, String token) {
+void owmWeatherUpdate(const String &city, const String &unitsFormat,
+                      const String &token) {
+#if defined(ESP8266)
+  // Pre-check TLS memory BEFORE allocating Strings to avert std::bad_alloc on
+  // fragmented heaps
+  if (ESP.getFreeHeap() < 18432 || ESP.getMaxFreeBlockSize() < 9216) {
+    Serial.printf(
+        "\n[OWM] Deferring update due to low memory (Heap: %u, MaxBlock: %u)",
+        ESP.getFreeHeap(), ESP.getMaxFreeBlockSize());
+    return;
+  }
+#endif
   Serial.print(F("\nGetting weather from Open Weather Map"));
-  JsonObject owmWeatherPostObj =
-      httpsRequest("api.openweathermap.org", 443,
-                   "/data/2.5/weather?q=" + city + "&units=" + unitsFormat +
-                       "&appid=" + token,
-                   "", true);
+  DynamicJsonDocument doc(1024);
+  bool success = httpsRequestToDoc("api.openweathermap.org", 443,
+                                   "/data/2.5/weather?q=" + city + "&units=" +
+                                       unitsFormat + "&appid=" + token,
+                                   "", true, doc);
+  JsonObject owmWeatherPostObj = doc.as<JsonObject>();
 
   // Only update cached values if we got a valid response
   if (owmWeatherPostObj.containsKey(F("main"))) {

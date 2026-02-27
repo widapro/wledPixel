@@ -18,6 +18,7 @@ void setup() {
   readAllConfig();
   Serial.begin(115200);
   Serial.print(F("Start serial...."));
+  Serial.printf("\nCPU frequency: %u MHz\n", ESP.getCpuFreqMHz());
 
   readAllConfig();
 
@@ -85,6 +86,18 @@ void setup() {
     mqttClient.setBufferSize(1536);
   }
 
+  // Pre-fetch OWM weather data during boot so it's ready immediately
+  if (owmApiToken.length() > 0 && owmCity.length() > 0) {
+    for (uint8_t n = 0; n < zoneNumbers; n++) {
+      if (zones[n].workMode == "owmWeather") {
+        Serial.println(F("[OWM] Pre-fetching weather data during boot..."));
+        owmWeatherUpdate(owmCity, owmUnitsFormat, owmApiToken);
+        owmLastTime = millis(); // prevent immediate re-fetch in loop()
+        break; // one zone triggers the fetch; all share the data
+      }
+    }
+  }
+
   // Start NTP client
   timeClient.begin();
   timeClient.setTimeOffset(ntpTimeZone * 3600);
@@ -142,6 +155,7 @@ void setup() {
     P.setZone(n, zones[n].begin, zones[n].end);
     P.setIntensity(n, intensity);
   }
+  Serial.printf("[OTA] Platform marker: %s\n", PLATFORM_MARKER);
   Serial.println("Setup complete, entering loop");
 }
 
@@ -172,6 +186,8 @@ void loop() {
         zones[n].previousMillis = -1000000;
       if (zones[n].workMode == "intTempSensor")
         previousDsMillis = -1000000;
+      if (zones[n].workMode == "stockTicker")
+        stockLastTime = 0; // Force immediate stock update
     }
   }
 
@@ -276,6 +292,14 @@ void loop() {
         previousDsMillis = -1000000;
       }
 
+      if (zones[n].workMode == "stockTicker") {
+        if (!disableServiceMessages)
+          zoneShowModeMessage(n, "Stock");
+        zoneNewMessage(n, "Loading...", "");
+        stockLastTime = 0;
+        stockParseSymbols(n, zones[n].stockSymbols);
+      }
+
       // Clear boot messages to prevent them from looping in MQTT mode
       if (zones[n].workMode == "mqttClient" && disableServiceMessages) {
         strcpy(zoneMessages[n], "");
@@ -290,25 +314,55 @@ void loop() {
     }
   }
 
+  // ── Stock ticker statics (declared early so config-save can reset them) ──
+  static uint8_t stockCurrentZone = 0;
+  static bool stockFetchingRound = false;
+  static unsigned long stockLastStaggerTime = 0;
+
   // ── Handle deferred config save ───────────────────────────────────────────
+  // These cooperative variables protect the heap from fragmentation by spacing
+  // out heavy file operations and blocking network requests by at least 2000ms.
+  bool heavyTaskExecutedThisLoop = false;
+  static unsigned long lastHeavyTaskTime = 0;
+
   if (configDirty && (millis() - configDirtyTime > 2000)) {
-    Serial.println(F("Saving deferred configuration..."));
-    for (uint8_t n = 0; n < zoneNumbers; n++) {
-      saveVarsToConfFile("zoneSettings", n);
+    if (!heavyTaskExecutedThisLoop &&
+        currentMillis - lastHeavyTaskTime > 2000) {
+      heavyTaskExecutedThisLoop = true;
+      Serial.println(F("Saving deferred configuration..."));
+      for (uint8_t n = 0; n < zoneNumbers; n++) {
+        saveVarsToConfFile("zoneSettings", n);
+      }
+      configDirty = false;
+      lastHeavyTaskTime = millis();
+#if defined(ESP8266)
+      // Config save fragments heap via Preferences String temporaries.
+      // Abort any in-progress stock fetch round and reset timer so the
+      // next TLS allocation doesn't crash into fragmented memory.
+      stockFetchingRound = false;
+      stockLastTime = millis();
+      Serial.printf("[Config] Heap after save: %u, MaxBlock: %u\n",
+                    ESP.getFreeHeap(), ESP.getMaxFreeBlockSize());
+#endif
     }
-    configDirty = false;
   }
 
   // ── Main logic (after boot tests finish) ──────────────────────────────────
   if (allTestsFinish) {
+
     // MQTT reconnect / loop
     if (mqttEnable && mqttServerAddress.length() > 0) {
       if (!mqttClient.connected()) {
         long now = millis();
         if (now - lastReconnectAttempt > 5000) {
-          lastReconnectAttempt = now;
-          if (reconnect()) {
-            lastReconnectAttempt = 0;
+          if (!heavyTaskExecutedThisLoop &&
+              currentMillis - lastHeavyTaskTime > 2000) {
+            heavyTaskExecutedThisLoop = true;
+            lastReconnectAttempt = now;
+            if (reconnect()) {
+              lastReconnectAttempt = 0;
+            }
+            lastHeavyTaskTime = millis();
           }
         }
       } else {
@@ -330,8 +384,11 @@ void loop() {
 
     // DS18B20 measurement
     if (ds18b20Enable) {
-      if (currentMillis - previousDsMillis >=
-          (unsigned)ds18b20UpdateInterval * 1000) {
+      if (!heavyTaskExecutedThisLoop &&
+          currentMillis - lastHeavyTaskTime > 2000 &&
+          currentMillis - previousDsMillis >=
+              (unsigned)ds18b20UpdateInterval * 1000) {
+        heavyTaskExecutedThisLoop = true;
         previousDsMillis = currentMillis;
         sensors.requestTemperatures();
         float dsTempC = sensors.getTempCByIndex(0);
@@ -356,6 +413,7 @@ void loop() {
                 String("wledPixel-" + shortMACaddr + "/temperature").c_str(),
                 dsTemp.c_str());
         }
+        lastHeavyTaskTime = millis();
       }
     }
 
@@ -366,10 +424,87 @@ void loop() {
           owmCity.length() > 0)
         owmWeatherEnable = true;
     }
-    if (owmWeatherEnable && currentMillis - owmLastTime >=
-                                (unsigned long)owmUpdateInterval * 1000) {
+    if (owmWeatherEnable && !heavyTaskExecutedThisLoop &&
+        currentMillis - lastHeavyTaskTime > 2000 &&
+        currentMillis - owmLastTime >=
+            (unsigned long)owmUpdateInterval * 1000) {
+      heavyTaskExecutedThisLoop = true;
       owmWeatherUpdate(owmCity, owmUnitsFormat, owmApiToken);
       owmLastTime = currentMillis;
+      lastHeavyTaskTime = millis();
+    }
+
+    // Stock Ticker update — fetch ONE symbol per tick (non-blocking)
+    // Each tick fetches a single symbol from one zone, cycling through zones
+    // and symbols. The full update cycle is stockUpdateInterval (all symbols
+    // refreshed), but individual fetches are staggered every 2s.
+
+    bool stockTickerActive = false;
+    for (uint8_t n = 0; n < zoneNumbers; n++) {
+      if (zones[n].workMode == "stockTicker" && stockApiToken.length() > 0 &&
+          zones[n].stockSymbols.length() > 0) {
+        stockTickerActive = true;
+        break;
+      }
+    }
+
+    if (stockLastTime == 0) {
+      stockFetchingRound = false;
+      stockLastTime =
+          currentMillis - ((unsigned long)stockUpdateInterval * 1000) - 1;
+    }
+
+    if (stockTickerActive) {
+      if (!stockFetchingRound &&
+          currentMillis - stockLastTime >=
+              (unsigned long)stockUpdateInterval * 1000) {
+        stockFetchingRound = true;
+        stockCurrentZone = 0;
+      }
+
+      if (stockFetchingRound && !heavyTaskExecutedThisLoop &&
+          currentMillis - lastHeavyTaskTime > 2000 &&
+          currentMillis - stockLastStaggerTime >= 2000UL) {
+        heavyTaskExecutedThisLoop = true;
+        bool fetched = false;
+        while (stockCurrentZone < zoneNumbers) {
+          if (zones[stockCurrentZone].workMode == "stockTicker" &&
+              zones[stockCurrentZone].stockSymbols.length() > 0) {
+
+            // Prevent firing again if task is already running
+            if (!stockTaskInProgress) {
+              stockUpdateOneSymbolAsync(stockCurrentZone, stockApiToken);
+              fetched = true;
+
+              // Move to next symbol/zone logic only when done
+              StockZoneData &zd = stockZones[stockCurrentZone];
+              // nextFetchIndex advances internally, if we wrapped around
+              // we move to the next zone
+              if (zd.nextFetchIndex == 0 && zd.symbolCount > 0 &&
+                  zd.quotes[0].valid) {
+                // In Async mode nextFetchIndex will be updated inside the async
+                // thread. So we don't increment stockCurrentZone here directly
+                // until zd.nextFetchIndex == 0 after at least one fetch. We can
+                // safely just trust zd.nextFetchIndex wrapper
+                stockCurrentZone++;
+              }
+            } else {
+              fetched = true; // task is busy, so don't advance the staggered
+                              // time, just wait
+            }
+            break; // Only ONE symbol per tick
+          } else {
+            stockCurrentZone++;
+          }
+        }
+
+        if (!fetched || stockCurrentZone >= zoneNumbers) {
+          stockFetchingRound = false;
+          stockLastTime = currentMillis;
+        }
+        stockLastStaggerTime = currentMillis;
+        lastHeavyTaskTime = millis();
+      }
     }
 
     // ── Zone routines ─────────────────────────────────────────────────────
@@ -569,11 +704,15 @@ void loop() {
 
       // HA client
       if (zones[n].workMode == "haClient") {
-        if (currentMillis - zones[n].previousMillis >=
-            (unsigned)haUpdateInterval * 1000) {
+        if (!heavyTaskExecutedThisLoop &&
+            currentMillis - lastHeavyTaskTime > 2000 &&
+            currentMillis - zones[n].previousMillis >=
+                (unsigned)haUpdateInterval * 1000) {
+          heavyTaskExecutedThisLoop = true;
           zoneNewMessage(
               n, haApiGet(zones[n].haSensorId, zones[n].haSensorPostfix), "");
           zones[n].previousMillis = currentMillis;
+          lastHeavyTaskTime = millis();
         }
       }
 
@@ -581,6 +720,17 @@ void loop() {
       if (zones[n].workMode == "intTempSensor" && dsTempToDisplay == true) {
         zoneNewMessage(n, String(dsTemp), zones[n].ds18b20Postfix);
         dsTempToDisplay = false;
+      }
+
+      // Stock Ticker
+      if (zones[n].workMode == "stockTicker") {
+        String stockDisplay = stockGetDisplayString(
+            n, zones[n].stockShowArrows, zones[n].stockDisplayFormat,
+            zones[n].stockPrefix, zones[n].stockPostfix);
+        if (stockDisplay != zones[n].curTime) {
+          zones[n].curTime = stockDisplay;
+          zoneNewMessage(n, stockDisplay, "", true, true);
+        }
       }
     }
   }

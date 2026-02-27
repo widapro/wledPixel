@@ -13,15 +13,16 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 4. Display controll through MQTT
 5. **Wall NTP clock** [NTP sync clock]
 6. **Manual input**
-7. Countdown timer
-8. Full controll through **web UI**
-9. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
-10. Control display as light in Home Assistant [MQTT setup required]
-11. Initial setup through wifi AP and web UI
-12. Support 4 independent display zones
-13. Support up to 12 display segments at the same time [configured in web UI]
-14. Included 3 different fonts
-15. Plus symbols font
+7. **Stock Ticker Mode**: Display real-time stock prices on any zone. Supports multiple symbols, customizable display format, prefix/suffix, and price change arrows (↑↓)
+8. Countdown timer
+9. Full controll through **web UI**
+10. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
+11. Control display as light in Home Assistant [MQTT setup required]
+12. Initial setup through wifi AP and web UI
+13. Support 4 independent display zones
+14. Support up to 12 display segments at the same time [configured in web UI]
+15. Included 3 different fonts
+16. Plus symbols font
 
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: <a href="https://aliexpress.com/item/32618155357.html" target="_blank">https://aliexpress.com/item/32618155357.html</a>

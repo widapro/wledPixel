@@ -9,3 +9,6 @@
 **/*.o
 **/*.a
 compile_commands.json
+
+# Local scripts and notes
+CHANGELOG.md
