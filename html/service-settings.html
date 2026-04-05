@@ -499,6 +499,17 @@
                 onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
 
+              <hr class="my-4">
+              <h3 class="mb-4">Progress Bar settings</h3>
+              <p class="text-muted">Configure a progress bar overlay on the bottom row of each zone. The bar fills
+                left-to-right based on a numeric value from Home Assistant sensor or MQTT topic.</p>
+
+              <div id="pbSettingsContainer"></div>
+
+              <button id="applyPbSettings" class="w-100 btn btn-primary btn-lg"
+                onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
+
 
               <div class="col-sm-12"></div>
               <footer class="my-5 pt-5 text-muted text-center text-small border-top">
@@ -763,6 +774,116 @@
           setText("mqttDevicePrefixInfo", data.mqttDevicePrefix);
           setText("mqttDevicePrefixHelp", data.mqttDevicePrefix);
           setText("ds18b20TempInfo", data.ds18b20Temp);
+
+          // ── Generate Progress Bar forms per zone ──
+          var zn = data.zoneNumbers || 1;
+          var pbContainer = document.getElementById('pbSettingsContainer');
+          if (pbContainer) {
+            var html = '';
+            for (var z = 0; z < zn; z++) {
+              html += '<div class="card mb-3"><div class="card-body">';
+              html += '<h5 class="card-title">Zone ' + z + ' Progress Bar</h5>';
+              html += '<div class="row g-3">';
+              // Enable
+              html += '<div class="col-12"><div class="form-check">';
+              html += '<input class="form-check-input" type="checkbox" id="pbEnable' + z + '">';
+              html += '<label class="form-check-label" for="pbEnable' + z + '">Enable progress bar</label>';
+              html += '</div></div>';
+              // Data Source Type
+              html += '<div class="col-6"><label class="form-label">Data source</label>';
+              html += '<select class="form-select pb-src-type-toggle" id="pbSrcType' + z + '" data-zone="' + z + '">';
+              html += '<option value="ha">Home Assistant</option>';
+              html += '<option value="mqtt">MQTT</option>';
+              html += '<option value="time">Time</option></select></div>';
+              // Data Source ID (shown for ha/mqtt)
+              html += '<div class="col-6" id="pbSrcIdWrap' + z + '"><label class="form-label">Sensor ID / MQTT topic</label>';
+              html += '<input type="text" class="form-control" id="pbSrcId' + z + '" placeholder="sensor.battery_level or home/battery"></div>';
+              // Time mode (shown for time, hidden by default)
+              html += '<div class="col-6" id="pbTimeWrap' + z + '" style="display:none"><label class="form-label">Time mode</label>';
+              html += '<select class="form-select" id="pbTimeMode' + z + '">';
+              html += '<option value="seconds">Seconds (until next minute)</option>';
+              html += '<option value="minutes">Minutes (until next hour)</option>';
+              html += '<option value="hours">Hours (until next day)</option></select></div>';
+              // Min (hidden for time)
+              html += '<div class="col-3" id="pbMinWrap' + z + '"><label class="form-label">Min value</label>';
+              html += '<input type="number" step="any" class="form-control" id="pbMin' + z + '" value="0"></div>';
+              // Max (hidden for time)
+              html += '<div class="col-3" id="pbMaxWrap' + z + '"><label class="form-label">Max value</label>';
+              html += '<input type="number" step="any" class="form-control" id="pbMax' + z + '" value="100"></div>';
+              // Condition Enable
+              html += '<div class="col-12"><div class="form-check">';
+              html += '<input class="form-check-input pb-cond-toggle" type="checkbox" id="pbCondEn' + z + '" data-zone="' + z + '">';
+              html += '<label class="form-check-label" for="pbCondEn' + z + '">Enable condition</label>';
+              html += '</div></div>';
+              // Condition fields (hidden by default)
+              html += '<div id="pbCondFields' + z + '" style="display:none" class="row g-3">';
+              html += '<div class="col-6"><label class="form-label">Condition source</label>';
+              html += '<select class="form-select" id="pbCondSrcT' + z + '">';
+              html += '<option value="ha">Home Assistant</option>';
+              html += '<option value="mqtt">MQTT</option></select></div>';
+              html += '<div class="col-6"><label class="form-label">Condition sensor / topic</label>';
+              html += '<input type="text" class="form-control" id="pbCondSrcI' + z + '"></div>';
+              html += '<div class="col-6"><label class="form-label">Expected value (exact match)</label>';
+              html += '<input type="text" class="form-control" id="pbCondVal' + z + '"></div>';
+              html += '</div>'; // condFields
+              html += '</div></div></div>'; // row, card-body, card
+            }
+            pbContainer.innerHTML = html;
+
+            // Helper: update visibility based on source type
+            function pbUpdateSourceUI(z) {
+              var srcType = document.getElementById('pbSrcType' + z).value;
+              var isTime = (srcType === 'time');
+              document.getElementById('pbSrcIdWrap' + z).style.display = isTime ? 'none' : '';
+              document.getElementById('pbTimeWrap' + z).style.display = isTime ? '' : 'none';
+              document.getElementById('pbMinWrap' + z).style.display = isTime ? 'none' : '';
+              document.getElementById('pbMaxWrap' + z).style.display = isTime ? 'none' : '';
+            }
+
+            // Populate PB fields from data
+            for (var z = 0; z < zn; z++) {
+              setChecked('pbEnable' + z, !!data['pbEnableZone' + z]);
+              var srcType = data['pbSrcTypeZone' + z] || 'ha';
+              setVal('pbSrcType' + z, srcType);
+
+              if (srcType === 'time') {
+                // For time, dataSourceId holds the time mode
+                setVal('pbTimeMode' + z, data['pbSrcIdZone' + z] || 'seconds');
+                setVal('pbSrcId' + z, '');
+              } else {
+                setVal('pbSrcId' + z, data['pbSrcIdZone' + z] || '');
+                setVal('pbTimeMode' + z, 'seconds');
+              }
+
+              setVal('pbMin' + z, data['pbMinZone' + z] !== undefined ? data['pbMinZone' + z] : 0);
+              setVal('pbMax' + z, data['pbMaxZone' + z] !== undefined ? data['pbMaxZone' + z] : 100);
+              setChecked('pbCondEn' + z, !!data['pbCondEnZone' + z]);
+              setVal('pbCondSrcT' + z, data['pbCondSrcTZone' + z] || 'ha');
+              setVal('pbCondSrcI' + z, data['pbCondSrcIZone' + z] || '');
+              setVal('pbCondVal' + z, data['pbCondValZone' + z] || '');
+              // Show/hide condition fields
+              var condFields = document.getElementById('pbCondFields' + z);
+              if (condFields && data['pbCondEnZone' + z]) condFields.style.display = '';
+              // Apply source type visibility
+              pbUpdateSourceUI(z);
+            }
+
+            // Source type change handlers
+            document.querySelectorAll('.pb-src-type-toggle').forEach(function(el) {
+              el.addEventListener('change', function() {
+                pbUpdateSourceUI(this.getAttribute('data-zone'));
+              });
+            });
+
+            // Condition toggle handlers
+            document.querySelectorAll('.pb-cond-toggle').forEach(function(el) {
+              el.addEventListener('change', function() {
+                var zIdx = this.getAttribute('data-zone');
+                var fields = document.getElementById('pbCondFields' + zIdx);
+                if (fields) fields.style.display = this.checked ? '' : 'none';
+              });
+            });
+          }
         })
         .catch(err => {
           console.error('Error loading settings:', err);
@@ -1002,6 +1123,30 @@
           key: "stockSettings",
           stockApiToken: document.getElementById('stockApiToken').value,
           stockUpdateInterval: document.getElementById('stockUpdateInterval').value
+        }
+        sendPost(data);
+      }
+
+      if (key == "applyPbSettings") {
+        data = { key: "pbSettings" };
+        for (var z = 0; z < 4; z++) {
+          var el = document.getElementById('pbEnable' + z);
+          if (!el) continue;
+          data['pbEnable' + z] = el.checked;
+          var srcType = document.getElementById('pbSrcType' + z).value;
+          data['pbSrcType' + z] = srcType;
+          // For time source, send time mode as source ID
+          if (srcType === 'time') {
+            data['pbSrcId' + z] = document.getElementById('pbTimeMode' + z).value;
+          } else {
+            data['pbSrcId' + z] = document.getElementById('pbSrcId' + z).value;
+          }
+          data['pbMin' + z] = document.getElementById('pbMin' + z).value;
+          data['pbMax' + z] = document.getElementById('pbMax' + z).value;
+          data['pbCondEn' + z] = document.getElementById('pbCondEn' + z).checked;
+          data['pbCondSrcT' + z] = document.getElementById('pbCondSrcT' + z).value;
+          data['pbCondSrcI' + z] = document.getElementById('pbCondSrcI' + z).value;
+          data['pbCondVal' + z] = document.getElementById('pbCondVal' + z).value;
         }
         sendPost(data);
       }

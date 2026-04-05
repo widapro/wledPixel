@@ -2,7 +2,264 @@
 #include "ConfigStore.h"
 #include "DisplayUtils.h"
 #include "MqttHandler.h"
+#include <cstdio>
 #include <httpsRequestJson.h>
+
+namespace {
+constexpr uint8_t kZoneCapacity = 4;
+
+void addStaticPageHeaders(AsyncWebServerResponse *response) {
+  response->addHeader("Content-Encoding", "gzip");
+  response->addHeader("Cache-Control", "max-age=3600");
+  response->addHeader("Connection", "close");
+}
+
+bool parseBoolParam(const String &value) {
+  return value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on") ||
+         value.equalsIgnoreCase("yes") || value == "1";
+}
+
+int8_t detectZoneFromParamName(const String &name) {
+  int zonePos = name.indexOf("zone");
+  if (zonePos < 0)
+    zonePos = name.indexOf("Zone");
+  if (zonePos < 0 || zonePos + 4 >= (int)name.length())
+    return -1;
+
+  char c = name.charAt(zonePos + 4);
+  if (c < '0' || c >= static_cast<char>('0' + kZoneCapacity))
+    return -1;
+
+  return static_cast<int8_t>(c - '0');
+}
+
+bool resolveZoneIndexFromRequest(AsyncWebServerRequest *request,
+                                 uint8_t &zoneOut) {
+  zoneOut = kZoneCapacity;
+  int params = request->params();
+  for (int i = 0; i < params; i++) {
+    const AsyncWebParameter *p = request->getParam((size_t)i);
+    if (!p || !p->isPost() || p->name() == "key")
+      continue;
+
+    if (p->name() == "zone") {
+      int parsed = p->value().toInt();
+      if (parsed >= 0 && parsed < kZoneCapacity) {
+        zoneOut = static_cast<uint8_t>(parsed);
+        return true;
+      }
+      continue;
+    }
+
+    int8_t fromName = detectZoneFromParamName(p->name());
+    if (fromName >= 0)
+      zoneOut = static_cast<uint8_t>(fromName);
+  }
+
+  return zoneOut < kZoneCapacity;
+}
+
+template <typename T>
+void assignIfPresent(const JsonDocument &doc, const char *key, T &target) {
+  if (doc.containsKey(key))
+    target = doc[key];
+}
+
+void assignIfPresent(const JsonDocument &doc, const char *key, String &target) {
+  if (doc.containsKey(key))
+    target = doc[key].as<String>();
+}
+
+void addZoneSettingsToDoc(JsonDocument &doc, uint8_t zone,
+                          bool includeWoprUpdate) {
+  char key[48];
+
+  snprintf(key, sizeof(key), "zone%uBegin", zone);
+  doc[key] = zones[zone].begin;
+  snprintf(key, sizeof(key), "zone%uEnd", zone);
+  doc[key] = zones[zone].end;
+
+  snprintf(key, sizeof(key), "workModeZone%u", zone);
+  doc[key] = zones[zone].workMode;
+  snprintf(key, sizeof(key), "scrollSpeedZone%u", zone);
+  doc[key] = zones[zone].scrollSpeed;
+  snprintf(key, sizeof(key), "scrollPauseZone%u", zone);
+  doc[key] = zones[zone].scrollPause;
+  snprintf(key, sizeof(key), "scrollAlignZone%u", zone);
+  doc[key] = zones[zone].scrollAlign;
+  snprintf(key, sizeof(key), "scrollEffectZone%uIn", zone);
+  doc[key] = zones[zone].scrollEffectIn;
+  snprintf(key, sizeof(key), "scrollEffectZone%uOut", zone);
+  doc[key] = zones[zone].scrollEffectOut;
+  snprintf(key, sizeof(key), "charspacingZone%u", zone);
+  doc[key] = zones[zone].charspacing;
+  snprintf(key, sizeof(key), "fontZone%u", zone);
+  doc[key] = zones[zone].font;
+  snprintf(key, sizeof(key), "mqttTextTopicZone%u", zone);
+  doc[key] = MQTTZones[zone].message;
+  snprintf(key, sizeof(key), "mqttPostfixZone%u", zone);
+  doc[key] = zones[zone].mqttPostfix;
+  snprintf(key, sizeof(key), "clockDisplayFormatZone%u", zone);
+  doc[key] = zones[zone].clockDisplayFormat;
+  snprintf(key, sizeof(key), "owmWhatToDisplayZone%u", zone);
+  doc[key] = zones[zone].owmWhatToDisplay;
+  snprintf(key, sizeof(key), "haSensorIdZone%u", zone);
+  doc[key] = zones[zone].haSensorId;
+  snprintf(key, sizeof(key), "haSensorPostfixZone%u", zone);
+  doc[key] = zones[zone].haSensorPostfix;
+  snprintf(key, sizeof(key), "ds18b20PostfixZone%u", zone);
+  doc[key] = zones[zone].ds18b20Postfix;
+  snprintf(key, sizeof(key), "scrollInfiniteZone%u", zone);
+  doc[key] = zones[zone].scrollInfinite;
+
+  if (includeWoprUpdate) {
+    snprintf(key, sizeof(key), "woprUpdateIntervalZone%u", zone);
+    doc[key] = woprZones[zone].updateInterval;
+  }
+
+  snprintf(key, sizeof(key), "countdownFormatZone%u", zone);
+  doc[key] = zones[zone].countdownFormat;
+  snprintf(key, sizeof(key), "countdownFinishZone%u", zone);
+  doc[key] = zones[zone].countdownFinish;
+  snprintf(key, sizeof(key), "countdownShowUnitsZone%u", zone);
+  doc[key] = zones[zone].countdownShowUnits;
+  snprintf(key, sizeof(key), "countdownPrefixZone%u", zone);
+  doc[key] = zones[zone].countdownPrefix;
+  snprintf(key, sizeof(key), "countdownSuffixZone%u", zone);
+  doc[key] = zones[zone].countdownSuffix;
+  snprintf(key, sizeof(key), "countdownTargetZone%u", zone);
+  doc[key] = countdownState[zone].targetStr;
+
+  snprintf(key, sizeof(key), "stockSymbolsZone%u", zone);
+  doc[key] = zones[zone].stockSymbols;
+  snprintf(key, sizeof(key), "stockDisplayFormatZone%u", zone);
+  doc[key] = zones[zone].stockDisplayFormat;
+  snprintf(key, sizeof(key), "stockPrefixZone%u", zone);
+  doc[key] = zones[zone].stockPrefix;
+  snprintf(key, sizeof(key), "stockPostfixZone%u", zone);
+  doc[key] = zones[zone].stockPostfix;
+  snprintf(key, sizeof(key), "stockShowArrowsZone%u", zone);
+  doc[key] = zones[zone].stockShowArrows;
+
+  // Progress Bar
+  snprintf(key, sizeof(key), "pbEnableZone%u", zone);
+  doc[key] = progressBars[zone].enabled;
+  snprintf(key, sizeof(key), "pbSrcTypeZone%u", zone);
+  doc[key] = progressBars[zone].dataSourceType;
+  snprintf(key, sizeof(key), "pbSrcIdZone%u", zone);
+  doc[key] = progressBars[zone].dataSourceId;
+  snprintf(key, sizeof(key), "pbMinZone%u", zone);
+  doc[key] = progressBars[zone].minValue;
+  snprintf(key, sizeof(key), "pbMaxZone%u", zone);
+  doc[key] = progressBars[zone].maxValue;
+  snprintf(key, sizeof(key), "pbCondEnZone%u", zone);
+  doc[key] = progressBars[zone].conditionEnabled;
+  snprintf(key, sizeof(key), "pbCondSrcTZone%u", zone);
+  doc[key] = progressBars[zone].conditionSourceType;
+  snprintf(key, sizeof(key), "pbCondSrcIZone%u", zone);
+  doc[key] = progressBars[zone].conditionSourceId;
+  snprintf(key, sizeof(key), "pbCondValZone%u", zone);
+  doc[key] = progressBars[zone].conditionValue;
+}
+
+void restoreZoneSettingsFromDoc(const JsonDocument &doc, uint8_t zone) {
+  char key[48];
+
+  snprintf(key, sizeof(key), "zone%uBegin", zone);
+  assignIfPresent(doc, key, zones[zone].begin);
+  snprintf(key, sizeof(key), "zone%uEnd", zone);
+  assignIfPresent(doc, key, zones[zone].end);
+
+  snprintf(key, sizeof(key), "workModeZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].workMode);
+  snprintf(key, sizeof(key), "scrollSpeedZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].scrollSpeed);
+  snprintf(key, sizeof(key), "scrollPauseZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].scrollPause);
+  snprintf(key, sizeof(key), "scrollAlignZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].scrollAlign);
+  snprintf(key, sizeof(key), "scrollEffectZone%uIn", zone);
+  assignIfPresent(doc, key, zones[zone].scrollEffectIn);
+  snprintf(key, sizeof(key), "scrollEffectZone%uOut", zone);
+  assignIfPresent(doc, key, zones[zone].scrollEffectOut);
+  snprintf(key, sizeof(key), "charspacingZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].charspacing);
+  snprintf(key, sizeof(key), "fontZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].font);
+  snprintf(key, sizeof(key), "mqttTextTopicZone%u", zone);
+  assignIfPresent(doc, key, MQTTZones[zone].message);
+  snprintf(key, sizeof(key), "mqttPostfixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].mqttPostfix);
+  snprintf(key, sizeof(key), "clockDisplayFormatZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].clockDisplayFormat);
+  snprintf(key, sizeof(key), "owmWhatToDisplayZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].owmWhatToDisplay);
+  snprintf(key, sizeof(key), "haSensorIdZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].haSensorId);
+  snprintf(key, sizeof(key), "haSensorPostfixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].haSensorPostfix);
+  snprintf(key, sizeof(key), "ds18b20PostfixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].ds18b20Postfix);
+  snprintf(key, sizeof(key), "woprUpdateIntervalZone%u", zone);
+  assignIfPresent(doc, key, woprZones[zone].updateInterval);
+  snprintf(key, sizeof(key), "scrollInfiniteZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].scrollInfinite);
+
+  snprintf(key, sizeof(key), "countdownFormatZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].countdownFormat);
+  snprintf(key, sizeof(key), "countdownFinishZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].countdownFinish);
+  snprintf(key, sizeof(key), "countdownShowUnitsZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].countdownShowUnits);
+  snprintf(key, sizeof(key), "countdownPrefixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].countdownPrefix);
+  snprintf(key, sizeof(key), "countdownSuffixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].countdownSuffix);
+  snprintf(key, sizeof(key), "countdownTargetZone%u", zone);
+  if (doc.containsKey(key)) {
+    String target = doc[key].as<String>();
+    if (target.length() > 0)
+      parseCountdownTarget(target, zone, timeClient.getEpochTime(), ntpTimeZone);
+  }
+
+  snprintf(key, sizeof(key), "stockSymbolsZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].stockSymbols);
+  snprintf(key, sizeof(key), "stockDisplayFormatZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].stockDisplayFormat);
+  snprintf(key, sizeof(key), "stockPrefixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].stockPrefix);
+  snprintf(key, sizeof(key), "stockPostfixZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].stockPostfix);
+  snprintf(key, sizeof(key), "stockShowArrowsZone%u", zone);
+  assignIfPresent(doc, key, zones[zone].stockShowArrows);
+
+  // Progress Bar
+  snprintf(key, sizeof(key), "pbEnableZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].enabled);
+  snprintf(key, sizeof(key), "pbSrcTypeZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].dataSourceType);
+  snprintf(key, sizeof(key), "pbSrcIdZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].dataSourceId);
+  snprintf(key, sizeof(key), "pbMinZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].minValue);
+  snprintf(key, sizeof(key), "pbMaxZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].maxValue);
+  snprintf(key, sizeof(key), "pbCondEnZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].conditionEnabled);
+  snprintf(key, sizeof(key), "pbCondSrcTZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].conditionSourceType);
+  snprintf(key, sizeof(key), "pbCondSrcIZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].conditionSourceId);
+  snprintf(key, sizeof(key), "pbCondValZone%u", zone);
+  assignIfPresent(doc, key, progressBars[zone].conditionValue);
+}
+
+void clearPreferencesNamespace(const char *ns) {
+  preferences.begin(ns, false);
+  preferences.clear();
+  preferences.end();
+}
+} // namespace
 
 class OomPreFlightHandler : public AsyncWebHandler {
 public:
@@ -44,27 +301,21 @@ void setupWebRoutes() {
   server.on("/", HTTP_ANY, [](AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response =
         request->beginResponse_P(200, "text/html", indexPage, indexPage_len);
-    response->addHeader("Content-Encoding", "gzip");
-    response->addHeader("Cache-Control", "max-age=3600");
-    response->addHeader("Connection", "close");
+    addStaticPageHeaders(response);
     request->send(response);
   });
 
   server.on("/zone-settings", HTTP_ANY, [](AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse_P(
         200, "text/html", zoneSettingsPage, zoneSettingsPage_len);
-    response->addHeader("Content-Encoding", "gzip");
-    response->addHeader("Cache-Control", "max-age=3600");
-    response->addHeader("Connection", "close");
+    addStaticPageHeaders(response);
     request->send(response);
   });
 
   server.on("/service-settings", HTTP_ANY, [](AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse_P(
         200, "text/html", serviceSettingsPage, serviceSettingsPage_len);
-    response->addHeader("Content-Encoding", "gzip");
-    response->addHeader("Cache-Control", "max-age=3600");
-    response->addHeader("Connection", "close");
+    addStaticPageHeaders(response);
     request->send(response);
   });
 
@@ -78,18 +329,14 @@ void setupWebRoutes() {
 #endif
     AsyncWebServerResponse *response =
         request->beginResponse_P(200, "text/html", otaPage, otaPage_len);
-    response->addHeader("Content-Encoding", "gzip");
-    response->addHeader("Cache-Control", "max-age=3600");
-    response->addHeader("Connection", "close");
+    addStaticPageHeaders(response);
     request->send(response);
   });
 
   server.on("/backup", HTTP_GET, [](AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response =
         request->beginResponse_P(200, "text/html", backupPage, backupPage_len);
-    response->addHeader("Content-Encoding", "gzip");
-    response->addHeader("Cache-Control", "max-age=3600");
-    response->addHeader("Connection", "close");
+    addStaticPageHeaders(response);
     request->send(response);
   });
 
@@ -153,40 +400,8 @@ void setupWebRoutes() {
     doc["stockUpdateInterval"] = stockUpdateInterval;
 
     // Zones
-    for (int i = 0; i < 4; i++) {
-      String z = "zone" + String(i);
-      doc[z + "Begin"] = zones[i].begin;
-      doc[z + "End"] = zones[i].end;
-      doc["workModeZone" + String(i)] = zones[i].workMode;
-      doc["scrollSpeedZone" + String(i)] = zones[i].scrollSpeed;
-      doc["scrollPauseZone" + String(i)] = zones[i].scrollPause;
-      doc["scrollAlignZone" + String(i)] = zones[i].scrollAlign;
-      doc["scrollEffectZone" + String(i) + "In"] = zones[i].scrollEffectIn;
-      doc["scrollEffectZone" + String(i) + "Out"] = zones[i].scrollEffectOut;
-      doc["charspacingZone" + String(i)] = zones[i].charspacing;
-      doc["fontZone" + String(i)] = zones[i].font;
-      doc["mqttTextTopicZone" + String(i)] = MQTTZones[i].message;
-      doc["mqttPostfixZone" + String(i)] = zones[i].mqttPostfix;
-      doc["clockDisplayFormatZone" + String(i)] = zones[i].clockDisplayFormat;
-      doc["owmWhatToDisplayZone" + String(i)] = zones[i].owmWhatToDisplay;
-      doc["haSensorIdZone" + String(i)] = zones[i].haSensorId;
-      doc["haSensorPostfixZone" + String(i)] = zones[i].haSensorPostfix;
-      doc["ds18b20PostfixZone" + String(i)] = zones[i].ds18b20Postfix;
-      doc["woprUpdateIntervalZone" + String(i)] = woprZones[i].updateInterval;
-      doc["scrollInfiniteZone" + String(i)] = zones[i].scrollInfinite;
-      // Countdown
-      doc["countdownFormatZone" + String(i)] = zones[i].countdownFormat;
-      doc["countdownFinishZone" + String(i)] = zones[i].countdownFinish;
-      doc["countdownShowUnitsZone" + String(i)] = zones[i].countdownShowUnits;
-      doc["countdownPrefixZone" + String(i)] = zones[i].countdownPrefix;
-      doc["countdownSuffixZone" + String(i)] = zones[i].countdownSuffix;
-      doc["countdownTargetZone" + String(i)] = countdownState[i].targetStr;
-      // Stock
-      doc["stockSymbolsZone" + String(i)] = zones[i].stockSymbols;
-      doc["stockDisplayFormatZone" + String(i)] = zones[i].stockDisplayFormat;
-      doc["stockPrefixZone" + String(i)] = zones[i].stockPrefix;
-      doc["stockPostfixZone" + String(i)] = zones[i].stockPostfix;
-      doc["stockShowArrowsZone" + String(i)] = zones[i].stockShowArrows;
+    for (uint8_t i = 0; i < kZoneCapacity; i++) {
+      addZoneSettingsToDoc(doc, i, true);
     }
 
     serializeJson(doc, *response);
@@ -220,8 +435,14 @@ void setupWebRoutes() {
         // Restore System
         if (doc.containsKey("disableServiceMessages"))
           disableServiceMessages = doc["disableServiceMessages"];
-        if (doc.containsKey("zoneNumbers"))
-          zoneNumbers = doc["zoneNumbers"];
+        if (doc.containsKey("zoneNumbers")) {
+          int parsedZoneCount = doc["zoneNumbers"];
+          if (parsedZoneCount < 1)
+            parsedZoneCount = 1;
+          if (parsedZoneCount > kZoneCapacity)
+            parsedZoneCount = kZoneCapacity;
+          zoneNumbers = static_cast<uint8_t>(parsedZoneCount);
+        }
         if (doc.containsKey("intensity"))
           intensity = doc["intensity"];
 
@@ -302,95 +523,8 @@ void setupWebRoutes() {
         saveVarsToConfFile("stockSettings", 0);
 
         // Restore Zones
-        for (int i = 0; i < 4; i++) {
-          String z = "zone" + String(i);
-          if (doc.containsKey(z + "Begin"))
-            zones[i].begin = doc[z + "Begin"];
-          if (doc.containsKey(z + "End"))
-            zones[i].end = doc[z + "End"];
-          if (doc.containsKey("workModeZone" + String(i)))
-            zones[i].workMode = doc["workModeZone" + String(i)].as<String>();
-          if (doc.containsKey("scrollSpeedZone" + String(i)))
-            zones[i].scrollSpeed = doc["scrollSpeedZone" + String(i)];
-          if (doc.containsKey("scrollPauseZone" + String(i)))
-            zones[i].scrollPause = doc["scrollPauseZone" + String(i)];
-          if (doc.containsKey("scrollAlignZone" + String(i)))
-            zones[i].scrollAlign =
-                doc["scrollAlignZone" + String(i)].as<String>();
-          if (doc.containsKey("scrollEffectZone" + String(i) + "In"))
-            zones[i].scrollEffectIn =
-                doc["scrollEffectZone" + String(i) + "In"].as<String>();
-          if (doc.containsKey("scrollEffectZone" + String(i) + "Out"))
-            zones[i].scrollEffectOut =
-                doc["scrollEffectZone" + String(i) + "Out"].as<String>();
-          if (doc.containsKey("charspacingZone" + String(i)))
-            zones[i].charspacing = doc["charspacingZone" + String(i)];
-          if (doc.containsKey("fontZone" + String(i)))
-            zones[i].font = doc["fontZone" + String(i)].as<String>();
-          if (doc.containsKey("mqttTextTopicZone" + String(i)))
-            MQTTZones[i].message =
-                doc["mqttTextTopicZone" + String(i)].as<String>();
-          if (doc.containsKey("mqttPostfixZone" + String(i)))
-            zones[i].mqttPostfix =
-                doc["mqttPostfixZone" + String(i)].as<String>();
-          if (doc.containsKey("clockDisplayFormatZone" + String(i)))
-            zones[i].clockDisplayFormat =
-                doc["clockDisplayFormatZone" + String(i)].as<String>();
-          if (doc.containsKey("owmWhatToDisplayZone" + String(i)))
-            zones[i].owmWhatToDisplay =
-                doc["owmWhatToDisplayZone" + String(i)].as<String>();
-          if (doc.containsKey("haSensorIdZone" + String(i)))
-            zones[i].haSensorId =
-                doc["haSensorIdZone" + String(i)].as<String>();
-          if (doc.containsKey("haSensorPostfixZone" + String(i)))
-            zones[i].haSensorPostfix =
-                doc["haSensorPostfixZone" + String(i)].as<String>();
-          if (doc.containsKey("ds18b20PostfixZone" + String(i)))
-            zones[i].ds18b20Postfix =
-                doc["ds18b20PostfixZone" + String(i)].as<String>();
-          if (doc.containsKey("woprUpdateIntervalZone" + String(i)))
-            woprZones[i].updateInterval =
-                doc["woprUpdateIntervalZone" + String(i)];
-          if (doc.containsKey("scrollInfiniteZone" + String(i)))
-            zones[i].scrollInfinite = doc["scrollInfiniteZone" + String(i)];
-          // Countdown
-          if (doc.containsKey("countdownFormatZone" + String(i)))
-            zones[i].countdownFormat =
-                doc["countdownFormatZone" + String(i)].as<String>();
-          if (doc.containsKey("countdownFinishZone" + String(i)))
-            zones[i].countdownFinish =
-                doc["countdownFinishZone" + String(i)].as<String>();
-          if (doc.containsKey("countdownShowUnitsZone" + String(i)))
-            zones[i].countdownShowUnits =
-                doc["countdownShowUnitsZone" + String(i)];
-          if (doc.containsKey("countdownPrefixZone" + String(i)))
-            zones[i].countdownPrefix =
-                doc["countdownPrefixZone" + String(i)].as<String>();
-          if (doc.containsKey("countdownSuffixZone" + String(i)))
-            zones[i].countdownSuffix =
-                doc["countdownSuffixZone" + String(i)].as<String>();
-          if (doc.containsKey("countdownTargetZone" + String(i))) {
-            String target = doc["countdownTargetZone" + String(i)].as<String>();
-            if (target.length() > 0)
-              parseCountdownTarget(target, i, timeClient.getEpochTime(),
-                                   ntpTimeZone);
-          }
-          // Stock
-          if (doc.containsKey("stockSymbolsZone" + String(i)))
-            zones[i].stockSymbols =
-                doc["stockSymbolsZone" + String(i)].as<String>();
-          if (doc.containsKey("stockDisplayFormatZone" + String(i)))
-            zones[i].stockDisplayFormat =
-                doc["stockDisplayFormatZone" + String(i)].as<String>();
-          if (doc.containsKey("stockPrefixZone" + String(i)))
-            zones[i].stockPrefix =
-                doc["stockPrefixZone" + String(i)].as<String>();
-          if (doc.containsKey("stockPostfixZone" + String(i)))
-            zones[i].stockPostfix =
-                doc["stockPostfixZone" + String(i)].as<String>();
-          if (doc.containsKey("stockShowArrowsZone" + String(i)))
-            zones[i].stockShowArrows = doc["stockShowArrowsZone" + String(i)];
-
+        for (uint8_t i = 0; i < kZoneCapacity; i++) {
+          restoreZoneSettingsFromDoc(doc, i);
           saveVarsToConfFile("zoneSettings", i);
         }
 
@@ -401,6 +535,13 @@ void setupWebRoutes() {
       },
       [](AsyncWebServerRequest *request, String filename, size_t index,
          uint8_t *data, size_t len, bool final) {
+        if (index == 0) {
+          restoreJsonBuffer = "";
+          size_t contentLen = request->contentLength();
+          if (contentLen > 0 && contentLen < 8192) {
+            restoreJsonBuffer.reserve(contentLen + 1);
+          }
+        }
         for (size_t i = 0; i < len; i++) {
           restoreJsonBuffer += (char)data[i];
         }
@@ -454,43 +595,8 @@ void setupWebRoutes() {
     doc["ds18b20Temp"] = (dsTemp == "-127") ? "Not connected" : dsTemp;
 
     // Zones
-    for (int i = 0; i < 4; i++) {
-      String z = "zone" + String(i);
-      doc[z + "Begin"] = zones[i].begin;
-      doc[z + "End"] = zones[i].end;
-      doc["workModeZone" + String(i)] = zones[i].workMode;
-      doc["scrollSpeedZone" + String(i)] = zones[i].scrollSpeed;
-      doc["scrollPauseZone" + String(i)] = zones[i].scrollPause;
-      doc["scrollAlignZone" + String(i)] = zones[i].scrollAlign;
-      doc["scrollEffectZone" + String(i) + "In"] = zones[i].scrollEffectIn;
-      doc["scrollEffectZone" + String(i) + "Out"] = zones[i].scrollEffectOut;
-      doc["charspacingZone" + String(i)] = zones[i].charspacing;
-      doc["fontZone" + String(i)] = zones[i].font;
-
-      doc["mqttTextTopicZone" + String(i)] = MQTTZones[i].message;
-      doc["mqttPostfixZone" + String(i)] = zones[i].mqttPostfix;
-
-      doc["clockDisplayFormatZone" + String(i)] = zones[i].clockDisplayFormat;
-      doc["owmWhatToDisplayZone" + String(i)] = zones[i].owmWhatToDisplay;
-
-      doc["haSensorIdZone" + String(i)] = zones[i].haSensorId;
-      doc["haSensorPostfixZone" + String(i)] = zones[i].haSensorPostfix;
-
-      doc["ds18b20PostfixZone" + String(i)] = zones[i].ds18b20Postfix;
-      doc["scrollInfiniteZone" + String(i)] = zones[i].scrollInfinite;
-      // Countdown
-      doc["countdownFormatZone" + String(i)] = zones[i].countdownFormat;
-      doc["countdownFinishZone" + String(i)] = zones[i].countdownFinish;
-      doc["countdownShowUnitsZone" + String(i)] = zones[i].countdownShowUnits;
-      doc["countdownPrefixZone" + String(i)] = zones[i].countdownPrefix;
-      doc["countdownSuffixZone" + String(i)] = zones[i].countdownSuffix;
-      doc["countdownTargetZone" + String(i)] = countdownState[i].targetStr;
-      // Stock
-      doc["stockSymbolsZone" + String(i)] = zones[i].stockSymbols;
-      doc["stockDisplayFormatZone" + String(i)] = zones[i].stockDisplayFormat;
-      doc["stockPrefixZone" + String(i)] = zones[i].stockPrefix;
-      doc["stockPostfixZone" + String(i)] = zones[i].stockPostfix;
-      doc["stockShowArrowsZone" + String(i)] = zones[i].stockShowArrows;
+    for (uint8_t i = 0; i < kZoneCapacity; i++) {
+      addZoneSettingsToDoc(doc, i, false);
     }
 
     doc["stockShowArrows"] = zones[0].stockShowArrows;
@@ -511,7 +617,7 @@ void setupWebRoutes() {
 #endif
         AsyncResponseStream *response =
             request->beginResponseStream("application/json");
-        DynamicJsonDocument doc(1536);
+        DynamicJsonDocument doc(3072);
 
         // System Settings
         doc["deviceName"] = shortMACaddr;
@@ -567,6 +673,32 @@ void setupWebRoutes() {
         // Stock Ticker
         doc["stockApiToken"] = (stockApiToken == "") ? "" : "********";
         doc["stockUpdateInterval"] = stockUpdateInterval;
+
+        // Zone count (needed for PB form generation)
+        doc["zoneNumbers"] = zoneNumbers;
+
+        // Progress Bar
+        for (uint8_t i = 0; i < kZoneCapacity; i++) {
+          char key[24];
+          snprintf(key, sizeof(key), "pbEnableZone%u", i);
+          doc[key] = progressBars[i].enabled;
+          snprintf(key, sizeof(key), "pbSrcTypeZone%u", i);
+          doc[key] = progressBars[i].dataSourceType;
+          snprintf(key, sizeof(key), "pbSrcIdZone%u", i);
+          doc[key] = progressBars[i].dataSourceId;
+          snprintf(key, sizeof(key), "pbMinZone%u", i);
+          doc[key] = progressBars[i].minValue;
+          snprintf(key, sizeof(key), "pbMaxZone%u", i);
+          doc[key] = progressBars[i].maxValue;
+          snprintf(key, sizeof(key), "pbCondEnZone%u", i);
+          doc[key] = progressBars[i].conditionEnabled;
+          snprintf(key, sizeof(key), "pbCondSrcTZone%u", i);
+          doc[key] = progressBars[i].conditionSourceType;
+          snprintf(key, sizeof(key), "pbCondSrcIZone%u", i);
+          doc[key] = progressBars[i].conditionSourceId;
+          snprintf(key, sizeof(key), "pbCondValZone%u", i);
+          doc[key] = progressBars[i].conditionValue;
+        }
 
         serializeJson(doc, *response);
         request->send(response);
@@ -795,7 +927,7 @@ void setupWebRoutes() {
       if (dsTemp == "-127") {
         request->send(200, "text/plain", "Not connected");
       } else {
-        request->send(200, "text/plain", String(dsTemp).c_str());
+        request->send(200, "text/plain", dsTemp);
       }
     } else {
       request->send(404, "text/plain", "Sensor disabled");
@@ -818,17 +950,12 @@ void setupWebRoutes() {
 
     for (int i = 0; i < params; i++) {
       const AsyncWebParameter *p = request->getParam((size_t)i);
-      if (p->isPost()) {
+      if (p && p->isPost()) {
         Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-
-        if (strcmp(p->name().c_str(), "messageZone0") == 0)
-          zoneNewMessage(0, p->value().c_str(), "", true, true);
-        if (strcmp(p->name().c_str(), "messageZone1") == 0)
-          zoneNewMessage(1, p->value().c_str(), "", true, true);
-        if (strcmp(p->name().c_str(), "messageZone2") == 0)
-          zoneNewMessage(2, p->value().c_str(), "", true, true);
-        if (strcmp(p->name().c_str(), "messageZone3") == 0)
-          zoneNewMessage(3, p->value().c_str(), "", true, true);
+        int8_t zone = detectZoneFromParamName(p->name());
+        if (zone >= 0 && p->name().startsWith("message")) {
+          zoneNewMessage(zone, p->value().c_str(), "", true, true);
+        }
       }
     }
     request->send(200, "application/json", "{\"status\":\"ok\"}");
@@ -847,33 +974,57 @@ void setupWebRoutes() {
     int params = request->params();
     Serial.print(params);
     Serial.println(F(" params sent in"));
-    const AsyncWebParameter *key = request->getParam((size_t)0);
-    uint8_t n = 99;
+
+    if (params == 0) {
+      request->send(400, "application/json",
+                    "{\"error\":\"Missing config group\"}");
+      return;
+    }
+
+    if (!request->hasParam("key", true)) {
+      request->send(400, "application/json",
+                    "{\"error\":\"Missing config group\"}");
+      return;
+    }
+    const AsyncWebParameter *key = request->getParam("key", true);
+
+    String keyValue = key->value();
+    uint8_t n = kZoneCapacity;
     bool finishRequest = false;
     bool showModeMessage = false;
-    bool zoneUpdate[4] = {false, false, false, false};
+    bool zoneUpdate[kZoneCapacity] = {false};
 
-    for (int i = 1; i < params; i++) {
+    if (keyValue == "zoneSettings" && !resolveZoneIndexFromRequest(request, n)) {
+      request->send(400, "application/json",
+                    "{\"error\":\"Missing or invalid zone\"}");
+      return;
+    }
+
+    for (int i = 0; i < params; i++) {
       const AsyncWebParameter *p = request->getParam((size_t)i);
-      if (p->isPost()) {
-        Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+      if (!p || !p->isPost() || p->name() == "key")
+        continue;
 
-        if (key->value() == "systemSettings") {
-          if (p->name() == "disableServiceMessages") {
-            if (strcmp(p->value().c_str(), "true") == 0)
-              disableServiceMessages = true;
-            if (strcmp(p->value().c_str(), "false") == 0)
-              disableServiceMessages = false;
-          }
+      Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+
+        if (keyValue == "systemSettings") {
+          if (p->name() == "disableServiceMessages")
+            disableServiceMessages = parseBoolParam(p->value());
           if (p->name() == "deviceName")
             shortMACaddr = p->value().c_str();
 
           finishRequest = true;
         }
 
-        if (key->value() == "displaySettings") {
-          if (p->name() == "zoneNumbers")
-            zoneNumbers = p->value().toInt();
+        if (keyValue == "displaySettings") {
+          if (p->name() == "zoneNumbers") {
+            int parsedZoneCount = p->value().toInt();
+            if (parsedZoneCount < 1)
+              parsedZoneCount = 1;
+            if (parsedZoneCount > kZoneCapacity)
+              parsedZoneCount = kZoneCapacity;
+            zoneNumbers = static_cast<uint8_t>(parsedZoneCount);
+          }
           if (p->name() == "zone0Begin")
             zones[0].begin = p->value().toInt();
           if (p->name() == "zone0End")
@@ -896,19 +1047,8 @@ void setupWebRoutes() {
           finishRequest = true;
         }
 
-        if (key->value() == "zoneSettings") {
-          if (p->name() == "zone")
-            n = p->value().toInt();
-          if (p->name().indexOf("zone0") >= 0)
-            n = 0;
-          if (p->name().indexOf("zone1") >= 0)
-            n = 1;
-          if (p->name().indexOf("zone2") >= 0)
-            n = 2;
-          if (p->name().indexOf("zone3") >= 0)
-            n = 3;
-
-          if (n < 4) {
+        if (keyValue == "zoneSettings") {
+          if (n < kZoneCapacity) {
             if (p->name() == "workMode") {
               String oldWorkMode = zones[n].workMode;
               zones[n].workMode = p->value().c_str();
@@ -1048,12 +1188,7 @@ void setupWebRoutes() {
           if (p->name() == "haSensorPostfix")
             zones[n].haSensorPostfix = p->value().c_str();
           if (p->name() == "scrollInfinite") {
-            String pv = p->value();
-            if (pv.equalsIgnoreCase("true") || pv.equalsIgnoreCase("on") ||
-                pv == "1")
-              zones[n].scrollInfinite = true;
-            else
-              zones[n].scrollInfinite = false;
+            zones[n].scrollInfinite = parseBoolParam(p->value());
           }
           // Countdown settings
           if (p->name() == "countdownTarget") {
@@ -1079,10 +1214,7 @@ void setupWebRoutes() {
           if (p->name() == "countdownFinish")
             zones[n].countdownFinish = p->value().c_str();
           if (p->name() == "countdownShowUnits") {
-            String pv = p->value();
-            zones[n].countdownShowUnits =
-                (pv.equalsIgnoreCase("true") || pv.equalsIgnoreCase("on") ||
-                 pv == "1");
+            zones[n].countdownShowUnits = parseBoolParam(p->value());
             zones[n].curTime = "";
           }
           if (p->name() == "countdownPrefix") {
@@ -1112,24 +1244,14 @@ void setupWebRoutes() {
             zones[n].curTime = ""; // Force redraw
           }
           if (p->name() == "stockShowArrows") {
-            String pv = p->value();
-            if (pv.equalsIgnoreCase("true") || pv.equalsIgnoreCase("on") ||
-                pv == "1")
-              zones[n].stockShowArrows = true;
-            else
-              zones[n].stockShowArrows = false;
+            zones[n].stockShowArrows = parseBoolParam(p->value());
           }
 
           finishRequest = true;
         }
-      }
-      if (key->value() == "mqttSettings") {
-        if (p->name() == "mqttEnable") {
-          if (strcmp(p->value().c_str(), "true") == 0)
-            mqttEnable = true;
-          if (strcmp(p->value().c_str(), "false") == 0)
-            mqttEnable = false;
-        }
+      if (keyValue == "mqttSettings") {
+        if (p->name() == "mqttEnable")
+          mqttEnable = parseBoolParam(p->value());
         if (p->name() == "mqttServerAddress")
           mqttServerAddress = p->value().c_str();
         if (p->name() == "mqttServerPort")
@@ -1151,15 +1273,11 @@ void setupWebRoutes() {
         shouldMqttDisconnect = true;
       }
 
-      if (key->value() == "wallClockSett") {
+      if (keyValue == "wallClockSett") {
         if (p->name() == "ntpTimeZone")
           ntpTimeZone = p->value().toFloat();
-        if (p->name() == "disableDotsBlink") {
-          if (strcmp(p->value().c_str(), "true") == 0)
-            disableDotsBlink = true;
-          if (strcmp(p->value().c_str(), "false") == 0)
-            disableDotsBlink = false;
-        }
+        if (p->name() == "disableDotsBlink")
+          disableDotsBlink = parseBoolParam(p->value());
         if (p->name() == "ntpUpdateInterval")
           ntpUpdateInterval = p->value().toInt();
         if (p->name() == "ntpServer") {
@@ -1175,7 +1293,7 @@ void setupWebRoutes() {
         finishRequest = true;
       }
 
-      if (key->value() == "owmSettings") {
+      if (keyValue == "owmSettings") {
         if (p->name() == "owmApiToken") {
           String val = p->value();
           if (val != "********") {
@@ -1191,7 +1309,7 @@ void setupWebRoutes() {
 
         finishRequest = true;
       }
-      if (key->value() == "haSettings") {
+      if (keyValue == "haSettings") {
         if (p->name() == "haAddr")
           haAddr = p->value().c_str();
         if (p->name() == "haUpdateInterval")
@@ -1210,13 +1328,9 @@ void setupWebRoutes() {
         finishRequest = true;
       }
 
-      if (key->value() == "ds18b20Settings") {
-        if (p->name() == "ds18b20Enable") {
-          if (strcmp(p->value().c_str(), "true") == 0)
-            ds18b20Enable = true;
-          if (strcmp(p->value().c_str(), "false") == 0)
-            ds18b20Enable = false;
-        }
+      if (keyValue == "ds18b20Settings") {
+        if (p->name() == "ds18b20Enable")
+          ds18b20Enable = parseBoolParam(p->value());
         if (p->name() == "ds18b20UpdateInterval")
           ds18b20UpdateInterval = p->value().toInt();
         if (p->name() == "ds18b20UnitsFormat") {
@@ -1227,7 +1341,7 @@ void setupWebRoutes() {
         finishRequest = true;
       }
 
-      if (key->value() == "stockSettings") {
+      if (keyValue == "stockSettings") {
         if (p->name() == "stockApiToken") {
           String val = p->value();
           if (val != "********") {
@@ -1239,7 +1353,44 @@ void setupWebRoutes() {
         finishRequest = true;
       }
 
-      if (key->value() == "intensity") {
+      if (keyValue == "pbSettings") {
+        // Parse per-zone progress bar parameters
+        // Expected param names: pbEnable0, pbSrcType0, pbSrcId0, pbMin0,
+        // pbMax0, pbCondEn0, pbCondSrcT0, pbCondSrcI0, pbCondVal0, etc.
+        for (uint8_t z = 0; z < kZoneCapacity; z++) {
+          char pname[24];
+          snprintf(pname, sizeof(pname), "pbEnable%u", z);
+          if (p->name() == pname)
+            progressBars[z].enabled = parseBoolParam(p->value());
+          snprintf(pname, sizeof(pname), "pbSrcType%u", z);
+          if (p->name() == pname)
+            progressBars[z].dataSourceType = p->value().c_str();
+          snprintf(pname, sizeof(pname), "pbSrcId%u", z);
+          if (p->name() == pname)
+            progressBars[z].dataSourceId = p->value().c_str();
+          snprintf(pname, sizeof(pname), "pbMin%u", z);
+          if (p->name() == pname)
+            progressBars[z].minValue = p->value().toFloat();
+          snprintf(pname, sizeof(pname), "pbMax%u", z);
+          if (p->name() == pname)
+            progressBars[z].maxValue = p->value().toFloat();
+          snprintf(pname, sizeof(pname), "pbCondEn%u", z);
+          if (p->name() == pname)
+            progressBars[z].conditionEnabled = parseBoolParam(p->value());
+          snprintf(pname, sizeof(pname), "pbCondSrcT%u", z);
+          if (p->name() == pname)
+            progressBars[z].conditionSourceType = p->value().c_str();
+          snprintf(pname, sizeof(pname), "pbCondSrcI%u", z);
+          if (p->name() == pname)
+            progressBars[z].conditionSourceId = p->value().c_str();
+          snprintf(pname, sizeof(pname), "pbCondVal%u", z);
+          if (p->name() == pname)
+            progressBars[z].conditionValue = p->value().c_str();
+        }
+        finishRequest = true;
+      }
+
+      if (keyValue == "intensity") {
         if (p->name() == "intensity") {
           if ((p->value()).toInt() > 0) {
             intensity = (p->value()).toInt() - 1;
@@ -1258,14 +1409,20 @@ void setupWebRoutes() {
       }
     }
 
+    if (!finishRequest) {
+      request->send(400, "application/json",
+                    "{\"error\":\"No valid config fields\"}");
+      return;
+    }
+
     // Apply batched updates
-    for (int z = 0; z < 4; z++) {
+    for (uint8_t z = 0; z < kZoneCapacity; z++) {
       if (zoneUpdate[z])
         zones[z].forceUpdate = true;
     }
 
     if (finishRequest) {
-      if (showModeMessage && !disableServiceMessages) {
+      if (showModeMessage && !disableServiceMessages && n < kZoneCapacity) {
         if (zones[n].workMode == "mqttClient")
           zoneShowModeMessage(n, "MQTT");
         if (zones[n].workMode == "manualInput")
@@ -1285,26 +1442,75 @@ void setupWebRoutes() {
           stockLastTime = 0;
         }
       }
-      if (key->value() == "zoneSettings" && zones[n].workMode == "mqttClient") {
+      if (keyValue == "zoneSettings" && n < kZoneCapacity &&
+          zones[n].workMode == "mqttClient") {
         if (mqttClient.connected() && MQTTZones[n].message != "" &&
             MQTTZones[n].message != " ") {
           mqttClient.subscribe(MQTTZones[n].message.c_str());
         }
       }
       request->send(200, "application/json", "{\"status\":\"ok\"}");
-      if (key->value() == "zoneSettings") {
+      if (keyValue == "zoneSettings") {
         configDirty = true;
         configDirtyTime = millis();
       } else {
-        saveVarsToConfFile(key->value(), n);
+        saveVarsToConfFile(keyValue, n);
       }
+
+      // Immediate progress bar update after settings change
+      if (keyValue == "pbSettings") {
+        MD_MAX72XX *mx = P.getGraphicObject();
+        for (uint8_t z = 0; z < zoneNumbers && z < 4; z++) {
+          // Re-evaluate condition state
+          if (progressBars[z].conditionEnabled) {
+            // Condition enabled — reset to false until actual data confirms it
+            progressBars[z].conditionMet = false;
+          } else {
+            // No condition — always active
+            progressBars[z].conditionMet = true;
+          }
+          // Reset update timers to force immediate HA poll on next loop
+          progressBars[z].lastDataUpdate = 0;
+          progressBars[z].lastCondUpdate = 0;
+          // Clear row 7 for this zone if bar is disabled or condition not met
+          if ((!progressBars[z].enabled ||
+               (progressBars[z].conditionEnabled && !progressBars[z].conditionMet)) && mx) {
+            int startCol = zones[z].begin * 8;
+            int endCol = (zones[z].end * 8) + 7;
+            for (int col = startCol; col <= endCol; col++) {
+              mx->setPoint(7, col, false);
+            }
+          }
+        }
+
+        // Resubscribe to MQTT PB topics (device is already connected)
+        if (mqttClient.connected()) {
+          for (uint8_t z = 0; z < zoneNumbers && z < 4; z++) {
+            if (progressBars[z].enabled) {
+              if (progressBars[z].dataSourceType == "mqtt" &&
+                  progressBars[z].dataSourceId.length() > 0) {
+                mqttClient.subscribe(progressBars[z].dataSourceId.c_str());
+              }
+              if (progressBars[z].conditionEnabled &&
+                  progressBars[z].conditionSourceType == "mqtt" &&
+                  progressBars[z].conditionSourceId.length() > 0) {
+                mqttClient.subscribe(progressBars[z].conditionSourceId.c_str());
+              }
+            }
+          }
+        }
+
+        // Immediately redraw active bars
+        updateProgressBars();
+      }
+
       shouldMqttPublish = true;
       // Reinforce power state after zone settings to prevent display
       // turning off
-      if (key->value() == "zoneSettings" && power) {
+      if (keyValue == "zoneSettings" && power) {
         P.displayShutdown(0);
       }
-      if (key->value() == "displaySettings") {
+      if (keyValue == "displaySettings") {
         restartESP = true;
       }
     }
@@ -1316,43 +1522,16 @@ void setupWebRoutes() {
               Serial.println(F("Factory reset requested!"));
 
               // Clear all preferences namespaces
-              preferences.begin("systemSettings", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("displaySettings", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("mqttSettings", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("wallClockSett", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("owmSettings", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("haSettings", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("ds18b20Settings", false);
-              preferences.clear();
-              preferences.end();
-
-              preferences.begin("intensity", false);
-              preferences.clear();
-              preferences.end();
-
-              for (uint8_t n = 0; n < 4; n++) {
-                preferences.begin("zoneSettings", false);
-                preferences.clear();
-                preferences.end();
-              }
+              clearPreferencesNamespace("systemSettings");
+              clearPreferencesNamespace("displaySettings");
+              clearPreferencesNamespace("mqttSettings");
+              clearPreferencesNamespace("wallClockSett");
+              clearPreferencesNamespace("owmSettings");
+              clearPreferencesNamespace("haSettings");
+              clearPreferencesNamespace("ds18b20Settings");
+              clearPreferencesNamespace("intensity");
+              clearPreferencesNamespace("zoneSettings");
+              clearPreferencesNamespace("pbSettings");
 
               if (wifiManagerPtr)
                 wifiManagerPtr->resetSettings();

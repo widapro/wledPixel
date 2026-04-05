@@ -20,8 +20,6 @@ void setup() {
   Serial.print(F("Start serial...."));
   Serial.printf("\nCPU frequency: %u MHz\n", ESP.getCpuFreqMHz());
 
-  readAllConfig();
-
   initDisplay();
 
   // Show boot message
@@ -736,4 +734,57 @@ void loop() {
   }
 
   displayAnimation();
+
+  // ── Progress Bar HA polling + rendering ───────────────────────────────────
+  if (allTestsFinish) {
+    for (uint8_t i = 0; i < zoneNumbers && i < 4; i++) {
+      if (!progressBars[i].enabled || woprZones[i].active)
+        continue;
+
+      // ── HA data source polling ──
+      if (progressBars[i].dataSourceType == "ha" &&
+          progressBars[i].dataSourceId.length() > 0 && haAddr.length() > 0 &&
+          haApiToken.length() > 0) {
+        if (!heavyTaskExecutedThisLoop &&
+            currentMillis - lastHeavyTaskTime > 2000 &&
+            currentMillis - progressBars[i].lastDataUpdate >=
+                (unsigned long)haUpdateInterval * 1000) {
+          heavyTaskExecutedThisLoop = true;
+          String state = haApiGetState(progressBars[i].dataSourceId);
+          if (state.length() > 0) {
+            progressBars[i].currentValue = state.toFloat();
+            Serial.printf("\n[PB] Zone %u HA data: '%s' -> %.2f", i,
+                          state.c_str(), progressBars[i].currentValue);
+          }
+          progressBars[i].lastDataUpdate = currentMillis;
+          lastHeavyTaskTime = millis();
+        }
+      }
+
+      // ── HA condition source polling ──
+      if (progressBars[i].conditionEnabled &&
+          progressBars[i].conditionSourceType == "ha" &&
+          progressBars[i].conditionSourceId.length() > 0 &&
+          haAddr.length() > 0 && haApiToken.length() > 0) {
+        if (!heavyTaskExecutedThisLoop &&
+            currentMillis - lastHeavyTaskTime > 2000 &&
+            currentMillis - progressBars[i].lastCondUpdate >=
+                (unsigned long)haUpdateInterval * 1000) {
+          heavyTaskExecutedThisLoop = true;
+          String state = haApiGetState(progressBars[i].conditionSourceId);
+          if (state.length() > 0) {
+            progressBars[i].conditionMet =
+                (state == progressBars[i].conditionValue);
+            progressBars[i].lastCondReceivedValue = state;
+            Serial.printf("\n[PB] Zone %u HA cond: '%s' == '%s' -> %s", i,
+                          state.c_str(),
+                          progressBars[i].conditionValue.c_str(),
+                          progressBars[i].conditionMet ? "true" : "false");
+          }
+          progressBars[i].lastCondUpdate = currentMillis;
+          lastHeavyTaskTime = millis();
+        }
+      }
+    }
+  }
 }

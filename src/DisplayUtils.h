@@ -26,7 +26,9 @@ bool isNumeric(String str);
 
 void displayAnimation();
 void updateWOPREffect(uint8_t zone);
+void updateProgressBars();
 void testZones(uint8_t n);
 
 String haApiGet(String sensorId, String sensorPostfix);
+String haApiGetState(const String &sensorId);
 void wifiApWelcomeMessage(AsyncWiFiManager *wifiManager);

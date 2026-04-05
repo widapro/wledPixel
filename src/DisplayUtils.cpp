@@ -307,7 +307,7 @@ void zoneShowModeMessage(int zone, String modeName) {
     if (textWidth == 0 && modeName.length() > 0)
       textWidth = modeName.length() * 6;
 
-    uint16_t startCol, endCol;
+    uint16_t startCol = 0, endCol = 0;
     P.getDisplayExtent(zone, startCol, endCol);
     int16_t zoneWidth = abs(startCol - endCol) + 1;
 
@@ -532,8 +532,12 @@ void displayAnimation() {
   }
 
   // ── Phase 2: Render the current frame ──
-  // Now all buffers are consistent — safe to animate.
   P.displayAnimate();
+
+  // Immediately re-draw progress bar overlay and flush affected devices.
+  // Parola clears row 7 during zone animation and flushes before returning.
+  // We re-draw PB and flush the affected devices immediately after.
+  updateProgressBars();
 
   frameCount++;
 
@@ -583,7 +587,7 @@ void displayAnimation() {
         if (textWidth == 0 && strlen(zoneMessages[z]) > 0)
           textWidth = strlen(zoneMessages[z]) * 6;
 
-        uint16_t startCol, endCol;
+        uint16_t startCol = 0, endCol = 0;
         P.getDisplayExtent(z, startCol, endCol);
         int16_t zoneWidth = abs(startCol - endCol) + 1;
         zones[z].textFits = (textWidth <= zoneWidth);
@@ -766,6 +770,128 @@ String haApiGet(String sensorId, String sensorPostfix) {
     return haApiRespondPostObj[F("state")].as<String>() + sensorPostfix;
   }
   return "err";
+}
+
+// ─── HA API Get State Only (for Progress Bar)
+// ─────────────────────────────────
+String haApiGetState(const String &sensorId) {
+  bool https = (haApiHttpType == "https");
+
+  DynamicJsonDocument doc(2048);
+  bool success = httpsRequestToDoc(haAddr, haApiPort, "/api/states/" + sensorId,
+                                   "Bearer " + haApiToken, https, doc);
+  JsonObject obj = doc.as<JsonObject>();
+
+  if (success && obj.containsKey(F("state"))) {
+    return obj[F("state")].as<String>();
+  }
+  return "";
+}
+
+// ─── Progress Bar Overlay
+// ─────────────────────────────────────────────────────
+void updateProgressBars() {
+  MD_MAX72XX *mx = P.getGraphicObject();
+  if (!mx)
+    return;
+
+  uint8_t devCount = mx->getDeviceCount();
+  if (devCount == 0)
+    return;
+
+  // Disable auto-update — all writes go to buffer only, no SPI
+  mx->update(MD_MAX72XX::OFF);
+
+  for (uint8_t n = 0; n < zoneNumbers && n < 4; n++) {
+    ProgressBarData &pb = progressBars[n];
+
+    // Skip if not enabled or zone is in WOPR mode
+    if (!pb.enabled || woprZones[n].active) {
+      continue;
+    }
+
+    // Compute active state
+    if (pb.conditionEnabled) {
+      pb.barActive = pb.conditionMet;
+    } else {
+      pb.barActive = true;
+    }
+
+    int startCol = zones[n].begin * 8;
+    int endCol = (zones[n].end * 8) + 7;
+    int totalCols = endCol - startCol + 1;
+
+    if (!pb.barActive) {
+      // Condition not met — clear row 7 for zone devices
+      for (uint8_t dev = zones[n].begin; dev <= zones[n].end; dev++) {
+        mx->setRow(dev, 7, 0x00);
+      }
+      continue;
+    }
+
+    // For time-based source, compute value from NTP clock
+    float useValue = pb.currentValue;
+    float useMin = pb.minValue;
+    float useMax = pb.maxValue;
+
+    if (pb.dataSourceType == "time") {
+      time_t epochTime = timeClient.getEpochTime();
+      struct tm *ptm = gmtime(&epochTime);
+      if (ptm) {
+        if (pb.dataSourceId == "seconds") {
+          useValue = ptm->tm_sec;
+          useMin = 0;
+          useMax = 59;
+        } else if (pb.dataSourceId == "minutes") {
+          useValue = ptm->tm_min;
+          useMin = 0;
+          useMax = 59;
+        } else if (pb.dataSourceId == "hours") {
+          useValue = ptm->tm_hour;
+          useMin = 0;
+          useMax = 23;
+        }
+      }
+    }
+
+    // Clamp value to [min, max]
+    float clamped = useValue;
+    if (clamped < useMin)
+      clamped = useMin;
+    if (clamped > useMax)
+      clamped = useMax;
+
+    // Calculate how many pixels to light
+    float range = useMax - useMin;
+    int filledCols = 0;
+    if (range > 0.0001f) {
+      filledCols = (int)((clamped - useMin) / range * totalCols);
+    }
+    // Ensure at least 1 pixel when value is above minimum
+    if (filledCols == 0 && clamped > useMin) {
+      filledCols = 1;
+    }
+
+    // Build row 7 bitmask per device and write with setRow()
+    // MD_MAX72XX col numbering: higher col = physical left
+    // Fill left-to-right: start from endCol going down
+    for (uint8_t dev = zones[n].begin; dev <= zones[n].end; dev++) {
+      uint8_t rowBits = 0;
+      int devStartCol = dev * 8;
+      for (uint8_t bit = 0; bit < 8; bit++) {
+        int absCol = devStartCol + bit;
+        // Map absolute column to the fill index (left-to-right)
+        int fillIdx = endCol - absCol;
+        if (fillIdx >= 0 && fillIdx < totalCols && fillIdx < filledCols) {
+          rowBits |= (1 << bit);
+        }
+      }
+      mx->setRow(dev, 7, rowBits);
+    }
+  }
+
+  // Re-enable auto-update — flushes ALL dirty rows in one batch
+  mx->update(MD_MAX72XX::ON);
 }
 
 // ─── WiFi AP Welcome

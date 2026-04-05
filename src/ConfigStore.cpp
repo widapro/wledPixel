@@ -1,4 +1,21 @@
 #include "ConfigStore.h"
+#include <cstdio>
+
+namespace {
+constexpr uint8_t kZoneCapacity = 4;
+
+void buildZoneKey(char *out, size_t outSize, uint8_t zone, const char *suffix) {
+  snprintf(out, outSize, "zone%u%s", zone, suffix);
+}
+
+uint8_t normalizedZoneCount(uint8_t raw) {
+  if (raw < 1)
+    return 1;
+  if (raw > kZoneCapacity)
+    return kZoneCapacity;
+  return raw;
+}
+} // namespace
 
 // ─── Template Processor
 // ────────────────────────────────────────────────────────
@@ -220,7 +237,7 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
   }
 
   if (groupName == "displaySettings") {
-    preferences.putUChar("zoneNumbers", zoneNumbers);
+    preferences.putUChar("zoneNumbers", normalizedZoneCount(zoneNumbers));
     preferences.putUChar("zones0Begin", zones[0].begin);
     preferences.putUChar("zones0End", zones[0].end);
     preferences.putUChar("zones1Begin", zones[1].begin);
@@ -232,63 +249,70 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
   }
 
   if (groupName == "zoneSettings") {
-    preferences.putString((String("zone") + n + "WorkMode").c_str(),
-                          zones[n].workMode);
-    preferences.putUChar((String("zone") + n + "ScrolSpeed").c_str(),
-                         zones[n].scrollSpeed);
-    preferences.putUChar((String("zone") + n + "ScrolPause").c_str(),
-                         zones[n].scrollPause);
-    preferences.putString((String("zone") + n + "ScrolAlign").c_str(),
-                          zones[n].scrollAlign);
-    preferences.putString((String("zone") + n + "ScrolEfIn").c_str(),
-                          zones[n].scrollEffectIn);
-    preferences.putString((String("zone") + n + "ScrolEfOut").c_str(),
-                          zones[n].scrollEffectOut);
-    preferences.putString((String("zone") + n + "Font").c_str(), zones[n].font);
-    preferences.putUChar((String("zone") + n + "Charspac").c_str(),
-                         zones[n].charspacing);
-    preferences.putString((String("zone") + n + "mqttTexTop").c_str(),
-                          MQTTZones[n].message);
-    preferences.putString((String("zone") + n + "mqttPosfix").c_str(),
-                          zones[n].mqttPostfix);
-    preferences.putString((String("zone") + n + "ClDispForm").c_str(),
-                          zones[n].clockDisplayFormat);
-    preferences.putString((String("zone") + n + "OwmWhDisp").c_str(),
-                          zones[n].owmWhatToDisplay);
-    preferences.putString((String("zone") + n + "HaSensorId").c_str(),
-                          zones[n].haSensorId);
-    preferences.putString((String("zone") + n + "HaSensorPf").c_str(),
-                          zones[n].haSensorPostfix);
-    preferences.putString((String("zone") + n + "Ds18b20Pf").c_str(),
-                          zones[n].ds18b20Postfix);
-    preferences.putUShort((String("zone") + n + "WoprUpdInt").c_str(),
-                          woprZones[n].updateInterval);
-    preferences.putBool((String("zone") + n + "ScrolInf").c_str(),
-                        zones[n].scrollInfinite);
+    if (n >= kZoneCapacity) {
+      preferences.end();
+      return;
+    }
+
+    char key[24];
+    buildZoneKey(key, sizeof(key), n, "WorkMode");
+    preferences.putString(key, zones[n].workMode);
+    buildZoneKey(key, sizeof(key), n, "ScrolSpeed");
+    preferences.putUChar(key, zones[n].scrollSpeed);
+    buildZoneKey(key, sizeof(key), n, "ScrolPause");
+    preferences.putUChar(key, zones[n].scrollPause);
+    buildZoneKey(key, sizeof(key), n, "ScrolAlign");
+    preferences.putString(key, zones[n].scrollAlign);
+    buildZoneKey(key, sizeof(key), n, "ScrolEfIn");
+    preferences.putString(key, zones[n].scrollEffectIn);
+    buildZoneKey(key, sizeof(key), n, "ScrolEfOut");
+    preferences.putString(key, zones[n].scrollEffectOut);
+    buildZoneKey(key, sizeof(key), n, "Font");
+    preferences.putString(key, zones[n].font);
+    buildZoneKey(key, sizeof(key), n, "Charspac");
+    preferences.putUChar(key, zones[n].charspacing);
+    buildZoneKey(key, sizeof(key), n, "mqttTexTop");
+    preferences.putString(key, MQTTZones[n].message);
+    buildZoneKey(key, sizeof(key), n, "mqttPosfix");
+    preferences.putString(key, zones[n].mqttPostfix);
+    buildZoneKey(key, sizeof(key), n, "ClDispForm");
+    preferences.putString(key, zones[n].clockDisplayFormat);
+    buildZoneKey(key, sizeof(key), n, "OwmWhDisp");
+    preferences.putString(key, zones[n].owmWhatToDisplay);
+    buildZoneKey(key, sizeof(key), n, "HaSensorId");
+    preferences.putString(key, zones[n].haSensorId);
+    buildZoneKey(key, sizeof(key), n, "HaSensorPf");
+    preferences.putString(key, zones[n].haSensorPostfix);
+    buildZoneKey(key, sizeof(key), n, "Ds18b20Pf");
+    preferences.putString(key, zones[n].ds18b20Postfix);
+    buildZoneKey(key, sizeof(key), n, "WoprUpdInt");
+    preferences.putUShort(key, woprZones[n].updateInterval);
+    buildZoneKey(key, sizeof(key), n, "ScrolInf");
+    preferences.putBool(key, zones[n].scrollInfinite);
     // Countdown settings
-    preferences.putString((String("zone") + n + "CdFormat").c_str(),
-                          zones[n].countdownFormat);
-    preferences.putString((String("zone") + n + "CdFinish").c_str(),
-                          zones[n].countdownFinish);
-    preferences.putBool((String("zone") + n + "CdUnits").c_str(),
-                        zones[n].countdownShowUnits);
-    preferences.putString((String("zone") + n + "CdPrefix").c_str(),
-                          zones[n].countdownPrefix);
-    preferences.putString((String("zone") + n + "CdSuffix").c_str(),
-                          zones[n].countdownSuffix);
-    preferences.putString((String("zone") + n + "CdTarget").c_str(),
-                          countdownState[n].targetStr);
+    buildZoneKey(key, sizeof(key), n, "CdFormat");
+    preferences.putString(key, zones[n].countdownFormat);
+    buildZoneKey(key, sizeof(key), n, "CdFinish");
+    preferences.putString(key, zones[n].countdownFinish);
+    buildZoneKey(key, sizeof(key), n, "CdUnits");
+    preferences.putBool(key, zones[n].countdownShowUnits);
+    buildZoneKey(key, sizeof(key), n, "CdPrefix");
+    preferences.putString(key, zones[n].countdownPrefix);
+    buildZoneKey(key, sizeof(key), n, "CdSuffix");
+    preferences.putString(key, zones[n].countdownSuffix);
+    buildZoneKey(key, sizeof(key), n, "CdTarget");
+    preferences.putString(key, countdownState[n].targetStr);
     // Stock ticker settings
-    preferences.putString((String("zone") + n + "StockSym").c_str(),
-                          zones[n].stockSymbols);
-    preferences.putString((String("zone") + n + "StockFmt").c_str(),
-                          zones[n].stockDisplayFormat);
-    preferences.putString((String("zone") + n + "StockPre").c_str(),
-                          zones[n].stockPrefix);
-    preferences.putString((String("zone") + n + "StockPst").c_str(),
-                          zones[n].stockPostfix);
-    preferences.putBool((String("zone") + n + "StockArr").c_str(),
-                        zones[n].stockShowArrows);
+    buildZoneKey(key, sizeof(key), n, "StockSym");
+    preferences.putString(key, zones[n].stockSymbols);
+    buildZoneKey(key, sizeof(key), n, "StockFmt");
+    preferences.putString(key, zones[n].stockDisplayFormat);
+    buildZoneKey(key, sizeof(key), n, "StockPre");
+    preferences.putString(key, zones[n].stockPrefix);
+    buildZoneKey(key, sizeof(key), n, "StockPst");
+    preferences.putString(key, zones[n].stockPostfix);
+    buildZoneKey(key, sizeof(key), n, "StockArr");
+    preferences.putBool(key, zones[n].stockShowArrows);
   }
 
   if (groupName == "mqttSettings") {
@@ -332,6 +356,30 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
     preferences.putUShort("stUpdateInt", stockUpdateInterval);
   }
 
+  if (groupName == "pbSettings") {
+    for (uint8_t i = 0; i < kZoneCapacity; i++) {
+      char key[24];
+      snprintf(key, sizeof(key), "pb%uEnable", i);
+      preferences.putBool(key, progressBars[i].enabled);
+      snprintf(key, sizeof(key), "pb%uSrcType", i);
+      preferences.putString(key, progressBars[i].dataSourceType);
+      snprintf(key, sizeof(key), "pb%uSrcId", i);
+      preferences.putString(key, progressBars[i].dataSourceId);
+      snprintf(key, sizeof(key), "pb%uMin", i);
+      preferences.putFloat(key, progressBars[i].minValue);
+      snprintf(key, sizeof(key), "pb%uMax", i);
+      preferences.putFloat(key, progressBars[i].maxValue);
+      snprintf(key, sizeof(key), "pb%uCondEn", i);
+      preferences.putBool(key, progressBars[i].conditionEnabled);
+      snprintf(key, sizeof(key), "pb%uCdSrcT", i);
+      preferences.putString(key, progressBars[i].conditionSourceType);
+      snprintf(key, sizeof(key), "pb%uCdSrcI", i);
+      preferences.putString(key, progressBars[i].conditionSourceId);
+      snprintf(key, sizeof(key), "pb%uCdVal", i);
+      preferences.putString(key, progressBars[i].conditionValue);
+    }
+  }
+
   if (groupName == "intensity") {
     preferences.putUChar("intensity", intensity);
   }
@@ -351,7 +399,8 @@ void readConfig(String groupName, uint8_t n) {
   }
 
   if (groupName == "displaySettings") {
-    zoneNumbers = preferences.getUChar("zoneNumbers", zoneNumbers);
+    zoneNumbers =
+        normalizedZoneCount(preferences.getUChar("zoneNumbers", zoneNumbers));
     zones[0].begin = preferences.getUChar("zones0Begin", zones[0].begin);
     zones[0].end = preferences.getUChar("zones0End", zones[0].end);
     zones[1].begin = preferences.getUChar("zones1Begin", zones[1].begin);
@@ -363,70 +412,83 @@ void readConfig(String groupName, uint8_t n) {
   }
 
   if (groupName == "zoneSettings") {
-    zones[n].workMode = preferences.getString(
-        (String("zone") + n + "WorkMode").c_str(), zones[n].workMode);
-    zones[n].scrollSpeed = preferences.getUChar(
-        (String("zone") + n + "ScrolSpeed").c_str(), zones[n].scrollSpeed);
-    zones[n].scrollPause = preferences.getUChar(
-        (String("zone") + n + "ScrolPause").c_str(), zones[n].scrollPause);
-    zones[n].scrollAlign = preferences.getString(
-        (String("zone") + n + "ScrolAlign").c_str(), zones[n].scrollAlign);
-    zones[n].scrollEffectIn = preferences.getString(
-        (String("zone") + n + "ScrolEfIn").c_str(), zones[n].scrollEffectIn);
-    zones[n].scrollEffectOut = preferences.getString(
-        (String("zone") + n + "ScrolEfOut").c_str(), zones[n].scrollEffectOut);
-    zones[n].font = preferences.getString((String("zone") + n + "Font").c_str(),
-                                          zones[n].font);
-    zones[n].charspacing = preferences.getUChar(
-        (String("zone") + n + "Charspac").c_str(), zones[n].charspacing);
-    MQTTZones[n].message = preferences.getString(
-        (String("zone") + n + "mqttTexTop").c_str(), MQTTZones[n].message);
-    zones[n].mqttPostfix = preferences.getString(
-        (String("zone") + n + "mqttPosfix").c_str(), zones[n].mqttPostfix);
+    if (n >= kZoneCapacity) {
+      preferences.end();
+      return;
+    }
+
+    char key[24];
+    buildZoneKey(key, sizeof(key), n, "WorkMode");
+    zones[n].workMode = preferences.getString(key, zones[n].workMode);
+    buildZoneKey(key, sizeof(key), n, "ScrolSpeed");
+    zones[n].scrollSpeed = preferences.getUChar(key, zones[n].scrollSpeed);
+    buildZoneKey(key, sizeof(key), n, "ScrolPause");
+    zones[n].scrollPause = preferences.getUChar(key, zones[n].scrollPause);
+    buildZoneKey(key, sizeof(key), n, "ScrolAlign");
+    zones[n].scrollAlign = preferences.getString(key, zones[n].scrollAlign);
+    buildZoneKey(key, sizeof(key), n, "ScrolEfIn");
+    zones[n].scrollEffectIn =
+        preferences.getString(key, zones[n].scrollEffectIn);
+    buildZoneKey(key, sizeof(key), n, "ScrolEfOut");
+    zones[n].scrollEffectOut =
+        preferences.getString(key, zones[n].scrollEffectOut);
+    buildZoneKey(key, sizeof(key), n, "Font");
+    zones[n].font = preferences.getString(key, zones[n].font);
+    buildZoneKey(key, sizeof(key), n, "Charspac");
+    zones[n].charspacing = preferences.getUChar(key, zones[n].charspacing);
+    buildZoneKey(key, sizeof(key), n, "mqttTexTop");
+    MQTTZones[n].message = preferences.getString(key, MQTTZones[n].message);
+    buildZoneKey(key, sizeof(key), n, "mqttPosfix");
+    zones[n].mqttPostfix = preferences.getString(key, zones[n].mqttPostfix);
+    buildZoneKey(key, sizeof(key), n, "ClDispForm");
     zones[n].clockDisplayFormat =
-        preferences.getString((String("zone") + n + "ClDispForm").c_str(),
-                              zones[n].clockDisplayFormat);
-    zones[n].owmWhatToDisplay = preferences.getString(
-        (String("zone") + n + "OwmWhDisp").c_str(), zones[n].owmWhatToDisplay);
-    zones[n].scrollInfinite = preferences.getBool(
-        (String("zone") + n + "ScrolInf").c_str(), zones[n].scrollInfinite);
-    zones[n].haSensorId = preferences.getString(
-        (String("zone") + n + "HaSensorId").c_str(), zones[n].haSensorId);
-    zones[n].haSensorPostfix = preferences.getString(
-        (String("zone") + n + "HaSensorPf").c_str(), zones[n].haSensorPostfix);
-    zones[n].ds18b20Postfix = preferences.getString(
-        (String("zone") + n + "Ds18b20Pf").c_str(), zones[n].ds18b20Postfix);
+        preferences.getString(key, zones[n].clockDisplayFormat);
+    buildZoneKey(key, sizeof(key), n, "OwmWhDisp");
+    zones[n].owmWhatToDisplay =
+        preferences.getString(key, zones[n].owmWhatToDisplay);
+    buildZoneKey(key, sizeof(key), n, "ScrolInf");
+    zones[n].scrollInfinite = preferences.getBool(key, zones[n].scrollInfinite);
+    buildZoneKey(key, sizeof(key), n, "HaSensorId");
+    zones[n].haSensorId = preferences.getString(key, zones[n].haSensorId);
+    buildZoneKey(key, sizeof(key), n, "HaSensorPf");
+    zones[n].haSensorPostfix =
+        preferences.getString(key, zones[n].haSensorPostfix);
+    buildZoneKey(key, sizeof(key), n, "Ds18b20Pf");
+    zones[n].ds18b20Postfix =
+        preferences.getString(key, zones[n].ds18b20Postfix);
+    buildZoneKey(key, sizeof(key), n, "WoprUpdInt");
     woprZones[n].updateInterval =
-        preferences.getUShort((String("zone") + n + "WoprUpdInt").c_str(),
-                              woprZones[n].updateInterval);
+        preferences.getUShort(key, woprZones[n].updateInterval);
     // Countdown settings
-    zones[n].countdownFormat = preferences.getString(
-        (String("zone") + n + "CdFormat").c_str(), zones[n].countdownFormat);
-    zones[n].countdownFinish = preferences.getString(
-        (String("zone") + n + "CdFinish").c_str(), zones[n].countdownFinish);
-    zones[n].countdownShowUnits = preferences.getBool(
-        (String("zone") + n + "CdUnits").c_str(), zones[n].countdownShowUnits);
-    zones[n].countdownPrefix = preferences.getString(
-        (String("zone") + n + "CdPrefix").c_str(), zones[n].countdownPrefix);
-    zones[n].countdownSuffix = preferences.getString(
-        (String("zone") + n + "CdSuffix").c_str(), zones[n].countdownSuffix);
-    String savedTarget =
-        preferences.getString((String("zone") + n + "CdTarget").c_str(), "");
+    buildZoneKey(key, sizeof(key), n, "CdFormat");
+    zones[n].countdownFormat = preferences.getString(key, zones[n].countdownFormat);
+    buildZoneKey(key, sizeof(key), n, "CdFinish");
+    zones[n].countdownFinish = preferences.getString(key, zones[n].countdownFinish);
+    buildZoneKey(key, sizeof(key), n, "CdUnits");
+    zones[n].countdownShowUnits = preferences.getBool(key, zones[n].countdownShowUnits);
+    buildZoneKey(key, sizeof(key), n, "CdPrefix");
+    zones[n].countdownPrefix = preferences.getString(key, zones[n].countdownPrefix);
+    buildZoneKey(key, sizeof(key), n, "CdSuffix");
+    zones[n].countdownSuffix = preferences.getString(key, zones[n].countdownSuffix);
+    buildZoneKey(key, sizeof(key), n, "CdTarget");
+    String savedTarget = preferences.getString(key, "");
     if (savedTarget.length() > 0) {
       parseCountdownTarget(savedTarget, n, timeClient.getEpochTime(),
                            ntpTimeZone);
     }
     // Stock ticker settings
-    zones[n].stockSymbols = preferences.getString(
-        (String("zone") + n + "StockSym").c_str(), zones[n].stockSymbols);
-    zones[n].stockDisplayFormat = preferences.getString(
-        (String("zone") + n + "StockFmt").c_str(), zones[n].stockDisplayFormat);
-    zones[n].stockPrefix = preferences.getString(
-        (String("zone") + n + "StockPre").c_str(), zones[n].stockPrefix);
-    zones[n].stockPostfix = preferences.getString(
-        (String("zone") + n + "StockPst").c_str(), zones[n].stockPostfix);
-    zones[n].stockShowArrows = preferences.getBool(
-        (String("zone") + n + "StockArr").c_str(), zones[n].stockShowArrows);
+    buildZoneKey(key, sizeof(key), n, "StockSym");
+    zones[n].stockSymbols = preferences.getString(key, zones[n].stockSymbols);
+    buildZoneKey(key, sizeof(key), n, "StockFmt");
+    zones[n].stockDisplayFormat =
+        preferences.getString(key, zones[n].stockDisplayFormat);
+    buildZoneKey(key, sizeof(key), n, "StockPre");
+    zones[n].stockPrefix = preferences.getString(key, zones[n].stockPrefix);
+    buildZoneKey(key, sizeof(key), n, "StockPst");
+    zones[n].stockPostfix = preferences.getString(key, zones[n].stockPostfix);
+    buildZoneKey(key, sizeof(key), n, "StockArr");
+    zones[n].stockShowArrows =
+        preferences.getBool(key, zones[n].stockShowArrows);
   }
 
   if (groupName == "mqttSettings") {
@@ -482,6 +544,45 @@ void readConfig(String groupName, uint8_t n) {
         preferences.getUShort("stUpdateInt", stockUpdateInterval);
   }
 
+  if (groupName == "pbSettings") {
+    for (uint8_t i = 0; i < kZoneCapacity; i++) {
+      char key[24];
+      snprintf(key, sizeof(key), "pb%uEnable", i);
+      progressBars[i].enabled = preferences.getBool(key, progressBars[i].enabled);
+      snprintf(key, sizeof(key), "pb%uSrcType", i);
+      progressBars[i].dataSourceType =
+          preferences.getString(key, progressBars[i].dataSourceType);
+      snprintf(key, sizeof(key), "pb%uSrcId", i);
+      progressBars[i].dataSourceId =
+          preferences.getString(key, progressBars[i].dataSourceId);
+      snprintf(key, sizeof(key), "pb%uMin", i);
+      progressBars[i].minValue =
+          preferences.getFloat(key, progressBars[i].minValue);
+      snprintf(key, sizeof(key), "pb%uMax", i);
+      progressBars[i].maxValue =
+          preferences.getFloat(key, progressBars[i].maxValue);
+      snprintf(key, sizeof(key), "pb%uCondEn", i);
+      progressBars[i].conditionEnabled =
+          preferences.getBool(key, progressBars[i].conditionEnabled);
+      snprintf(key, sizeof(key), "pb%uCdSrcT", i);
+      progressBars[i].conditionSourceType =
+          preferences.getString(key, progressBars[i].conditionSourceType);
+      snprintf(key, sizeof(key), "pb%uCdSrcI", i);
+      progressBars[i].conditionSourceId =
+          preferences.getString(key, progressBars[i].conditionSourceId);
+      snprintf(key, sizeof(key), "pb%uCdVal", i);
+      progressBars[i].conditionValue =
+          preferences.getString(key, progressBars[i].conditionValue);
+      // Reset runtime state
+      progressBars[i].currentValue = 0.0;
+      progressBars[i].conditionMet = !progressBars[i].conditionEnabled;
+      progressBars[i].barActive = false;
+      progressBars[i].lastDataUpdate = 0;
+      progressBars[i].lastCondUpdate = 0;
+      progressBars[i].lastCondReceivedValue = "";
+    }
+  }
+
   preferences.end();
 }
 
@@ -490,7 +591,7 @@ void readConfig(String groupName, uint8_t n) {
 void readAllConfig() {
   readConfig("systemSettings", 99);
   readConfig("displaySettings", 99);
-  for (uint8_t n = 0; n < zoneNumbers; n++) {
+  for (uint8_t n = 0; n < normalizedZoneCount(zoneNumbers); n++) {
     readConfig("zoneSettings", n);
   }
   readConfig("mqttSettings", 99);
@@ -499,6 +600,6 @@ void readAllConfig() {
   readConfig("haSettings", 99);
   readConfig("ds18b20Settings", 99);
   readConfig("stockSettings", 99);
-  readConfig("intensity", 99);
+  readConfig("pbSettings", 99);
   readConfig("intensity", 99);
 }
