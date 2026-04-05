@@ -115,6 +115,28 @@ typedef struct {
   uint8_t blinkPattern[8];
 } WOPRData;
 
+typedef struct {
+  bool enabled;               // Master enable for this progress bar
+  // Data source
+  String dataSourceType;      // "ha" or "mqtt"
+  String dataSourceId;        // HA sensor ID or MQTT topic
+  // Scale
+  float minValue;             // Value that maps to 0% (bar empty)
+  float maxValue;             // Value that maps to 100% (bar full)
+  // Condition (optional)
+  bool conditionEnabled;      // Whether condition checking is active
+  String conditionSourceType; // "ha" or "mqtt"
+  String conditionSourceId;   // HA sensor ID or MQTT topic
+  String conditionValue;      // Expected value to activate the bar
+  // Runtime state (not persisted)
+  float currentValue;         // Last received numeric value
+  bool conditionMet;          // Whether the condition is currently satisfied
+  bool barActive;             // = enabled && conditionMet && !wopr (computed)
+  unsigned long lastDataUpdate;     // millis() of last data fetch
+  unsigned long lastCondUpdate;     // millis() of last condition fetch
+  String lastCondReceivedValue;     // Last received condition value (for HA polling compare)
+} ProgressBarData;
+
 // ─── Extern Declarations
 // ───────────────────────────────────────────────────────
 
@@ -164,6 +186,9 @@ extern bool dsTempToDisplay;
 
 // WOPR
 extern WOPRData woprZones[4];
+
+// Progress Bar
+extern ProgressBarData progressBars[4];
 
 // MQTT
 extern bool mqttEnable;

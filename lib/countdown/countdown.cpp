@@ -167,9 +167,8 @@ bool parseCountdownTarget(const String &input, int zone,
   struct tm localTm;
   time_t localEpoch = epoch + tzOffsetSec;
   gmtime_r(&localEpoch, &localTm);
-  sprintf(buf, "%04d-%02d-%02dT%02d:%02d:%02d", localTm.tm_year + 1900,
-          localTm.tm_mon + 1, localTm.tm_mday, localTm.tm_hour, localTm.tm_min,
-          localTm.tm_sec);
+  if (strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &localTm) == 0)
+    return false;
   countdownState[zone].targetStr = String(buf);
 
   return true;

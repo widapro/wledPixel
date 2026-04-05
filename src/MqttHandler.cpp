@@ -470,6 +470,35 @@ void MQTTCallback(char *topic, byte *payload, int length) {
       configDirtyTime = millis();
     }
   }
+
+  // ── Progress Bar MQTT handling ──
+  for (uint8_t i = 0; i < zoneNumbers && i < 4; i++) {
+    if (!progressBars[i].enabled)
+      continue;
+
+    // Data source
+    if (progressBars[i].dataSourceType == "mqtt" &&
+        progressBars[i].dataSourceId.length() > 0 &&
+        topicStr == progressBars[i].dataSourceId) {
+      progressBars[i].currentValue = PayloadString.toFloat();
+      Serial.printf("\n[PB] Zone %u data: %s -> %.2f", i,
+                    PayloadString.c_str(), progressBars[i].currentValue);
+    }
+
+    // Condition source
+    if (progressBars[i].conditionEnabled &&
+        progressBars[i].conditionSourceType == "mqtt" &&
+        progressBars[i].conditionSourceId.length() > 0 &&
+        topicStr == progressBars[i].conditionSourceId) {
+      progressBars[i].conditionMet =
+          (PayloadString == progressBars[i].conditionValue);
+      Serial.printf("\n[PB] Zone %u condition: '%s' == '%s' -> %s", i,
+                    PayloadString.c_str(),
+                    progressBars[i].conditionValue.c_str(),
+                    progressBars[i].conditionMet ? "true" : "false");
+    }
+  }
+
   MQTTPublishState();
 }
 
@@ -509,6 +538,22 @@ boolean reconnect() {
       mqttClient.subscribe((char *)MQTTZones[n].countdown.c_str());
       mqttClient.subscribe((char *)MQTTZones[n].countdownFormat.c_str());
     }
+
+    // Subscribe to progress bar MQTT topics
+    for (uint8_t i = 0; i < zoneNumbers && i < 4; i++) {
+      if (progressBars[i].enabled) {
+        if (progressBars[i].dataSourceType == "mqtt" &&
+            progressBars[i].dataSourceId.length() > 0) {
+          mqttClient.subscribe(progressBars[i].dataSourceId.c_str());
+        }
+        if (progressBars[i].conditionEnabled &&
+            progressBars[i].conditionSourceType == "mqtt" &&
+            progressBars[i].conditionSourceId.length() > 0) {
+          mqttClient.subscribe(progressBars[i].conditionSourceId.c_str());
+        }
+      }
+    }
+
     MQTTPublishState();
     Serial.println(F("MQTT subscribe objects"));
     mqttClient.subscribe((char *)MQTTIntensity.c_str());

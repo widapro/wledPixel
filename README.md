@@ -15,14 +15,15 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 6. **Manual input**
 7. **Stock Ticker Mode**: Display real-time stock prices on any zone. Supports multiple symbols, customizable display format, prefix/suffix, and price change arrows (↑↓)
 8. Countdown timer
-9. Full controll through **web UI**
-10. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
-11. Control display as light in Home Assistant [MQTT setup required]
-12. Initial setup through wifi AP and web UI
-13. Support 4 independent display zones
-14. Support up to 12 display segments at the same time [configured in web UI]
-15. Included 3 different fonts
-16. Plus symbols font
+9. **Progress Bar Overlay**: 1-pixel bottom-row bar on any zone — supports HA sensors, MQTT topics, and time-based modes
+10. Full controll through **web UI**
+11. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
+12. Control display as light in Home Assistant [MQTT setup required]
+13. Initial setup through wifi AP and web UI
+14. Support 4 independent display zones
+15. Support up to 12 display segments at the same time [configured in web UI]
+16. Included 3 different fonts
+17. Plus symbols font
 
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: <a href="https://aliexpress.com/item/32618155357.html" target="_blank">https://aliexpress.com/item/32618155357.html</a>
@@ -299,6 +300,37 @@ Wall clock mode support next following display options:
   - Dots do **NOT** blink to prevent interrupting the scroll cycle.
 
 > **Note:** The **Scroll Effect Out** setting in the Web UI is disabled (greyed out) for Wall Clock mode because the loop animation doesn't use an exit effect.
+
+
+## Progress Bar Overlay
+
+A 1-pixel horizontal progress bar rendered on the bottom row (row 7) of any zone. It works as a transparent overlay — the bar coexists with clocks, text, weather, and other modes running in the same zone. Each zone can have its own independent progress bar configured in the "Progress Bar" section of the Settings page.
+
+### Data Sources
+
+| Source | Description |
+| :--- | :--- |
+| **Home Assistant** | Any HA sensor entity (e.g., `sensor.battery_level`). Polled at the HA update interval. |
+| **MQTT** | Any MQTT topic. Device subscribes automatically. |
+| **Time — Seconds** | Fills over 60 seconds, resets each minute. |
+| **Time — Minutes** | Fills over 60 minutes, resets each hour. |
+| **Time — Hours** | Fills over 24 hours, resets each day. |
+
+### Configuration
+
+- **Min / Max values**: Define the scale for HA and MQTT sources (e.g., 0–100 for battery percentage). Time mode auto-calculates its scale.
+- **Conditional display**: Optionally show the bar only when a condition is met — a specific HA sensor or MQTT topic value matches an expected string (exact match).
+- **WOPR exclusion**: If a zone is running in WOPR mode, the progress bar is automatically disabled.
+
+### Use Cases
+
+| Use Case | Data Source | Min | Max | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| Battery level | HA sensor / MQTT | 0 | 100 | Show charge state alongside clock |
+| Seconds ticker | Time — Seconds | — | — | Visual second hand on a clock zone |
+| Hour progress | Time — Hours | — | — | See how much of the day has passed |
+| Download progress | MQTT | 0 | 100 | Publish progress % from a script |
+| Tank / reservoir level | HA sensor | 0 | 500 | Scale to your sensor's range |
 
 
 ## Scroll effect list

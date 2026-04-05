@@ -25,7 +25,7 @@ bool shouldReboot = false;
 bool shouldUpdateNtp = false;
 size_t otaTotalSize = 0;
 String restoreJsonBuffer = "";
-const char *firmwareVer = "v3.5";
+const char *firmwareVer = "v3.6";
 // Platform marker embedded in binary — used for OTA platform validation
 // DO NOT REMOVE: this string is scanned in the binary during OTA upload
 #if defined(ESP8266)
@@ -59,6 +59,19 @@ WOPRData woprZones[4] = {{false, 0, 100, 7, {0}},
                          {false, 0, 100, 7, {0}},
                          {false, 0, 100, 7, {0}},
                          {false, 0, 100, 7, {0}}};
+
+// ─── Progress Bar
+// ──────────────────────────────────────────────────────────────────
+ProgressBarData progressBars[4] = {
+    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
+     ""},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
+     ""},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
+     ""},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
+     ""},
+};
 
 // ─── MQTT
 // ──────────────────────────────────────────────────────────────────────

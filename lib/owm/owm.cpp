@@ -27,7 +27,7 @@ void owmWeatherUpdate(const String &city, const String &unitsFormat,
   JsonObject owmWeatherPostObj = doc.as<JsonObject>();
 
   // Only update cached values if we got a valid response
-  if (owmWeatherPostObj.containsKey(F("main"))) {
+  if (success && owmWeatherPostObj.containsKey(F("main"))) {
     owmHumidity = owmWeatherPostObj[F("main")][F("humidity")].as<byte>();
     owmPressure = owmWeatherPostObj[F("main")][F("pressure")].as<int>();
     owmWindSpeed = owmWeatherPostObj[F("wind")][F("speed")].as<int>();
