@@ -1,36 +1,52 @@
 #include "httpsRequestJson.h"
+#include "../../src/WebPriority.h"
 
 #if defined(ESP8266)
 // (Unused includes removed to prevent SPI concurrent access issues)
 #endif
 
 bool isFetchingHttps = false;
+volatile bool httpsAbortRequested = false;
 #include <memory>
 
 struct HttpsGuard {
-  HttpsGuard() { isFetchingHttps = true; }
-  ~HttpsGuard() { isFetchingHttps = false; }
+  explicit HttpsGuard(bool tls) : ready(false) {
+    httpsAbortRequested = false;
+    ready = beginExternalNetworkRequest(tls);
+    isFetchingHttps = ready;
+  }
+  ~HttpsGuard() {
+    isFetchingHttps = false;
+    if (ready)
+      endExternalNetworkRequest();
+  }
+  bool ready;
 };
+
+void requestHttpsAbortForWeb() { httpsAbortRequested = true; }
+
+bool httpsAbortWasRequested() { return httpsAbortRequested; }
 
 // Internal helper function to perform the HTTP request and parse directly
 static bool performHttpRequestToDoc(const String &addr, int port,
                                     const String &path, const String &token,
                                     bool https, JsonDocument &doc) {
-  HttpsGuard guard;
+  HttpsGuard guard(https);
+  if (!guard.ready) {
+    Serial.print(F("\n[NET] External request deferred for web/API priority"));
+    return false;
+  }
 #if defined(ESP8266)
-  if (https) {
-    uint32_t freeHeap = ESP.getFreeHeap();
-    uint32_t maxBlock = ESP.getMaxFreeBlockSize();
-    // Require 18KB total free heap and 9KB max block. BearSSL with reduced
-    // buffer sizes (setBufferSizes 2048+1024) needs ~14-16KB total, but we
-    // keep 18KB headroom to survive heap fragmentation after a prior fetch.
-    // If maxBlock falls below 9KB, BearSSL handshake may throw std::bad_alloc.
-    if (freeHeap < 18432 || maxBlock < 9216) {
-      Serial.printf(
-          "\n[HTTPS] Aborting TLS due to low memory. Heap: %u, MaxBlock: %u\n",
-          freeHeap, maxBlock);
-      return false;
-    }
+  uint32_t freeHeap = ESP.getFreeHeap();
+  uint32_t maxBlock = ESP.getMaxFreeBlockSize();
+  const uint32_t minHeap = https ? 6500 : 4000;
+  const uint32_t minBlock = https ? 3200 : 1500;
+  if (freeHeap < minHeap || maxBlock < minBlock) {
+    Serial.printf("\n[NET] Request deferred after memory release. "
+                  "TLS=%s Heap=%u/%u MaxBlock=%u/%u",
+                  https ? "yes" : "no", freeHeap, minHeap, maxBlock,
+                  minBlock);
+    return false;
   }
 #endif
 
@@ -55,8 +71,10 @@ static bool performHttpRequestToDoc(const String &addr, int port,
       return false;
     }
     clientSsl->setInsecure();
-    clientSsl->setBufferSizes(2048, 1024);
-    clientSsl->setTimeout(2000);
+    // ESP8266 core clamps these to its documented 512-byte data minimum and
+    // adds TLS record overhead internally (837 RX + 597 TX allocated).
+    clientSsl->setBufferSizes(512, 512);
+    clientSsl->setTimeout(1000);
 #elif defined(ESP32)
     clientSsl.reset(new (std::nothrow) WiFiClientSecure);
     if (!clientSsl)
@@ -68,7 +86,7 @@ static bool performHttpRequestToDoc(const String &addr, int port,
     espClient.reset(new (std::nothrow) WiFiClient);
     if (!espClient)
       return false;
-    espClient->setTimeout(2000);
+    espClient->setTimeout(1000);
     httpBegin = httpClient.begin(*espClient, addr, port, path, false);
   }
 
@@ -78,6 +96,17 @@ static bool performHttpRequestToDoc(const String &addr, int port,
     }
 
     int httpCode = httpClient.GET();
+
+    if (httpsAbortRequested) {
+      Serial.print(F("\n[HTTPS] Aborted for incoming web request"));
+      success = false;
+      httpClient.end();
+      if (clientSsl)
+        clientSsl->stop();
+      if (espClient)
+        espClient->stop();
+      return false;
+    }
 
     if (httpCode == HTTP_CODE_OK) {
       Serial.print(F("\n[HTTPS] Start json parsing from stream"));
@@ -92,6 +121,20 @@ static bool performHttpRequestToDoc(const String &addr, int port,
     } else {
       if (httpCode > 0) {
         Serial.printf("\n[HTTPS] HTTP status error: %d", httpCode);
+        // HA and most other JSON APIs return a short explanation for 4xx
+        // responses. Parse it into the caller-provided document instead of
+        // allocating a heap-backed response String.
+        int errorSize = httpClient.getSize();
+        if (httpCode >= 400 && errorSize > 0 && errorSize <= 512) {
+          doc.clear();
+          DeserializationError error =
+              deserializeJson(doc, httpClient.getStream());
+          if (!error) {
+            const char *message = doc[F("message")].as<const char *>();
+            if (message && message[0] != '\0')
+              Serial.printf(" message='%s'", message);
+          }
+        }
       } else {
         Serial.printf("\n[HTTPS] api error: %s",
                       httpClient.errorToString(httpCode).c_str());

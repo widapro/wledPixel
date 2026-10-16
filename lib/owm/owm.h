@@ -7,6 +7,7 @@
 
 void owmWeatherUpdate(const String &city, const String &unitsFormat,
                       const String &token);
-String openWetherMapGetWeather(String whatToDisplay, String unitsFormat);
+String openWetherMapGetWeather(const String &whatToDisplay,
+                               const String &unitsFormat);
 
 #endif

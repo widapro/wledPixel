@@ -3,7 +3,9 @@
 
 MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
-<a href="https://github.com/widapro/wled-pixel-v2/releases" target="_blank">The latest firmware version can be found in Releases</a>
+<a href="https://github.com/widapro/wledPixel/releases" target="_blank">The latest firmware version can be found in Releases</a>
+
+The current development version is **v4.0-beta.3**. See the [beta release notes](RELEASE_NOTES_v4.0-beta.3.md) for changes since v3.6, upgrade instructions and known limitations. Back up your settings before testing the beta.
 
 
 ## Supported key features:
@@ -16,14 +18,25 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 7. **Stock Ticker Mode**: Display real-time stock prices on any zone. Supports multiple symbols, customizable display format, prefix/suffix, and price change arrows (↑↓)
 8. Countdown timer
 9. **Progress Bar Overlay**: 1-pixel bottom-row bar on any zone — supports HA sensors, MQTT topics, and time-based modes
+   - **Dynamic mode** adds 16 animations and two HA/MQTT value rules, with complete progress-bar settings stored per profile and zone.
 10. Full controll through **web UI**
 11. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
 12. Control display as light in Home Assistant [MQTT setup required]
 13. Initial setup through wifi AP and web UI
 14. Support 4 independent display zones
+   - **Rotate display 180°** in **Service Settings → System settings** rotates the entire display, including zones, animations and progress bars. Click **Apply** to save. This is one global setting shared by all profiles and retained after reboot.
 15. Support up to 12 display segments at the same time [configured in web UI]
 16. Included 3 different fonts
 17. Plus symbols font
+18. **Display profiles and scheduling**: 4 profiles on ESP8266 or 8 on ESP32, including the default profile; scheduled overrides and **Apply Now**.
+
+## Profiles and scheduling (v4.0 beta)
+
+Open **Profiles** to configure a default baseline and additional profiles. Profiles can override power, brightness, zone layout, display modes, fonts, scrolling, countdown, stock ticker and progress bars. **No change** preserves the active value. Saving a profile stores it; **Apply Now** saves and activates it. Changing the zone layout can restart the device.
+
+Enable scheduling and select hours, minutes, days of the week and days of the month. The scheduler uses the configured NTP time and time-zone offset and waits for a successful sync. To restore the baseline after another profile has run, apply or schedule the default profile explicitly.
+
+Progress bars support **Regular** numeric/time mode and **Dynamic** animation mode. Dynamic mode uses up to two HA/MQTT value rules with independent animations and speeds. Leaving both values unset runs Rule 1 continuously; configured rules hide the bar when neither value matches.
 
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: <a href="https://aliexpress.com/item/32618155357.html" target="_blank">https://aliexpress.com/item/32618155357.html</a>
@@ -98,8 +111,8 @@ This font maps standard ASCII characters directly to icons.
 
 
 ## Web UI - Settings
-![img](img/wledPixel_settingsS.jpeg)
 
+![Settings UI with example network values](img/wledPixel_settingsS.jpeg)
 
 ## Hardware GPIO for external devices, hardcoded:
 
@@ -192,7 +205,7 @@ pio run -e esp32 -t upload
 ## MQTT Topics
 
 **Topic Structure:** `[devicePrefix]/[zone]/[command]`
-*   **devicePrefix**: `wledPixel-{shortMAC}` (e.g., `wledPixel-XXXX`)
+*   **devicePrefix**: `wledPixel-{shortMAC}` (shown as `wledPixel-XXXX` in the examples below)
 *   **zone**: `zoneN` where N is 0, 1, 2, or 3.
 
 ### Zone Parameters
@@ -280,7 +293,9 @@ Both **MQTT Client** and **Manual Input** modes share the same display logic:
 
 ## Wall clock
 Wall clock mode support next following display options:
-* `HH:MM`       - Hours : Minutes [21:43]
+* `HH:MM`       - 24-hour Hours : Minutes [21:43]
+* `hh:mm`       - 12-hour Hours : Minutes without am/pm [09:43]
+* `hh:mm am/pm` - 12-hour Hours : Minutes with am/pm [09:43 pm]
 * `HH:MM:SS`    - Hours : Minutes : Seconds [21:43:54]
 * `HH`          - Hours [21]
 * `MM`          - Minutes [43]
@@ -402,4 +417,10 @@ Send sensor value each time when a value has been changed
         topic: wledPixel-XXXX/zone0/text
         payload_template: "{{ states('sensor.example_temperature') }} C"
 ```
-Change **wledPixel-XXXX** to device name with your prefix
+Replace **wledPixel-XXXX** and **sensor.example_temperature** with your own device prefix and sensor entity.
+
+### v4.0-beta.3 validation
+
+See [release notes](RELEASE_NOTES_v4.0-beta.3.md) for changes, settings-backup compatibility and beta limitations,
+and [local test documentation](test/README.md) for the test and HIL workflows.
+Local tests: `./tools/test_local.sh all`.

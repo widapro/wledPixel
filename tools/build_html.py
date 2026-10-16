@@ -9,11 +9,14 @@ Each .h file contains a uint8_t array with the gzip-compressed page data,
 plus a size_t constant. WebRoutes.cpp must serve these with:
   Content-Encoding: gzip
   Content-Type:     text/html
-  Cache-Control:    max-age=3600
+  Cache-Control:    no-store
 """
 
 import gzip
 import os
+import re
+import shutil
+import subprocess
 
 Import("env")  # noqa: F821 – PlatformIO SConstruct environment
 
@@ -53,6 +56,37 @@ PAGES = [
 ]
 
 
+def validate_inline_javascript(html_path, raw):
+    """Fail the build when an inline page script has invalid JavaScript."""
+    node = shutil.which("node")
+    if not node:
+        print("[build_html] WARNING: node not found; skipping JavaScript syntax check")
+        return
+
+    text = raw.decode("utf-8")
+    scripts = re.findall(
+        r"<script(?:\s[^>]*)?>(.*?)</script>", text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for index, script in enumerate(scripts, start=1):
+        if not script.strip():
+            continue
+        result = subprocess.run(
+            [node, "--check", "-"],
+            input=script,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Invalid inline JavaScript in {} (script {}):\n{}".format(
+                    html_path, index, result.stderr.strip()
+                )
+            )
+
+
 def generate_header(html_path, header_path, guard, var_name):
     abs_html   = os.path.join(PROJECT_DIR, html_path)
     abs_header = os.path.join(PROJECT_DIR, header_path)
@@ -63,7 +97,9 @@ def generate_header(html_path, header_path, guard, var_name):
 
     with open(abs_html, "rb") as f:
         raw = f.read()
-    compressed = gzip.compress(raw, compresslevel=9)
+    validate_inline_javascript(html_path, raw)
+    # mtime=0 keeps generated headers byte-for-byte reproducible.
+    compressed = gzip.compress(raw, compresslevel=9, mtime=0)
 
     # Format as C byte array (16 bytes per line)
     lines = []
@@ -97,6 +133,12 @@ def generate_header(html_path, header_path, guard, var_name):
         var=var_name,
         content=array_content,
     )
+
+    if os.path.exists(abs_header):
+        with open(abs_header, "r") as existing_file:
+            if existing_file.read() == header_content:
+                print("[build_html] {} is up to date".format(header_path))
+                return
 
     os.makedirs(os.path.dirname(abs_header), exist_ok=True)
     with open(abs_header, "w") as f:

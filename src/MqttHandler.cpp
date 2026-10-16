@@ -1,15 +1,130 @@
 #include "MqttHandler.h"
 #include "ConfigStore.h"
 #include "DisplayUtils.h"
+#include "sharedScratch.h"
+#include <cctype>
+#include <cstring>
+
+namespace {
+bool mqttDiscoveryPublished = false;
+bool mqttClearRetainedPower = false;
+bool mqttClearRetainedIntensity = false;
+
+bool clearRetainedCommand(const String &topic, const __FlashStringHelper *name) {
+  if (topic.length() == 0)
+    return true;
+  static const uint8_t emptyPayload = 0;
+  bool cleared = mqttClient.publish(topic.c_str(), &emptyPayload, 0, true);
+  Serial.print(F("\n[MQTT] Clear retained "));
+  Serial.print(name);
+  Serial.print(cleared ? F(" command: OK") : F(" command: FAILED"));
+  return cleared;
+}
+
+bool clearPendingScheduledCommands() {
+  if (!mqttClient.connected())
+    return false;
+  if (mqttClearRetainedPower) {
+    if (!clearRetainedCommand(MQTTPower, F("power")))
+      return false;
+    mqttClearRetainedPower = false;
+  }
+  if (mqttClearRetainedIntensity) {
+    if (!clearRetainedCommand(MQTTIntensity, F("intensity")))
+      return false;
+    mqttClearRetainedIntensity = false;
+  }
+  return true;
+}
+
+bool mqttHasHeadroom(uint32_t minFreeHeap, uint32_t minMaxBlock) {
+#if defined(ESP8266)
+  return ESP.getFreeHeap() >= minFreeHeap &&
+         ESP.getMaxFreeBlockSize() >= minMaxBlock;
+#else
+  (void)minFreeHeap;
+  (void)minMaxBlock;
+  return true;
+#endif
+}
+
+void logMqttLowMem(const char *where) {
+#if defined(ESP8266)
+  Serial.printf("\n[MQTT] Skip %s due low mem. Heap=%u MaxBlock=%u Frag=%u%%", where,
+                ESP.getFreeHeap(), ESP.getMaxFreeBlockSize(),
+                ESP.getHeapFragmentation());
+#else
+  Serial.printf("\n[MQTT] Skip %s due low mem", where);
+#endif
+}
+
+bool mqttTopicEquals(const char *topic, const String &expected) {
+  return topic && expected.length() > 0 &&
+         strcmp(topic, expected.c_str()) == 0;
+}
+
+bool mqttPayloadIsUnsignedInt(const char *payload) {
+  if (!payload || *payload == '\0')
+    return false;
+  for (const char *p = payload; *p; ++p) {
+    if (!isdigit(static_cast<unsigned char>(*p)))
+      return false;
+  }
+  return true;
+}
+
+bool mqttPayloadEqualsIgnoreCase(const char *payload, const char *literal) {
+  if (!payload || !literal)
+    return false;
+  while (*payload && *literal) {
+    if (tolower(static_cast<unsigned char>(*payload)) !=
+        tolower(static_cast<unsigned char>(*literal))) {
+      return false;
+    }
+    ++payload;
+    ++literal;
+  }
+  return (*payload == '\0' && *literal == '\0');
+}
+
+bool mqttPayloadIsTrue(const char *payload) {
+  return mqttPayloadEqualsIgnoreCase(payload, "on") ||
+         mqttPayloadEqualsIgnoreCase(payload, "true") ||
+         strcmp(payload, "1") == 0;
+}
+
+bool mqttPayloadIsFalse(const char *payload) {
+  return mqttPayloadEqualsIgnoreCase(payload, "off") ||
+         mqttPayloadEqualsIgnoreCase(payload, "false") ||
+         strcmp(payload, "0") == 0;
+}
+} // namespace
+
+void MQTTProtectScheduledState(bool powerChanged, bool intensityChanged) {
+  mqttClearRetainedPower |= powerChanged;
+  mqttClearRetainedIntensity |= intensityChanged;
+  shouldMqttPublish = true;
+
+  // If MQTT is currently connected, delete stale retained commands now.
+  // Otherwise reconnect() performs this before subscribing to command topics.
+  if (mqttClient.connected())
+    clearPendingScheduledCommands();
+}
 
 // ─── HA Discovery
 // ──────────────────────────────────────────────────────────────
-void MQTTPublishHADiscovry(String zone, String device_type) {
+void MQTTPublishHADiscovry(const String &zone, const String &device_type) {
   if (mqttClient.connected()) {
-    DynamicJsonDocument root(1072);
+    if (!mqttHasHeadroom(6000, 2500)) {
+      logMqttLowMem("MQTTPublishHADiscovry");
+      return;
+    }
+
+    StaticJsonDocument<2048> &root = sharedJsonDocument();
+    root.clear();
     char topic_config[120];
-    char buffer[1072];
-    boolean result;
+    char *buffer = sharedJsonBuffer();
+    size_t bufferCapacity = sharedJsonBufferCapacity();
 
     // device block
     JsonObject device = root.createNestedObject("dev");
@@ -244,8 +359,19 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
       root["unit_of_measurement"] = "°C";
     }
 
-    size_t n = serializeJson(root, buffer);
+    if (root.overflowed()) {
+      Serial.println(F("\n[MQTT] Discovery JSON overflow; skip publish"));
+      return;
+    }
 
+    size_t n = serializeJson(root, buffer, bufferCapacity);
+    if (n == 0 || n >= bufferCapacity) {
+      Serial.println(F("\n[MQTT] Discovery payload too large; skip publish"));
+      return;
+    }
+
+    Serial.printf("\n[MQTT] HA discovery publish type=%s topic=%s bytes=%u",
+                  device_type.c_str(), topic_config, static_cast<unsigned>(n));
     Serial.print(F("\nMQTT publish HA device state: "));
     mqttPublished = mqttClient.publish(topic_config, buffer, n);
     if (mqttPublished)
@@ -253,12 +379,7 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
     else
       Serial.println(F("fail"));
 
-    result = mqttClient.endPublish();
-    if (result == false)
-      Serial.print(F("\nERROR: MQTT HA config error end!"));
-
-    root.shrinkToFit();
-    root.garbageCollect();
+    yield();
   }
 }
 
@@ -267,29 +388,45 @@ void MQTTPublishHADiscovry(String zone, String device_type) {
 void MQTTPublishState() {
   Serial.print(F("MQTT pub state func"));
   if (mqttClient.connected()) {
-    DynamicJsonDocument doc(1024);
-    char buffer[1024];
+    if (!mqttHasHeadroom(6000, 2500)) {
+      logMqttLowMem("MQTTPublishState");
+      return;
+    }
+
+    StaticJsonDocument<2048> &doc = sharedJsonDocument();
+    doc.clear();
+    char *buffer = sharedJsonBuffer();
+    size_t bufferCapacity = sharedJsonBufferCapacity();
 
     doc["status"] = "online";
     doc["power"] = power;
     doc["brightness"] = intensity + 1;
     doc["wifiSsid"] = WiFi.SSID();
     for (uint8_t n = 0; n < zoneNumbers; n++) {
-      doc["zone" + String(n)]["workMode"] = zones[n].workMode;
-      doc["zone" + String(n)]["charspacing"] = zones[n].charspacing;
-      doc["zone" + String(n)]["scrollAlign"] = zones[n].scrollAlign;
-      doc["zone" + String(n)]["scrollPause"] = zones[n].scrollPause;
-      doc["zone" + String(n)]["scrollSpeed"] = zones[n].scrollSpeed;
-      doc["zone" + String(n)]["scrollEffectIn"] = zones[n].scrollEffectIn;
-      doc["zone" + String(n)]["scrollEffectOut"] = zones[n].scrollEffectOut;
-      doc["zone" + String(n)]["scrollInfinite"] =
-          zones[n].scrollInfinite ? "ON" : "OFF";
+      char zoneKey[8];
+      snprintf(zoneKey, sizeof(zoneKey), "zone%u", n);
+      JsonObject zoneObj = doc.createNestedObject(zoneKey);
+      zoneObj["workMode"] = zones[n].workMode;
+      zoneObj["charspacing"] = zones[n].charspacing;
+      zoneObj["scrollAlign"] = zones[n].scrollAlign;
+      zoneObj["scrollPause"] = zones[n].scrollPause;
+      zoneObj["scrollSpeed"] = zones[n].scrollSpeed;
+      zoneObj["scrollEffectIn"] = zones[n].scrollEffectIn;
+      zoneObj["scrollEffectOut"] = zones[n].scrollEffectOut;
+      zoneObj["scrollInfinite"] = zones[n].scrollInfinite ? "ON" : "OFF";
+    }
+
+    if (doc.overflowed()) {
+      Serial.println(F("\n[MQTT] State JSON overflow; skip publish"));
+      return;
     }
 
     serializeJson(doc, Serial);
-    doc.shrinkToFit();
-    doc.garbageCollect();
-    size_t n = serializeJson(doc, buffer);
+    size_t n = serializeJson(doc, buffer, bufferCapacity);
+    if (n == 0 || n >= bufferCapacity) {
+      Serial.println(F("\n[MQTT] State payload too large; skip publish"));
+      return;
+    }
 
     Serial.print(F("MQTT publish device state: "));
     mqttPublished = mqttClient.publish(MQTTStateTopic.c_str(), buffer, n);
@@ -297,101 +434,108 @@ void MQTTPublishState() {
       Serial.println(F("OK"));
     else
       Serial.println(F("fail"));
+
+    yield();
   }
 }
 
 // ─── MQTT Callback
 // ─────────────────────────────────────────────────────────────
 void MQTTCallback(char *topic, byte *payload, int length) {
-  String topicStr(topic);
-  String PayloadString;
-  PayloadString.reserve(length + 1);
-  for (int i = 0; i < length; i++) {
-    PayloadString += (char)payload[i];
+  if (!mqttHasHeadroom(4500, 1500)) {
+    logMqttLowMem("MQTTCallback");
+    return;
   }
+  if (!topic || length <= 0 || length > 512) {
+    Serial.println(F("\n[MQTT] Ignore payload: invalid length"));
+    return;
+  }
+  char payloadBuf[513];
+  memcpy(payloadBuf, payload, static_cast<size_t>(length));
+  payloadBuf[length] = '\0';
 
   Serial.print(F("\nMQTT new message arrived"));
   Serial.print(F("\nTopic: "));
   Serial.println(topic);
-  Serial.println(PayloadString);
+  Serial.println(payloadBuf);
+  bool shouldPublishState = false;
 
-  if (topicStr == MQTTIntensity) {
-    if (isNumeric(PayloadString)) {
-      if (PayloadString.toInt() > 0) {
-        intensity = PayloadString.toInt() - 1;
-        if (!power) {
-          power = true;
-          P.displayShutdown(0);
-        }
+  if (mqttTopicEquals(topic, MQTTIntensity)) {
+    if (mqttPayloadIsUnsignedInt(payloadBuf)) {
+      int level = atoi(payloadBuf);
+      if (level > 0) {
+        intensity = level - 1;
         P.setIntensity(intensity);
-        saveVarsToConfFile("intensity", 99);
-        MQTTPublishState();
+        queueConfigSave("intensity", 99);
+        if (!power) {
+          Serial.print(F("\n[MQTT] Brightness updated while power is OFF; "
+                         "display remains OFF"));
+        }
+        shouldPublishState = true;
       }
-      if (PayloadString.toInt() == 0) {
+      if (level == 0) {
         P.displayShutdown(1);
         power = false;
-        MQTTPublishState();
+        shouldPublishState = true;
       }
     } else {
       Serial.print(F("Supports are only numeric values"));
     }
   }
-  if (topicStr == MQTTPower) {
-    if (PayloadString == "on" || PayloadString == "ON" ||
-        PayloadString == "TRUE") {
+  if (mqttTopicEquals(topic, MQTTPower)) {
+    if (mqttPayloadIsTrue(payloadBuf)) {
       P.displayShutdown(0);
       P.setIntensity(intensity);
       power = true;
-      MQTTPublishState();
+      shouldPublishState = true;
     }
-    if (PayloadString == "off" || PayloadString == "OFF" ||
-        PayloadString == "FALSE") {
+    if (mqttPayloadIsFalse(payloadBuf)) {
       P.displayShutdown(1);
       power = false;
-      MQTTPublishState();
+      shouldPublishState = true;
     }
   }
 
   for (uint8_t n = 0; n < zoneNumbers; n++) {
     bool zoneSettingsChanged = false;
-    if (zones[n].workMode == "mqttClient" && topicStr == MQTTZones[n].message)
-      zoneNewMessage(n, PayloadString.c_str(), zones[n].mqttPostfix, true,
-                     true);
+    if (zones[n].workMode == "mqttClient" &&
+        mqttTopicEquals(topic, MQTTZones[n].message))
+      zoneNewMessage(n, payloadBuf, zones[n].mqttPostfix, true, true);
 
-    if (topicStr == MQTTZones[n].scrollEffectIn) {
-      zones[n].scrollEffectIn = PayloadString.c_str();
+    if (mqttTopicEquals(topic, MQTTZones[n].scrollEffectIn)) {
+      zones[n].scrollEffectIn = payloadBuf;
       P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn),
                       stringToTextEffectT(zones[n].scrollEffectOut));
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].scrollEffectOut) {
-      zones[n].scrollEffectOut = PayloadString.c_str();
+    if (mqttTopicEquals(topic, MQTTZones[n].scrollEffectOut)) {
+      zones[n].scrollEffectOut = payloadBuf;
       P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn),
                       stringToTextEffectT(zones[n].scrollEffectOut));
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].scrollSpeed) {
-      zones[n].scrollSpeed = PayloadString.toInt();
+    if (mqttTopicEquals(topic, MQTTZones[n].scrollSpeed)) {
+      zones[n].scrollSpeed = atoi(payloadBuf);
       P.setSpeed(n, zones[n].scrollSpeed);
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].scrollPause) {
-      zones[n].scrollPause = PayloadString.toInt();
+    if (mqttTopicEquals(topic, MQTTZones[n].scrollPause)) {
+      zones[n].scrollPause = atoi(payloadBuf);
       P.setPause(n, zones[n].scrollPause * 1000);
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].scrollAllign) {
-      zones[n].scrollAlign = PayloadString.c_str();
+    if (mqttTopicEquals(topic, MQTTZones[n].scrollAllign)) {
+      zones[n].scrollAlign = payloadBuf;
       P.setTextAlignment(n, stringToTextPositionT(zones[n].scrollAlign));
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].charspacing) {
-      zones[n].charspacing = PayloadString.toInt();
+    if (mqttTopicEquals(topic, MQTTZones[n].charspacing)) {
+      zones[n].charspacing = atoi(payloadBuf);
       P.setCharSpacing(n, zones[n].charspacing);
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].workMode) {
-      zones[n].workMode = PayloadString.c_str();
+    if (mqttTopicEquals(topic, MQTTZones[n].workMode)) {
+      zones[n].workMode = payloadBuf;
       zones[n].owmWhatToDisplay = "owmTemperature";
 
       if (zones[n].workMode == "countdown") {
@@ -442,32 +586,31 @@ void MQTTCallback(char *topic, byte *payload, int length) {
       }
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].scrollInfinite) {
-      if (PayloadString == "on" || PayloadString == "ON" ||
-          PayloadString == "TRUE" || PayloadString == "true" ||
-          PayloadString == "1")
+    if (mqttTopicEquals(topic, MQTTZones[n].scrollInfinite)) {
+      if (mqttPayloadIsTrue(payloadBuf))
         zones[n].scrollInfinite = true;
       else
         zones[n].scrollInfinite = false;
 
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].countdown) {
-      parseCountdownTarget(PayloadString, n, timeClient.getEpochTime(),
+    if (mqttTopicEquals(topic, MQTTZones[n].countdown)) {
+      parseCountdownTarget(payloadBuf, n, timeClient.getEpochTime(),
                            ntpTimeZone);
       zones[n].workMode = "countdown";
       zones[n].previousMillis = -1000000;
       zones[n].curTime = "";
       zoneSettingsChanged = true;
     }
-    if (topicStr == MQTTZones[n].countdownFormat) {
-      zones[n].countdownFormat = PayloadString;
+    if (mqttTopicEquals(topic, MQTTZones[n].countdownFormat)) {
+      zones[n].countdownFormat = payloadBuf;
       zones[n].curTime = "";
       zoneSettingsChanged = true;
     }
     if (zoneSettingsChanged) {
       configDirty = true;
       configDirtyTime = millis();
+      shouldPublishState = true;
     }
   }
 
@@ -476,88 +619,158 @@ void MQTTCallback(char *topic, byte *payload, int length) {
     if (!progressBars[i].enabled)
       continue;
 
-    // Data source
-    if (progressBars[i].dataSourceType == "mqtt" &&
+    // Data source (Regular mode only)
+    if (!progressBars[i].dynamicMode &&
+        progressBars[i].dataSourceType == "mqtt" &&
         progressBars[i].dataSourceId.length() > 0 &&
-        topicStr == progressBars[i].dataSourceId) {
-      progressBars[i].currentValue = PayloadString.toFloat();
+        mqttTopicEquals(topic, progressBars[i].dataSourceId)) {
+      progressBars[i].currentValue = atof(payloadBuf);
       Serial.printf("\n[PB] Zone %u data: %s -> %.2f", i,
-                    PayloadString.c_str(), progressBars[i].currentValue);
+                    payloadBuf, progressBars[i].currentValue);
     }
 
-    // Condition source
-    if (progressBars[i].conditionEnabled &&
+    // Condition source (Regular mode only)
+    if (!progressBars[i].dynamicMode &&
+        progressBars[i].conditionEnabled &&
         progressBars[i].conditionSourceType == "mqtt" &&
         progressBars[i].conditionSourceId.length() > 0 &&
-        topicStr == progressBars[i].conditionSourceId) {
-      progressBars[i].conditionMet =
-          (PayloadString == progressBars[i].conditionValue);
+        mqttTopicEquals(topic, progressBars[i].conditionSourceId)) {
+      progressBars[i].conditionMet = progressBars[i].conditionValue == payloadBuf;
       Serial.printf("\n[PB] Zone %u condition: '%s' == '%s' -> %s", i,
-                    PayloadString.c_str(),
+                    payloadBuf,
                     progressBars[i].conditionValue.c_str(),
                     progressBars[i].conditionMet ? "true" : "false");
     }
+
+    // Dynamic animation source (Dynamic mode only)
+    if (progressBars[i].dynamicMode &&
+        progressBars[i].dynSourceType == "mqtt" &&
+        progressBars[i].dynSourceId.length() > 0 &&
+        mqttTopicEquals(topic, progressBars[i].dynSourceId)) {
+      progressBars[i].dynCurrentSensorValue = payloadBuf;
+      Serial.printf("\n[PB] Zone %u dyn src: '%s'", i, payloadBuf);
+    }
   }
 
-  MQTTPublishState();
+  if (shouldPublishState)
+    MQTTPublishState();
 }
 
 // ─── Reconnect
 // ─────────────────────────────────────────────────────────────────
 boolean reconnect() {
+  if (!mqttHasHeadroom(7000, 3000)) {
+    logMqttLowMem("reconnect");
+    return false;
+  }
   mqttClient.setServer(mqttServerAddress.c_str(), mqttServerPort);
 
-  String lwtTopic = MQTTGlobalPrefix + "/state";
+  char lwtTopic[80];
+  snprintf(lwtTopic, sizeof(lwtTopic), "%s/state", MQTTGlobalPrefix.c_str());
   const char *lwtMessage = "{\"status\":\"offline\"}";
 
   if (mqttClient.connect(MQTTGlobalPrefix.c_str(), mqttUsername.c_str(),
-                         mqttPassword.c_str(), lwtTopic.c_str(), 1, true,
+                         mqttPassword.c_str(), lwtTopic, 1, true,
                          lwtMessage)) {
-    MQTTPublishHADiscovry("0", "light");
-    MQTTPublishHADiscovry("0", "ds18b20");
+    // A scheduler profile is authoritative for explicitly changed power and
+    // brightness. Remove older retained MQTT commands before subscribing;
+    // otherwise every web-priority reconnect can replay stale ON/brightness.
+    if (!clearPendingScheduledCommands()) {
+      Serial.println(F("\n[MQTT] Retained command cleanup failed; reconnect "
+                       "deferred to protect scheduled state"));
+      mqttClient.disconnect();
+      return false;
+    }
+
+    bool discoveryCompleted = true;
+    if (!mqttDiscoveryPublished) {
+      MQTTPublishHADiscovry("0", "light");
+      yield();
+      MQTTPublishHADiscovry("0", "ds18b20");
+      yield();
+    }
 
     for (uint8_t n = 0; n < zoneNumbers; n++) {
-      MQTTPublishHADiscovry(String(n), "scrollAlign");
-      MQTTPublishHADiscovry(String(n), "charspacing");
-      MQTTPublishHADiscovry(String(n), "workMode");
-      MQTTPublishHADiscovry(String(n), "scrollPause");
-      MQTTPublishHADiscovry(String(n), "scrollSpeed");
-      MQTTPublishHADiscovry(String(n), "scrollEffectIn");
-      MQTTPublishHADiscovry(String(n), "scrollEffectOut");
+      if (!mqttDiscoveryPublished) {
+        if (!mqttHasHeadroom(6000, 2500)) {
+          logMqttLowMem("reconnect.discovery");
+          discoveryCompleted = false;
+          break;
+        }
+        char zoneBuf[4];
+        snprintf(zoneBuf, sizeof(zoneBuf), "%u", n);
+        MQTTPublishHADiscovry(zoneBuf, "scrollAlign");
+        yield();
+        MQTTPublishHADiscovry(zoneBuf, "charspacing");
+        yield();
+#if !defined(ESP8266)
+        MQTTPublishHADiscovry(zoneBuf, "workMode");
+        yield();
+#endif
+        MQTTPublishHADiscovry(zoneBuf, "scrollPause");
+        yield();
+        MQTTPublishHADiscovry(zoneBuf, "scrollSpeed");
+        yield();
+#if !defined(ESP8266)
+        MQTTPublishHADiscovry(zoneBuf, "scrollEffectIn");
+        yield();
+        MQTTPublishHADiscovry(zoneBuf, "scrollEffectOut");
+        yield();
+#endif
+      }
 
       if (MQTTZones[n].message != "" && MQTTZones[n].message != " ")
-        mqttClient.subscribe((char *)MQTTZones[n].message.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].scrollEffectIn.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].scrollEffectOut.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].scrollSpeed.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].scrollPause.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].scrollAllign.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].charspacing.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].workMode.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].scrollInfinite.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].countdown.c_str());
-      mqttClient.subscribe((char *)MQTTZones[n].countdownFormat.c_str());
+        mqttClient.subscribe(MQTTZones[n].message.c_str());
+      mqttClient.subscribe(MQTTZones[n].scrollEffectIn.c_str());
+      mqttClient.subscribe(MQTTZones[n].scrollEffectOut.c_str());
+      mqttClient.subscribe(MQTTZones[n].scrollSpeed.c_str());
+      mqttClient.subscribe(MQTTZones[n].scrollPause.c_str());
+      mqttClient.subscribe(MQTTZones[n].scrollAllign.c_str());
+      mqttClient.subscribe(MQTTZones[n].charspacing.c_str());
+      mqttClient.subscribe(MQTTZones[n].workMode.c_str());
+      mqttClient.subscribe(MQTTZones[n].scrollInfinite.c_str());
+      mqttClient.subscribe(MQTTZones[n].countdown.c_str());
+      mqttClient.subscribe(MQTTZones[n].countdownFormat.c_str());
+      yield();
     }
 
     // Subscribe to progress bar MQTT topics
     for (uint8_t i = 0; i < zoneNumbers && i < 4; i++) {
+      if (!mqttHasHeadroom(5000, 1800)) {
+        logMqttLowMem("reconnect.subscribe");
+        break;
+      }
       if (progressBars[i].enabled) {
-        if (progressBars[i].dataSourceType == "mqtt" &&
-            progressBars[i].dataSourceId.length() > 0) {
-          mqttClient.subscribe(progressBars[i].dataSourceId.c_str());
-        }
-        if (progressBars[i].conditionEnabled &&
-            progressBars[i].conditionSourceType == "mqtt" &&
-            progressBars[i].conditionSourceId.length() > 0) {
-          mqttClient.subscribe(progressBars[i].conditionSourceId.c_str());
+        if (!progressBars[i].dynamicMode) {
+          // Regular mode: subscribe to data + condition sources
+          if (progressBars[i].dataSourceType == "mqtt" &&
+              progressBars[i].dataSourceId.length() > 0) {
+            mqttClient.subscribe(progressBars[i].dataSourceId.c_str());
+          }
+          if (progressBars[i].conditionEnabled &&
+              progressBars[i].conditionSourceType == "mqtt" &&
+              progressBars[i].conditionSourceId.length() > 0) {
+            mqttClient.subscribe(progressBars[i].conditionSourceId.c_str());
+          }
+        } else {
+          // Dynamic mode: subscribe to rules source
+          if (progressBars[i].dynSourceType == "mqtt" &&
+              progressBars[i].dynSourceId.length() > 0) {
+            mqttClient.subscribe(progressBars[i].dynSourceId.c_str());
+          }
         }
       }
+      yield();
+    }
+
+    if (!mqttDiscoveryPublished && discoveryCompleted) {
+      mqttDiscoveryPublished = true;
     }
 
     MQTTPublishState();
     Serial.println(F("MQTT subscribe objects"));
-    mqttClient.subscribe((char *)MQTTIntensity.c_str());
-    mqttClient.subscribe((char *)MQTTPower.c_str());
+    mqttClient.subscribe(MQTTIntensity.c_str());
+    mqttClient.subscribe(MQTTPower.c_str());
 
     for (uint8_t n = 0; n < zoneNumbers; n++) {
       if (zones[n].workMode == "mqttClient") {

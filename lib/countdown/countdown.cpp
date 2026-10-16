@@ -28,6 +28,28 @@ static int daysInMonth(int month, int year) {
   return days[month];
 }
 
+static bool parseDigits(const String &value, size_t offset, size_t count,
+                        int &result) {
+  if (offset + count > value.length())
+    return false;
+  result = 0;
+  for (size_t i = 0; i < count; i++) {
+    char ch = value.charAt(offset + i);
+    if (ch < '0' || ch > '9')
+      return false;
+    result = result * 10 + (ch - '0');
+  }
+  return true;
+}
+
+static bool validDateTime(int year, int month, int day, int hour, int minute,
+                          int second) {
+  return year >= 1970 && year <= 9999 && month >= 1 && month <= 12 &&
+         day >= 1 && day <= daysInMonth(month, year) && hour >= 0 &&
+         hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 &&
+         second <= 59;
+}
+
 // Calendar-aware diff: compute years, months, days, hours, mins, secs
 // between 'from' and 'to' (to >= from)
 struct CalendarDiff {
@@ -117,23 +139,37 @@ bool parseCountdownTarget(const String &input, int zone,
 
   int tzOffsetSec = (int)(tzOffsetHours * 3600);
 
-  if (s.length() >= 19 && s.indexOf('T') == 10) {
+  int year = 0, month = 0, day = 0;
+  int hour = 0, minute = 0, second = 0;
+
+  if (s.length() == 19 && s.charAt(4) == '-' && s.charAt(7) == '-' &&
+      s.charAt(10) == 'T' && s.charAt(13) == ':' && s.charAt(16) == ':' &&
+      parseDigits(s, 0, 4, year) && parseDigits(s, 5, 2, month) &&
+      parseDigits(s, 8, 2, day) && parseDigits(s, 11, 2, hour) &&
+      parseDigits(s, 14, 2, minute) && parseDigits(s, 17, 2, second) &&
+      validDateTime(year, month, day, hour, minute, second)) {
     // Full ISO: "2026-12-31T23:59:59"
-    t.tm_year = s.substring(0, 4).toInt() - 1900;
-    t.tm_mon = s.substring(5, 7).toInt() - 1;
-    t.tm_mday = s.substring(8, 10).toInt();
-    t.tm_hour = s.substring(11, 13).toInt();
-    t.tm_min = s.substring(14, 16).toInt();
-    t.tm_sec = s.substring(17, 19).toInt();
-  } else if (s.length() == 10 && s.charAt(4) == '-') {
+    t.tm_year = year - 1900;
+    t.tm_mon = month - 1;
+    t.tm_mday = day;
+    t.tm_hour = hour;
+    t.tm_min = minute;
+    t.tm_sec = second;
+  } else if (s.length() == 10 && s.charAt(4) == '-' &&
+             s.charAt(7) == '-' && parseDigits(s, 0, 4, year) &&
+             parseDigits(s, 5, 2, month) && parseDigits(s, 8, 2, day) &&
+             validDateTime(year, month, day, 0, 0, 0)) {
     // Date only: "2026-12-31"
-    t.tm_year = s.substring(0, 4).toInt() - 1900;
-    t.tm_mon = s.substring(5, 7).toInt() - 1;
-    t.tm_mday = s.substring(8, 10).toInt();
+    t.tm_year = year - 1900;
+    t.tm_mon = month - 1;
+    t.tm_mday = day;
     t.tm_hour = 0;
     t.tm_min = 0;
     t.tm_sec = 0;
-  } else if (s.length() == 8 && s.charAt(2) == ':') {
+  } else if (s.length() == 8 && s.charAt(2) == ':' && s.charAt(5) == ':' &&
+             parseDigits(s, 0, 2, hour) && parseDigits(s, 3, 2, minute) &&
+             parseDigits(s, 6, 2, second) && hour <= 23 && minute <= 59 &&
+             second <= 59) {
     // Time only: "23:59:59" — use current date
     time_t localNow = currentEpoch + tzOffsetSec;
     struct tm nowTm;
@@ -141,9 +177,9 @@ bool parseCountdownTarget(const String &input, int zone,
     t.tm_year = nowTm.tm_year;
     t.tm_mon = nowTm.tm_mon;
     t.tm_mday = nowTm.tm_mday;
-    t.tm_hour = s.substring(0, 2).toInt();
-    t.tm_min = s.substring(3, 5).toInt();
-    t.tm_sec = s.substring(6, 8).toInt();
+    t.tm_hour = hour;
+    t.tm_min = minute;
+    t.tm_sec = second;
   } else {
     return false;
   }

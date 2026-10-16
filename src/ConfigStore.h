@@ -5,7 +5,13 @@
 // ─── Config Storage Functions
 // ──────────────────────────────────────────────────
 
-String processor(const String &var);
-void saveVarsToConfFile(String groupName, uint8_t n);
-void readConfig(String groupName, uint8_t n);
+void saveVarsToConfFile(const char *groupName, uint8_t n);
+inline void saveVarsToConfFile(const String &groupName, uint8_t n) {
+  saveVarsToConfFile(groupName.c_str(), n);
+}
+void saveSchedulerEnabledToConfFile();
+bool queueConfigSave(const char *groupName, uint8_t n = 0);
+bool serviceDeferredConfigSave();
+bool hasDeferredConfigSaves();
+void readConfig(const char *groupName, uint8_t n);
 void readAllConfig();

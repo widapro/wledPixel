@@ -1,21 +1,61 @@
 #include "DisplayUtils.h"
+#include "Scheduler.h"
 #include "httpsRequestJson.h"
+#include "sharedScratch.h"
 #include <SPI.h>
+#include <cstdio>
+#include <cstring>
 
 #if defined(ESP32)
 SemaphoreHandle_t displayMutex;
 #endif
 
+namespace displayRotation {
+bool flipped = false;
+uint8_t moduleCount = 1;
+} // namespace displayRotation
+
 void initDisplay() {
-#if defined(ESP32)
-  // displayMutex is replaced by noInterrupts() usage, but we keep the func for
-  // init
-#endif
+  displayRotation::flipped = displayFlip;
+  uint8_t count = 1;
+  for (uint8_t z = 0; z < zoneNumbers && z < 4; ++z) {
+    if (zones[z].end < MAX_DEVICES && zones[z].end + 1 > count)
+      count = zones[z].end + 1;
+  }
+  // The physical chain stays the same when a profile uses fewer modules.
+  // Include explicit layouts in saved profiles, without adding profile fields.
+  for (uint8_t i = 0; i < MAX_PROFILES; ++i) {
+    ScheduleProfile &profile = schedulerSharedProfileBuffer();
+    if (!schedulerLoadProfile(i, profile))
+      continue;
+    for (uint8_t z = 0; z < 4; ++z) {
+      if (profile.zoneEnd[z] < MAX_DEVICES && profile.zoneEnd[z] + 1 > count)
+        count = profile.zoneEnd[z] + 1;
+    }
+  }
+  displayRotation::moduleCount = count;
+}
+
+void serviceDisplayOrientation() {
+  if (displayRotation::flipped == displayFlip)
+    return;
+  MD_MAX72XX *mx = P.getGraphicObject();
+  if (!mx)
+    return;
+  displayRotation::flipped = displayFlip;
+  // Resend the current frame immediately, including static text, without
+  // resetting animations or clearing the screen. Keep logical pixels intact.
+  mx->update(MD_MAX72XX::OFF);
+  for (uint16_t col = 0; col < mx->getColumnCount(); ++col)
+    mx->setColumn(col, mx->getColumn(col));
+  mx->update(MD_MAX72XX::ON);
+  for (uint8_t z = 0; z < zoneNumbers && z < 4; ++z)
+    P.setIntensity(z, P.getIntensity(z));
 }
 
 // ─── String → textPosition_t
 // ───────────────────────────────────────────────────
-textPosition_t stringToTextPositionT(String val) {
+textPosition_t stringToTextPositionT(const String &val) {
   if (val == F("PA_CENTER"))
     return PA_CENTER;
   if (val == F("PA_LEFT"))
@@ -27,7 +67,7 @@ textPosition_t stringToTextPositionT(String val) {
 
 // ─── Apply Font
 // ────────────────────────────────────────────────────────────────
-void applyZoneFont(int zone, String font) {
+void applyZoneFont(int zone, const String &font) {
   if (font == F("default"))
     P.setFont(zone, nullptr);
   if (font == F("wledFont"))
@@ -40,125 +80,9 @@ void applyZoneFont(int zone, String font) {
     P.setFont(zone, wledFont_CompactSymbols);
 }
 
-// ─── UTF-8 → Font Encoding
-// ────────────────────────────────────────────────────────────
-// Converts UTF-8 encoded text to single-byte font indices.
-// MD_Parola fonts are indexed 0-255 by single bytes.
-// UTF-8 characters above ASCII use 2+ bytes, which MD_Parola
-// would treat as separate characters. This function collapses
-// them to the correct single-byte index.
-void utf8ToFontEncoding(const char *src, char *dst, size_t dstSize,
-                        const String &fontName) {
-
-  size_t si = 0, di = 0;
-  while (src[si] && di < dstSize - 1) {
-    uint8_t b = (uint8_t)src[si];
-
-    // ASCII (0x00-0x7F) — pass through
-    if (b < 0x80) {
-      if (fontName == "wledFont_CompactSymbols" && (char)src[si] == '~') {
-        si++; // Skip '~'
-        if ((char)src[si] == '~') {
-          // Double tilde -> tilde char
-          dst[di++] = '~';
-          si++;
-        } else if (src[si] >= 32 && src[si] <= 127) {
-          if (src[si] == '@') {
-            dst[di++] = (char)230;
-            si++;
-          } else if (src[si] == 'P') {
-            // ~P -> Sun day (mapped to 224)
-            dst[di++] = (char)224;
-            si++;
-          } else {
-            // ~ + char (32-127) -> map to 128-223
-            dst[di++] = (char)(128 + (src[si] - 32));
-            si++;
-          }
-        } else {
-          // Tilde followed by something else (or null) -> just print tilde
-          dst[di++] = '~';
-        }
-      } else {
-        dst[di++] = src[si++];
-      }
-      continue;
-    }
-
-    // 2-byte UTF-8 sequence (lead byte 0xC0-0xDF)
-    if ((b & 0xE0) == 0xC0 && (uint8_t)src[si + 1]) {
-      uint16_t codepoint =
-          ((uint16_t)(b & 0x1F) << 6) | ((uint8_t)src[si + 1] & 0x3F);
-
-      // Latin-1 supplement (U+0080-U+00FF) — direct mapping
-      if (codepoint >= 0x0080 && codepoint <= 0x00FF) {
-        dst[di++] = (char)(codepoint & 0xFF);
-        si += 2;
-        continue;
-      }
-
-      // Cyrillic block (U+0410-U+044F = А-я, 64 chars)
-      // Maps to font slots 128-191 when using wledFont_cyrillic
-      if (fontName == "wledFont_cyrillic" && codepoint >= 0x0410 &&
-          codepoint <= 0x044F) {
-        if (codepoint == 0x0430) { // 'а' -> 194
-          dst[di++] = (char)194;
-        } else if (codepoint == 0x0440) { // 'р' -> 195
-          dst[di++] = (char)195;
-        } else {
-          dst[di++] = (char)(128 + (codepoint - 0x0410));
-        }
-        si += 2;
-        continue;
-      }
-
-      // Ё (U+0401) and ё (U+0451) — special Cyrillic chars
-      if (fontName == "wledFont_cyrillic") {
-        if (codepoint == 0x0401) { // Ё → map to slot 192
-          dst[di++] = (char)192;
-          si += 2;
-          continue;
-        }
-        if (codepoint == 0x0451) { // ё → map to slot 193
-          dst[di++] = (char)193;
-          si += 2;
-          continue;
-        }
-      }
-
-      // Unknown 2-byte character → '?'
-      dst[di++] = '?';
-      si += 2;
-      continue;
-    }
-
-    // 3-byte UTF-8 sequence (lead byte 0xE0-0xEF) — skip
-    if ((b & 0xF0) == 0xE0) {
-      dst[di++] = '?';
-      si += ((uint8_t)src[si + 1] && (uint8_t)src[si + 2]) ? 3 : 1;
-      continue;
-    }
-
-    // 4-byte UTF-8 sequence (lead byte 0xF0-0xF7) — skip
-    if ((b & 0xF8) == 0xF0) {
-      dst[di++] = '?';
-      si +=
-          ((uint8_t)src[si + 1] && (uint8_t)src[si + 2] && (uint8_t)src[si + 3])
-              ? 4
-              : 1;
-      continue;
-    }
-
-    // Stray continuation byte or already-encoded Latin-1 — pass through
-    // (e.g. \xA0 from flashClockDots is already a valid font index)
-    dst[di++] = src[si++];
-  }
-  dst[di] = '\0';
-}
-
 // ─── String → textEffect_t
 // ─────────────────────────────────────────────────────
-textEffect_t stringToTextEffectT(String val) {
+textEffect_t stringToTextEffectT(const String &val) {
   if (val == F("PA_NO_EFFECT"))
     return PA_NO_EFFECT;
   if (val == F("PA_PRINT"))
@@ -254,7 +178,7 @@ textEffect_t stringToTextEffectT(String val) {
 
 // ─── Zone New Message
 // ──────────────────────────────────────────────────────────
-void zoneNewMessage(int zone, String newMessage, String postfix,
+void zoneNewMessage(int zone, const String &newMessage, const String &postfix,
                     bool restoreEffects, bool force) {
   if (zone >= 0 && zone < 4) {
     String fullMessage = newMessage + postfix;
@@ -267,10 +191,10 @@ void zoneNewMessage(int zone, String newMessage, String postfix,
     // Check if message is identical to pending/current to avoid redundant work
     if (!force) {
       if (zones[zone].newMessageAvailable) {
-        if (String(zoneMessagesPending[zone]) == String(tempEncoded))
+        if (strcmp(zoneMessagesPending[zone], tempEncoded) == 0)
           return;
       } else {
-        if (String(zoneMessages[zone]) == String(tempEncoded))
+        if (strcmp(zoneMessages[zone], tempEncoded) == 0)
           return;
       }
     }
@@ -286,7 +210,7 @@ void zoneNewMessage(int zone, String newMessage, String postfix,
 
 // ─── Zone Show Mode Message
 // ────────────────────────────────────────────────────
-void zoneShowModeMessage(int zone, String modeName) {
+void zoneShowModeMessage(int zone, const String &modeName) {
   if (zone >= 0 && zone < 4) {
     Serial.print("Debug: zoneShowModeMessage called for zone ");
     Serial.print(zone);
@@ -296,7 +220,7 @@ void zoneShowModeMessage(int zone, String modeName) {
     if (disableServiceMessages)
       return;
 
-    if (String(zoneMessages[zone]) == modeName) {
+    if (strcmp(zoneMessages[zone], modeName.c_str()) == 0) {
       Serial.println("Debug: Message already displayed, skipping update.");
       return;
     }
@@ -336,7 +260,7 @@ void zoneShowModeMessage(int zone, String modeName) {
 
 // ─── Numeric Check
 // ─────────────────────────────────────────────────────────────
-bool isNumeric(String str) {
+bool isNumeric(const String &str) {
   if (str.length() == 0)
     return false;
   for (byte i = 0; i < str.length(); i++) {
@@ -351,6 +275,7 @@ bool isNumeric(String str) {
 void ntpUpdateTime() {
   if (timeClient.update()) {
     previousNTPsyncMillis = currentMillis;
+    ntpSyncedOnce = true;
     Serial.print(F("\nNTP time synchronized successfully"));
   } else {
     previousNTPsyncMillis =
@@ -420,23 +345,38 @@ void updateSpriteData(uint8_t z) {
 
 // ─── Flash Clock Dots
 // ──────────────────────────────────────────────────────────
-String flashClockDots(String t, String font) {
+String flashClockDots(const String &t, const String &font) {
+  String result = t;
   String blinkChar = (font == "default") ? " " : "\xA0";
-  if (t.indexOf(":") > 0)
-    t.replace(":", blinkChar);
+  if (result.indexOf(":") > 0)
+    result.replace(":", blinkChar);
   else if (font != "default")
-    t.replace("\xA0", ":");
-  return t;
+    result.replace("\xA0", ":");
+  return result;
 }
 
 // ─── Get Current Time
 // ──────────────────────────────────────────────────────────
-String getCurTime(String curZoneFont, String displayFormat) {
+String getCurTime(const String &curZoneFont, const String &displayFormat) {
   if (currentMillis - previousNTPsyncMillis >=
       (unsigned)ntpUpdateInterval * 3600 * 1000)
     ntpUpdateTime();
 
   String t = (String)timeClient.getFormattedTime();
+
+  if (displayFormat == "HHMM12" || displayFormat == "HHMM12AP") {
+    const uint8_t hour24 = timeClient.getHours();
+    const uint8_t hour12 = (hour24 % 12 == 0) ? 12 : hour24 % 12;
+    String hour;
+    if (hour12 < 10)
+      hour += '0';
+    hour += hour12;
+
+    t = hour + t.substring(2, 5);
+    if (displayFormat == "HHMM12AP")
+      t += hour24 < 12 ? F(" am") : F(" pm");
+    return t;
+  }
 
   if (displayFormat == "HHMM") {
     t.remove(5, 4);
@@ -467,9 +407,11 @@ String getCurTime(String curZoneFont, String displayFormat) {
     monthDayStr += '0';
   monthDayStr += monthDay;
 
-  String weekDays[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-  String weekDaysCyrillic[7] = {"Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"};
-  String weekDay;
+  static const char *const weekDays[7] = {"Sun", "Mon", "Tue", "Wed",
+                                          "Thu", "Fri", "Sat"};
+  static const char *const weekDaysCyrillic[7] = {
+      "Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"};
+  const char *weekDay = nullptr;
   if (curZoneFont == "wledFont_cyrillic") {
     weekDay = weekDaysCyrillic[timeClient.getDay()];
   } else {
@@ -482,12 +424,12 @@ String getCurTime(String curZoneFont, String displayFormat) {
   if (displayFormat == "ddmm")
     t = monthDayStr + "." + currentMonthStr;
   if (displayFormat == "ddmmaa")
-    t = monthDayStr + "." + currentMonthStr + String(weekDay);
+    t = monthDayStr + "." + currentMonthStr + weekDay;
   if (displayFormat == "aa")
-    t = String(weekDay);
+    t = weekDay;
   if (displayFormat == "ddmmaahhmm") {
     t.remove(5, 4);
-    t = monthDayStr + "." + currentMonthStr + " " + String(weekDay) + " " + t;
+    t = monthDayStr + "." + currentMonthStr + " " + weekDay + " " + t;
   }
   return t;
 }
@@ -755,37 +697,238 @@ void testZones(uint8_t n) {
   }
 }
 
+namespace {
+bool fetchHaStateValue(const String &sensorId, String &outState) {
+  if (sensorId.length() == 0 || haAddr.length() == 0 || haApiToken.length() == 0)
+    return false;
+
+  static String path;
+  static String auth;
+  if (!path.reserve(96) || !auth.reserve(220)) {
+    Serial.println(F("\n[HA] OOM while reserving request buffers"));
+    return false;
+  }
+  path = F("/api/states/");
+  path += sensorId;
+  auth = F("Bearer ");
+  auth += haApiToken;
+  if (path.length() == 0 || auth.length() == 0) {
+    Serial.println(F("\n[HA] Failed to build request path/token"));
+    return false;
+  }
+
+  bool https = (haApiHttpType == "https");
+  Serial.printf("\n[HA] GET %s://%s:%u%s (entity length=%u, token length=%u)",
+                https ? "https" : "http", haAddr.c_str(), haApiPort,
+                path.c_str(), static_cast<unsigned>(sensorId.length()),
+                static_cast<unsigned>(haApiToken.length()));
+  StaticJsonDocument<2048> &doc = sharedJsonDocument();
+  doc.clear();
+  bool success = httpsRequestToDoc(haAddr, haApiPort, path, auth, https, doc);
+  if (!success)
+    return false;
+  JsonVariant state = doc[F("state")];
+  if (state.isNull())
+    return false;
+  const char *stateValue = state.as<const char *>();
+  if (!stateValue)
+    return false;
+  outState = stateValue;
+  return true;
+}
+} // namespace
+
 // ─── HA API Get
 // ────────────────────────────────────────────────────────────────
-String haApiGet(String sensorId, String sensorPostfix) {
+String haApiGet(const String &sensorId, const String &sensorPostfix) {
   Serial.printf("\nHA updating...");
-  bool https = (haApiHttpType == "https");
-
-  DynamicJsonDocument doc(2048);
-  bool success = httpsRequestToDoc(haAddr, haApiPort, "/api/states/" + sensorId,
-                                   "Bearer " + haApiToken, https, doc);
-  JsonObject haApiRespondPostObj = doc.as<JsonObject>();
-
-  if (success && haApiRespondPostObj.containsKey(F("state"))) {
-    return haApiRespondPostObj[F("state")].as<String>() + sensorPostfix;
-  }
-  return "err";
+  String state;
+  if (!fetchHaStateValue(sensorId, state))
+    return "err";
+  state += sensorPostfix;
+  return state;
 }
 
 // ─── HA API Get State Only (for Progress Bar)
 // ─────────────────────────────────
 String haApiGetState(const String &sensorId) {
-  bool https = (haApiHttpType == "https");
+  String state;
+  if (!fetchHaStateValue(sensorId, state))
+    return "";
+  return state;
+}
 
-  DynamicJsonDocument doc(2048);
-  bool success = httpsRequestToDoc(haAddr, haApiPort, "/api/states/" + sensorId,
-                                   "Bearer " + haApiToken, https, doc);
-  JsonObject obj = doc.as<JsonObject>();
+// ─── Dynamic Progress Bar Pixel Helper
+// ──────────────────────────────────────────
+// Determines if pixel at index i (0=leftmost) should be ON
+// given the animation type, phase, position, and total columns.
+// Animations 1-6: fill/erase two-phase model.
+// Animations 7-14: standalone patterns (phase/pos have animation-specific meaning).
+//
+// Morse SOS spatial pattern — scrolls across the strip like a ticker.
+// Dot = 1 pixel ON, Dash = 3 pixels ON
+// Inter-element gap = 1 pixel OFF, letter gap = 3 pixels OFF, word gap = 7 pixels OFF
+// S(●○●○●) + letter_gap(○○○) + O(●●●○●●●○●●●) + letter_gap(○○○) + S(●○●○●) + word_gap(○○○○○○○)
+static const uint8_t morseSOSBits[] = {
+  // S: dot gap dot gap dot
+  1,0,1,0,1,
+  // letter gap
+  0,0,0,
+  // O: dash gap dash gap dash
+  1,1,1,0,1,1,1,0,1,1,1,
+  // letter gap
+  0,0,0,
+  // S: dot gap dot gap dot
+  1,0,1,0,1,
+  // word gap
+  0,0,0,0,0,0,0
+};
+static const uint8_t morseSOSBitsLen = sizeof(morseSOSBits);
 
-  if (success && obj.containsKey(F("state"))) {
-    return obj[F("state")].as<String>();
+static bool isDynPixelOn(uint8_t anim, uint8_t phase, int16_t pos,
+                         int16_t i, int16_t totalCols,
+                         int8_t direction, uint16_t extra) {
+  // ── Animations 1-6: Fill / Erase two-phase model ──
+  if (anim >= 1 && anim <= 6) {
+    if (phase == 0) { // Fill phase
+      switch (anim) {
+      case 1:
+      case 3:
+        return i <= pos; // L→R fill
+      case 2:
+      case 4:
+        return i >= totalCols - 1 - pos; // R→L fill
+      case 5:
+      case 6:
+        return i <= pos || i >= totalCols - 1 - pos; // edges→center
+      }
+    } else { // Erase phase
+      switch (anim) {
+      case 1:
+        return i > pos; // L→R erase
+      case 2:
+        return i < totalCols - 1 - pos; // R→L erase
+      case 3:
+        return i < totalCols - 1 - pos; // R→L erase (snake)
+      case 4:
+        return i > pos; // L→R erase (snake)
+      case 5:
+        return i > pos && i < totalCols - 1 - pos; // edges→center erase
+      case 6: {
+        int16_t cL = (totalCols - 1) / 2;
+        int16_t cR = totalCols / 2;
+        return i < cL - pos || i > cR + pos; // center→edges erase
+      }
+      }
+    }
+    return false;
   }
-  return "";
+
+  // ── Animation 7: Larson Scanner ──
+  // pos = absolute position in bounce cycle (0 to 2*(totalCols-2)-1)
+  // Maps to physical position that oscillates 0→totalCols-1→1
+  if (anim == 7) {
+    int16_t maxIdx = totalCols - 1;
+    int16_t physPos;
+    if (pos <= maxIdx) {
+      physPos = pos;
+    } else {
+      physPos = 2 * maxIdx - pos; // bounce back
+    }
+    int16_t dist = i - physPos;
+    if (dist < 0) dist = -dist;
+    return dist <= 1; // 3-pixel-wide dot
+  }
+
+  // ── Animation 8: Heartbeat ──
+  // pos cycles 0-7: ON(0), OFF(1), ON(2), OFF(3,4,5,6,7)
+  // All pixels share the same state
+  if (anim == 8) {
+    return (pos == 0 || pos == 2); // two quick beats then long pause
+  }
+
+  // ── Animation 9: Running Wave → ──
+  // Pattern ●●●○○○ scrolling right. pos increments each step.
+  if (anim == 9) {
+    int16_t p = ((i - pos) % 6 + 6) % 6; // ensure positive modulo
+    return p < 3; // first 3 of 6-pixel group are ON
+  }
+
+  // ── Animation 10: Breathing (center expand/contract) ──
+  // phase 0: expand from center, phase 1: contract to center
+  // pos = current radius from center
+  if (anim == 10) {
+    int16_t center = totalCols / 2;
+    int16_t dist = i - center;
+    if (dist < 0) dist = -dist;
+    if (phase == 0) {
+      return dist <= pos; // expanding
+    } else {
+      return dist <= pos; // contracting (pos decreasing)
+    }
+  }
+
+  // ── Animation 11: Bouncing Pixel ──
+  // Single pixel bouncing off edges (1 pixel, unlike Larson's 3).
+  // pos = position of the pixel
+  if (anim == 11) {
+    return (i == pos);
+  }
+
+  // ── Animation 12: Comet → ──
+  // Head at pos, pattern: [tail●●●][gap○][head●]
+  // i.e., at pos: head ON, pos-1: OFF (gap), pos-2,pos-3,pos-4: ON (tail)
+  if (anim == 12) {
+    int16_t rel = ((pos - i) % totalCols + totalCols) % totalCols;
+    // rel=0: head, rel=1: gap, rel=2,3,4: tail
+    return (rel == 0 || (rel >= 2 && rel <= 4));
+  }
+
+  // ── Animation 13: Firework / Sparkle ──
+  // Random pixels based on pos as changing seed. ~30% density.
+  // Uses a simple LCG to generate deterministic pattern per frame.
+  if (anim == 13) {
+    uint16_t seed = (uint16_t)(pos * 7919 + i * 6271 + extra);
+    seed ^= (seed >> 3);
+    seed *= 2654435761U;
+    seed ^= (seed >> 7);
+    return (seed % 100) < 30; // ~30% density
+  }
+
+  // ── Animation 14: Morse Code (SOS) ──
+  // The SOS bit pattern scrolls across the strip from left to right.
+  // pos = scroll offset, increments each step.
+  // Pixel i is ON if the corresponding bit in the pattern is 1.
+  if (anim == 14) {
+    // Map pixel position to pattern index (scrolling left-to-right)
+    int16_t patIdx = ((i - pos) % morseSOSBitsLen + morseSOSBitsLen) % morseSOSBitsLen;
+    return morseSOSBits[patIdx] != 0;
+  }
+
+  // ── Animation 15: Alternating Flash ──
+  // Even and odd pixels flash in opposite phases.
+  // pos toggles 0/1 each step.
+  if (anim == 15) {
+    bool evenPhase = (pos % 2 == 0);
+    bool isEven = (i % 2 == 0);
+    return (evenPhase == isEven);
+  }
+
+  // ── Animation 16: Stack Builder ──
+  // A single pixel runs from left to the stack boundary, then "lands".
+  // extra = number of pixels already stacked (from right side).
+  // pos = current position of the running pixel (0 to boundary).
+  // phase 0 = pixel is running, phase 1 = pixel just landed (brief pause).
+  if (anim == 16) {
+    int16_t stackStart = totalCols - extra; // first stacked column
+    // Show the stacked pixels (always ON)
+    if (i >= stackStart) return true;
+    // Show the running pixel (during run phase)
+    if (phase == 0 && i == pos) return true;
+    return false;
+  }
+
+  return false;
 }
 
 // ─── Progress Bar Overlay
@@ -810,18 +953,20 @@ void updateProgressBars() {
       continue;
     }
 
-    // Compute active state
-    if (pb.conditionEnabled) {
-      pb.barActive = pb.conditionMet;
-    } else {
-      pb.barActive = true;
+    // Compute active state (Regular mode only — dynamic handles its own visibility)
+    if (!pb.dynamicMode) {
+      if (pb.conditionEnabled) {
+        pb.barActive = pb.conditionMet;
+      } else {
+        pb.barActive = true;
+      }
     }
 
     int startCol = zones[n].begin * 8;
     int endCol = (zones[n].end * 8) + 7;
     int totalCols = endCol - startCol + 1;
 
-    if (!pb.barActive) {
+    if (!pb.dynamicMode && !pb.barActive) {
       // Condition not met — clear row 7 for zone devices
       for (uint8_t dev = zones[n].begin; dev <= zones[n].end; dev++) {
         mx->setRow(dev, 7, 0x00);
@@ -829,6 +974,182 @@ void updateProgressBars() {
       continue;
     }
 
+    // ── Dynamic animation mode ──
+    if (pb.dynamicMode) {
+      // Resolve which animation/speed to use based on rules
+      uint8_t resolvedAnim = 0;
+      uint16_t resolvedSpeed = 100;
+
+      if (pb.dynSourceId.length() > 0 &&
+          pb.dynCurrentSensorValue.length() > 0) {
+        if (pb.dynRule1Value.length() > 0 &&
+            pb.dynCurrentSensorValue == pb.dynRule1Value) {
+          resolvedAnim = pb.dynamicAnimation;
+          resolvedSpeed = pb.dynamicSpeedMs;
+        } else if (pb.dynRule2Value.length() > 0 &&
+                   pb.dynCurrentSensorValue == pb.dynRule2Value) {
+          resolvedAnim = pb.dynRule2Animation;
+          resolvedSpeed = pb.dynRule2SpeedMs;
+        }
+      }
+
+      // No rule matches → bar off
+      if (resolvedAnim == 0) {
+        for (uint8_t dev = zones[n].begin; dev <= zones[n].end; dev++) {
+          mx->setRow(dev, 7, 0x00);
+        }
+        pb.dynActiveAnim = 0;
+        continue;
+      }
+
+      // Animation changed? Reset state to restart cycle
+      if (resolvedAnim != pb.dynActiveAnim) {
+        pb.dynActiveAnim = resolvedAnim;
+        pb.dynPhase = 0;
+        pb.dynPosition = 0;
+        pb.dynLastStep = 0;
+        pb.dynDirection = 1;
+        pb.dynExtra = 0;
+      }
+
+      unsigned long now = millis();
+
+      // Render current state
+      for (uint8_t dev = zones[n].begin; dev <= zones[n].end; dev++) {
+        uint8_t rowBits = 0;
+        int devStartCol = dev * 8;
+        for (uint8_t bit = 0; bit < 8; bit++) {
+          int absCol = devStartCol + bit;
+          int16_t pixelIdx = endCol - absCol; // 0=left, totalCols-1=right
+          if (pixelIdx >= 0 && pixelIdx < totalCols) {
+            if (isDynPixelOn(resolvedAnim, pb.dynPhase,
+                             pb.dynPosition, pixelIdx, totalCols,
+                             pb.dynDirection, pb.dynExtra)) {
+              rowBits |= (1 << bit);
+            }
+          }
+        }
+        mx->setRow(dev, 7, rowBits);
+      }
+
+      // Advance state on timer
+      if (pb.dynLastStep == 0) {
+        pb.dynLastStep = now; // First frame — mark time, don't advance
+      } else if (now - pb.dynLastStep >= resolvedSpeed) {
+        pb.dynLastStep = now;
+
+        if (resolvedAnim >= 1 && resolvedAnim <= 6) {
+          // ── Animations 1-6: fill/erase two-phase ──
+          int16_t maxPos;
+          if (resolvedAnim >= 5)
+            maxPos = (totalCols + 1) / 2 - 1;
+          else
+            maxPos = totalCols - 1;
+
+          pb.dynPosition++;
+          if (pb.dynPosition > maxPos) {
+            pb.dynPhase = (pb.dynPhase == 0) ? 1 : 0;
+            pb.dynPosition = 0;
+          }
+        } else if (resolvedAnim == 7) {
+          // ── Larson Scanner: bounce 0 → 2*(totalCols-2) ──
+          int16_t maxPos = 2 * (totalCols - 1) - 1;
+          if (maxPos < 1) maxPos = 1;
+          pb.dynPosition++;
+          if (pb.dynPosition > maxPos) {
+            pb.dynPosition = 0;
+          }
+        } else if (resolvedAnim == 8) {
+          // ── Heartbeat: cycle 0-7 ──
+          pb.dynPosition++;
+          if (pb.dynPosition > 7) {
+            pb.dynPosition = 0;
+          }
+        } else if (resolvedAnim == 9) {
+          // ── Running Wave: scroll offset ──
+          pb.dynPosition++;
+          if (pb.dynPosition >= 6) {
+            pb.dynPosition = 0;
+          }
+        } else if (resolvedAnim == 10) {
+          // ── Breathing: expand/contract from center ──
+          int16_t maxRadius = (totalCols + 1) / 2 - 1;
+          if (pb.dynPhase == 0) {
+            // Expanding
+            pb.dynPosition++;
+            if (pb.dynPosition > maxRadius) {
+              pb.dynPhase = 1;
+              pb.dynPosition = maxRadius;
+            }
+          } else {
+            // Contracting
+            pb.dynPosition--;
+            if (pb.dynPosition < 0) {
+              pb.dynPhase = 0;
+              pb.dynPosition = 0;
+            }
+          }
+        } else if (resolvedAnim == 11) {
+          // ── Bouncing Pixel: single pixel bouncing ──
+          int16_t maxPos = totalCols - 1;
+          if (maxPos < 1) maxPos = 1;
+          pb.dynPosition += pb.dynDirection;
+          if (pb.dynPosition >= maxPos) {
+            pb.dynPosition = maxPos;
+            pb.dynDirection = -1;
+          } else if (pb.dynPosition <= 0) {
+            pb.dynPosition = 0;
+            pb.dynDirection = 1;
+          }
+        } else if (resolvedAnim == 12) {
+          // ── Comet: wraps continuously L→R ──
+          pb.dynPosition++;
+          if (pb.dynPosition >= totalCols) {
+            pb.dynPosition = 0;
+          }
+        } else if (resolvedAnim == 13) {
+          // ── Sparkle: just increment pos for new random pattern each frame ──
+          pb.dynPosition++;
+          if (pb.dynPosition > 255) {
+            pb.dynPosition = 0;
+            pb.dynExtra++; // extra adds more randomness between cycles
+          }
+        } else if (resolvedAnim == 14) {
+          // ── Morse Code: scroll the bit pattern across the strip ──
+          pb.dynPosition++;
+          if (pb.dynPosition >= morseSOSBitsLen) {
+            pb.dynPosition = 0;
+          }
+        } else if (resolvedAnim == 15) {
+          // ── Alternating Flash: toggle 0/1 ──
+          pb.dynPosition = (pb.dynPosition == 0) ? 1 : 0;
+        } else if (resolvedAnim == 16) {
+          // ── Stack Builder: pixel runs left→right, stacks ──
+          int16_t stackStart = totalCols - pb.dynExtra;
+          if (pb.dynPhase == 0) {
+            // Running phase
+            pb.dynPosition++;
+            if (pb.dynPosition >= stackStart) {
+              // Pixel reached the stack — land it
+              pb.dynExtra++; // one more pixel in the stack
+              pb.dynPhase = 1;
+              pb.dynPosition = 0;
+            }
+          } else {
+            // Brief pause after landing, then start next pixel
+            pb.dynPhase = 0;
+            pb.dynPosition = 0;
+            // If stack is full, reset
+            if (pb.dynExtra >= (uint16_t)totalCols) {
+              pb.dynExtra = 0;
+            }
+          }
+        }
+      }
+      continue; // skip value-driven rendering
+    }
+
+    // ── Value-driven mode (existing) ──
     // For time-based source, compute value from NTP clock
     float useValue = pb.currentValue;
     float useMin = pb.minValue;

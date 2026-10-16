@@ -128,13 +128,34 @@ typedef struct {
   String conditionSourceType; // "ha" or "mqtt"
   String conditionSourceId;   // HA sensor ID or MQTT topic
   String conditionValue;      // Expected value to activate the bar
-  // Runtime state (not persisted)
+  // Dynamic mode settings (persisted)
+  bool dynamicMode;           // true = dynamic (rules), false = regular (value)
+  uint8_t dynamicAnimation;   // Rule 1 animation type (1-16)
+  uint16_t dynamicSpeedMs;    // Rule 1 speed: ms per pixel step (50-1000)
+  // Dynamic animation rules (persisted)
+  String dynSourceType;       // "ha" or "mqtt"
+  String dynSourceId;         // HA sensor ID or MQTT topic
+  String dynRule1Value;       // Trigger value for rule 1 (anim/speed = above)
+  String dynRule2Value;       // Trigger value for rule 2
+  uint8_t dynRule2Animation;  // Rule 2 animation type (1-16)
+  uint16_t dynRule2SpeedMs;   // Rule 2 speed (50-1000ms)
+  // Runtime state — Regular mode (not persisted)
   float currentValue;         // Last received numeric value
   bool conditionMet;          // Whether the condition is currently satisfied
-  bool barActive;             // = enabled && conditionMet && !wopr (computed)
+  bool barActive;             // Computed active state
   unsigned long lastDataUpdate;     // millis() of last data fetch
   unsigned long lastCondUpdate;     // millis() of last condition fetch
-  String lastCondReceivedValue;     // Last received condition value (for HA polling compare)
+  String lastCondReceivedValue;     // Last received condition value
+  // Runtime state — Dynamic mode (not persisted)
+  String dynCurrentSensorValue;     // Last received value from rules source
+  unsigned long lastDynSrcUpdate;   // millis() of last rules source HA poll
+  uint8_t dynPhase;           // 0=fill, 1=erase
+  int16_t dynPosition;        // Current pixel position in animation
+  unsigned long dynLastStep;  // millis() of last animation step
+  uint8_t dynActiveAnim;      // Currently resolved animation (0=none)
+  // Extended runtime state for animations 7-14
+  uint16_t dynExtra;          // General-purpose counter (sparkle seed, morse step, etc.)
+  int8_t  dynDirection;       // Bounce/scan direction: +1 or -1
 } ProgressBarData;
 
 // ─── Extern Declarations
@@ -173,6 +194,8 @@ extern bool initConfig;
 extern char const *wifiAPpassword;
 extern unsigned long currentMillis;
 extern unsigned long previousMillis;
+extern bool ntpSyncedOnce;
+extern volatile unsigned long webActivityMillis;
 extern bool shouldSaveConfig;
 
 // DS18B20
@@ -181,7 +204,7 @@ extern uint16_t ds18b20UpdateInterval;
 extern unsigned long previousDsMillis;
 extern String ds18b20UnitsFormat;
 extern String dsTemp;
-extern char dsTempBuff[5];
+extern char dsTempBuff[16];
 extern bool dsTempToDisplay;
 
 // WOPR
@@ -214,7 +237,9 @@ extern ZoneData zones[];
 extern uint8_t zoneNumbers;
 extern uint8_t intensity;
 extern bool power;
+extern bool displayWakePending;
 extern bool disableServiceMessages;
+extern bool displayFlip;
 extern bool disableDotsBlink;
 extern bool configDirty;
 extern unsigned long configDirtyTime;

@@ -16,6 +16,8 @@
 #endif
 
 extern bool isFetchingHttps;
+void requestHttpsAbortForWeb();
+bool httpsAbortWasRequested();
 
 // Returns true on success, fills the provided JsonDocument with the response
 bool httpsRequestToDoc(const String &addr, int port, const String &path,

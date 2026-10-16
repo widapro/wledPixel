@@ -1,5 +1,7 @@
 #include "stockTicker.h"
 #include "httpsRequestJson.h"
+#include "sharedScratch.h"
+#include <new>
 
 StockZoneData stockZones[4];
 
@@ -48,39 +50,6 @@ void stockParseSymbols(uint8_t zone, const String &symbols) {
   }
 }
 
-// ─── Fetch Quotes ───────────────────────────────────────────────────────────
-void stockUpdateZone(uint8_t zone, const String &apiToken) {
-  if (zone >= 4)
-    return;
-  StockZoneData &zd = stockZones[zone];
-
-  if (apiToken.length() == 0 || zd.symbolCount == 0)
-    return;
-
-  for (uint8_t i = 0; i < zd.symbolCount; i++) {
-    String path =
-        "/api/v1/quote?symbol=" + zd.quotes[i].symbol + "&token=" + apiToken;
-
-    Serial.printf("\nStock: fetching %s ...", zd.quotes[i].symbol.c_str());
-
-    DynamicJsonDocument doc(512);
-    bool success = httpsRequestToDoc("finnhub.io", 443, path, "", true, doc);
-    JsonObject obj = doc.as<JsonObject>();
-
-    if (success && obj.containsKey("c") && obj["c"].as<float>() > 0) {
-      zd.quotes[i].price = obj["c"].as<float>();
-      zd.quotes[i].change = obj["d"].as<float>();
-      zd.quotes[i].changePct = obj["dp"].as<float>();
-      zd.quotes[i].valid = true;
-      zd.quotes[i].error = false;
-      Serial.printf(" $%.2f (%.2f)", zd.quotes[i].price, zd.quotes[i].change);
-    } else {
-      Serial.print(" ERROR");
-      zd.quotes[i].error = true;
-    }
-  }
-}
-
 // ─── Fetch ONE Symbol (non-blocking per call) ───────────────────────────────
 bool stockUpdateOneSymbol(uint8_t zone, const String &apiToken) {
   if (zone >= 4)
@@ -94,20 +63,6 @@ bool stockUpdateOneSymbol(uint8_t zone, const String &apiToken) {
   if (i >= zd.symbolCount)
     i = 0; // safety wrap
 
-#if defined(ESP8266)
-  // Pre-check TLS memory BEFORE allocating Strings to avert std::bad_alloc on
-  // highly fragmented heaps
-  if (ESP.getFreeHeap() < 20480 || ESP.getMaxFreeBlockSize() < 10240) {
-    Serial.printf(
-        "\n[Stock] Deferring %s due to low memory (Heap: %u, MaxBlock: %u)",
-        zd.quotes[i].symbol.c_str(), ESP.getFreeHeap(),
-        ESP.getMaxFreeBlockSize());
-    // Return false to NOT advance nextFetchIndex, so we retry the exact same
-    // symbol on the next tick
-    return false;
-  }
-#endif
-
   String path =
       "/api/v1/quote?symbol=" + zd.quotes[i].symbol + "&token=" + apiToken;
 
@@ -115,7 +70,7 @@ bool stockUpdateOneSymbol(uint8_t zone, const String &apiToken) {
                 i + 1, zd.symbolCount);
 
   // Convert to StaticJsonDocument to eliminate heap fragmentation
-  static StaticJsonDocument<256> doc;
+  StaticJsonDocument<2048> &doc = sharedJsonDocument();
   doc.clear();
   bool success = httpsRequestToDoc("finnhub.io", 443, path, "", true, doc);
   JsonObject obj = doc.as<JsonObject>();
@@ -164,12 +119,17 @@ void stockUpdateOneSymbolAsync(uint8_t zone, const String &apiToken) {
   stockTaskInProgress = true;
 
 #if defined(ESP32)
-  StockTaskArgs *args = new StockTaskArgs();
+  StockTaskArgs *args = new (std::nothrow) StockTaskArgs();
+  if (!args) {
+    stockTaskInProgress = false;
+    Serial.println("[Stock] Failed to allocate task args");
+    return;
+  }
   args->zone = zone;
   args->apiToken = apiToken;
   // Create task on Core 0 (Pro CPU) to not block the main loop on Core 1 (App
   // CPU)
-  xTaskCreatePinnedToCore(
+  BaseType_t created = xTaskCreatePinnedToCore(
       stockFetchTask,   // Task function
       "StockFetchTask", // String with name of task
       6144,         // Stack size in words (WiFiClientSecure needs around 5-6K)
@@ -178,6 +138,11 @@ void stockUpdateOneSymbolAsync(uint8_t zone, const String &apiToken) {
       NULL,         // Task handle
       0             // Pin to Core 0
   );
+  if (created != pdPASS) {
+    delete args;
+    stockTaskInProgress = false;
+    Serial.println("[Stock] Failed to create fetch task");
+  }
 #else
   // For ESP8266, we use the Ticker fix inside httpsRequestJson,
   // so we just call the blocking function directly here.

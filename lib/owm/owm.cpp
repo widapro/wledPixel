@@ -1,4 +1,5 @@
 #include "owm.h"
+#include "sharedScratch.h"
 
 String owmWeatherIcon;
 byte owmHumidity;
@@ -8,18 +9,9 @@ int owmTemperature;
 
 void owmWeatherUpdate(const String &city, const String &unitsFormat,
                       const String &token) {
-#if defined(ESP8266)
-  // Pre-check TLS memory BEFORE allocating Strings to avert std::bad_alloc on
-  // fragmented heaps
-  if (ESP.getFreeHeap() < 18432 || ESP.getMaxFreeBlockSize() < 9216) {
-    Serial.printf(
-        "\n[OWM] Deferring update due to low memory (Heap: %u, MaxBlock: %u)",
-        ESP.getFreeHeap(), ESP.getMaxFreeBlockSize());
-    return;
-  }
-#endif
   Serial.print(F("\nGetting weather from Open Weather Map"));
-  DynamicJsonDocument doc(1024);
+  StaticJsonDocument<2048> &doc = sharedJsonDocument();
+  doc.clear();
   bool success = httpsRequestToDoc("api.openweathermap.org", 443,
                                    "/data/2.5/weather?q=" + city + "&units=" +
                                        unitsFormat + "&appid=" + token,
@@ -39,7 +31,8 @@ void owmWeatherUpdate(const String &city, const String &unitsFormat,
   }
 }
 
-String openWetherMapGetWeather(String whatToDisplay, String unitsFormat) {
+String openWetherMapGetWeather(const String &whatToDisplay,
+                               const String &unitsFormat) {
   if (whatToDisplay == "owmHumidity")
     return String(owmHumidity) + "%";
   if (whatToDisplay == "owmPressure")

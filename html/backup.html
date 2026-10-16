@@ -20,7 +20,7 @@
               <a href="/" class="nav-link text-white">Home</a>
             </li>
             <li>
-              <a href="/zone-settings" class="nav-link text-white">Zone Settings</a>
+              <a href="/zone-settings" class="nav-link text-white">Profiles</a>
             </li>
             <li>
               <a href="/service-settings" class="nav-link text-white">Service Settings</a>
@@ -103,20 +103,31 @@
   </div>
 
 <script>
-function fetchWithRetry(url, options = {}, retries = 10, delayMs = 2000) {
-  return fetch(url, options).then(res => {
-    if (res.status === 503 && retries > 0) {
-      console.log(`503 received, retrying in ${delayMs}ms...`);
-      return new Promise(resolve => setTimeout(resolve, delayMs))
-        .then(() => fetchWithRetry(url, options, retries - 1, delayMs));
+function fetchWithRetry(url, options, retries, delayMs) {
+  if (retries === undefined) retries = 10;
+  if (delayMs === undefined) delayMs = 2000;
+  function doRetry() {
+    return new Promise(function(r) { setTimeout(r, delayMs); })
+      .then(function() { return fetchWithRetry(url, options, retries - 1, delayMs); });
+  }
+  return fetch(url, options).then(function(res) {
+    if ((res.status === 429 || res.status === 503) && retries > 0) {
+      console.log('Device busy, retrying...');
+      return doRetry();
     }
-    return res;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }, function(err) {
+    if (retries > 0) {
+      console.log('Network error, retrying...');
+      return doRetry();
+    }
+    throw err;
   });
 }
 
 window.onload = function() {
   fetchWithRetry('/api/service-settings')
-    .then(r => r.json())
     .then(data => {
       if (document.getElementById('footerFwVer')) {
         document.getElementById('footerFwVer').innerText = data.firmwareVer;
@@ -150,13 +161,35 @@ async function uploadBackup() {
   formData.append('backup', file);
 
   try {
-    var response = await fetch('/api/restore', {
-      method: 'POST',
-      body: formData
-    });
+    var attempts = 5;
+    var response;
+    while (attempts-- > 0) {
+      response = await fetch('/api/restore', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.status !== 429 && response.status !== 503) break;
+      status.innerText = 'Device busy, retrying restore...';
+      await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+    }
 
     if (!response.ok) {
       throw new Error('Upload failed: ' + response.status + ' ' + response.statusText);
+    }
+
+    if (response.status === 202) {
+      status.innerText = 'Restoring settings...';
+      var completed = false;
+      for (var check = 0; check < 90; check++) {
+        await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+        var progress = await fetch('/api/restore-status');
+        if (progress.status === 429 || progress.status === 503) continue;
+        if (!progress.ok) throw new Error('Cannot check restore status');
+        var result = await progress.json();
+        if (result.state === 4) throw new Error('Restore failed. Check backup and free storage.');
+        if (result.state === 3) { completed = true; break; }
+      }
+      if (!completed) throw new Error('Restore did not complete in time');
     }
 
     status.style.display = 'none';

@@ -34,9 +34,6 @@ extern StockZoneData stockZones[4];
 // Parse comma-separated symbols string into stockZones[zone].quotes
 void stockParseSymbols(uint8_t zone, const String &symbols);
 
-// Fetch quotes for all symbols in a zone from Finnhub API (blocking)
-void stockUpdateZone(uint8_t zone, const String &apiToken);
-
 extern bool stockTaskInProgress;
 
 // Fetch a single symbol asynchronously (non-blocking). Uses FreeRTOS on ESP32,

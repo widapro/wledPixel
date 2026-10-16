@@ -25,7 +25,7 @@ bool shouldReboot = false;
 bool shouldUpdateNtp = false;
 size_t otaTotalSize = 0;
 String restoreJsonBuffer = "";
-const char *firmwareVer = "v3.6";
+const char *firmwareVer = "v4.0-beta.3";
 // Platform marker embedded in binary — used for OTA platform validation
 // DO NOT REMOVE: this string is scanned in the binary during OTA upload
 #if defined(ESP8266)
@@ -42,6 +42,8 @@ char const *wifiAPpassword = "12345678";
 unsigned long currentMillis;
 unsigned long previousMillis = 0;
 bool shouldSaveConfig = false;
+bool ntpSyncedOnce = false;
+volatile unsigned long webActivityMillis = 0;
 
 // ─── DS18B20
 // ───────────────────────────────────────────────────────────────────
@@ -50,7 +52,7 @@ uint16_t ds18b20UpdateInterval = 30;
 unsigned long previousDsMillis = -100000;
 String ds18b20UnitsFormat = "Celsius";
 String dsTemp = "-127";
-char dsTempBuff[5];
+char dsTempBuff[16];
 bool dsTempToDisplay = false;
 
 // ─── WOPR
@@ -63,14 +65,18 @@ WOPRData woprZones[4] = {{false, 0, 100, 7, {0}},
 // ─── Progress Bar
 // ──────────────────────────────────────────────────────────────────
 ProgressBarData progressBars[4] = {
-    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
-     ""},
-    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
-     ""},
-    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
-     ""},
-    {false, "ha", "", 0.0, 100.0, false, "ha", "", "", 0.0, false, false, 0, 0,
-     ""},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "",  "",  false,
+     1,     100,  "", "",  "",    "",    1,    100, 0.0, false,
+     false, 0,    0,  "",  "",    0,     0,    0,   0,   0},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "",  "",  false,
+     1,     100,  "", "",  "",    "",    1,    100, 0.0, false,
+     false, 0,    0,  "",  "",    0,     0,    0,   0,   0},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "",  "",  false,
+     1,     100,  "", "",  "",    "",    1,    100, 0.0, false,
+     false, 0,    0,  "",  "",    0,     0,    0,   0,   0},
+    {false, "ha", "", 0.0, 100.0, false, "ha", "",  "",  false,
+     1,     100,  "", "",  "",    "",    1,    100, 0.0, false,
+     false, 0,    0,  "",  "",    0,     0,    0,   0,   0},
 };
 
 // ─── MQTT
@@ -294,7 +300,9 @@ ZoneData zones[] = {
 uint8_t zoneNumbers = 1;
 uint8_t intensity = 7;
 bool power = true;
+bool displayWakePending = false;
 bool disableServiceMessages = false;
+bool displayFlip = false;
 bool disableDotsBlink = false;
 bool configDirty = false;
 unsigned long configDirtyTime = 0;

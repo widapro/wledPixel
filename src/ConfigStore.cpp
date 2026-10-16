@@ -1,11 +1,174 @@
 #include "ConfigStore.h"
+#include "Scheduler.h"
+#include "ConfigStringStorage.h"
 #include <cstdio>
+#include <cstring>
+
+namespace {
+constexpr uint8_t kDeferredSaveCapacity = 16;
+
+enum DeferredGroup : uint8_t {
+  DG_INVALID = 0,
+  DG_SYSTEM,
+  DG_DISPLAY,
+  DG_MQTT,
+  DG_CLOCK,
+  DG_OWM,
+  DG_HA,
+  DG_DS18,
+  DG_INTENSITY,
+  DG_ZONE,
+  DG_PROGRESS,
+  DG_STOCK,
+  DG_CRON_GLOBAL,
+  DG_CRON_SETTINGS,
+};
+
+struct DeferredConfigSave {
+  DeferredGroup group;
+  uint8_t index;
+};
+
+DeferredConfigSave deferredSaves[kDeferredSaveCapacity];
+uint8_t deferredSaveCount = 0;
+
+DeferredGroup deferredGroupFromName(const char *name) {
+  if (!name) return DG_INVALID;
+  if (strcmp(name, "systemSettings") == 0) return DG_SYSTEM;
+  if (strcmp(name, "displaySettings") == 0) return DG_DISPLAY;
+  if (strcmp(name, "mqttSettings") == 0) return DG_MQTT;
+  if (strcmp(name, "wallClockSett") == 0) return DG_CLOCK;
+  if (strcmp(name, "owmSettings") == 0) return DG_OWM;
+  if (strcmp(name, "haSettings") == 0) return DG_HA;
+  if (strcmp(name, "ds18b20Settings") == 0) return DG_DS18;
+  if (strcmp(name, "intensity") == 0) return DG_INTENSITY;
+  if (strcmp(name, "zoneSettings") == 0) return DG_ZONE;
+  if (strcmp(name, "pbSettings") == 0) return DG_PROGRESS;
+  if (strcmp(name, "stockSettings") == 0) return DG_STOCK;
+  if (strcmp(name, "cronGlobal") == 0) return DG_CRON_GLOBAL;
+  if (strcmp(name, "cronSettings") == 0) return DG_CRON_SETTINGS;
+  return DG_INVALID;
+}
+
+const char *deferredGroupName(DeferredGroup group) {
+  switch (group) {
+  case DG_SYSTEM: return "systemSettings";
+  case DG_DISPLAY: return "displaySettings";
+  case DG_MQTT: return "mqttSettings";
+  case DG_CLOCK: return "wallClockSett";
+  case DG_OWM: return "owmSettings";
+  case DG_HA: return "haSettings";
+  case DG_DS18: return "ds18b20Settings";
+  case DG_INTENSITY: return "intensity";
+  case DG_ZONE: return "zoneSettings";
+  case DG_PROGRESS: return "pbSettings";
+  case DG_STOCK: return "stockSettings";
+  case DG_CRON_GLOBAL: return "cronGlobal";
+  case DG_CRON_SETTINGS: return "cronSettings";
+  default: return "";
+  }
+}
+} // namespace
+
+bool queueConfigSave(const char *groupName, uint8_t n) {
+  DeferredGroup group = deferredGroupFromName(groupName);
+  if (group == DG_INVALID)
+    return false;
+  for (uint8_t i = 0; i < deferredSaveCount; i++) {
+    if (deferredSaves[i].index == n && deferredSaves[i].group == group)
+      return true;
+  }
+  if (deferredSaveCount >= kDeferredSaveCapacity) {
+    Serial.printf("\n[Config] Deferred save queue full: %s/%u", groupName, n);
+    return false;
+  }
+  DeferredConfigSave &entry = deferredSaves[deferredSaveCount++];
+  entry.group = group;
+  entry.index = n;
+  return true;
+}
+
+bool serviceDeferredConfigSave() {
+  if (deferredSaveCount == 0)
+    return false;
+  SchedulerWorkGuard work;
+  DeferredConfigSave entry = deferredSaves[0];
+  for (uint8_t i = 1; i < deferredSaveCount; i++)
+    deferredSaves[i - 1] = deferredSaves[i];
+  deferredSaveCount--;
+  const char *groupName = deferredGroupName(entry.group);
+  Serial.printf("\n[Config] Deferred save: %s/%u", groupName, entry.index);
+  if (entry.group == DG_CRON_GLOBAL)
+    saveSchedulerEnabledToConfFile();
+  else
+    saveVarsToConfFile(groupName, entry.index);
+  return true;
+}
+
+bool hasDeferredConfigSaves() { return deferredSaveCount > 0; }
 
 namespace {
 constexpr uint8_t kZoneCapacity = 4;
 
+typedef struct __attribute__((packed)) {
+  bool     enabled;
+  uint8_t  minute;
+  uint8_t  hour;
+  uint8_t  dayOfWeek;
+  uint32_t dayOfMonth;
+  uint8_t  power;
+  uint8_t  intensity;
+  uint8_t  zoneCount;
+  uint8_t  pbEnable;
+  uint8_t  zoneBegin[4];
+  uint8_t  zoneEnd[4];
+  uint8_t  zoneWorkMode[4];
+  uint8_t  zoneOwmDisplay[4];
+  uint8_t  zoneClockFmt[4];
+  uint8_t  zoneFont[4];
+  char     zoneHaSensorId[4][32];
+  char     zoneHaPostfix[4][6];
+  char     zoneMqttTopic[4][32];
+  char     name[12];
+} LegacyScheduleProfile;
+
 void buildZoneKey(char *out, size_t outSize, uint8_t zone, const char *suffix) {
   snprintf(out, outSize, "zone%u%s", zone, suffix);
+}
+
+// These missing-key defaults match every zone's initial values in Globals.cpp.
+// Reclaim them before any new writes, including on the first boot after OTA.
+void reclaimZoneDefaultStrings(uint8_t n) {
+  Preferences storage;
+  if (!storage.begin("zoneSettings", false)) return;
+  struct Setting { const char *suffix; const String *value; const char *fallback; };
+  const Setting settings[] = {
+      {"mqttPosfix", &zones[n].mqttPostfix, ""},
+      {"HaSensorId", &zones[n].haSensorId, ""},
+      {"HaSensorPf", &zones[n].haSensorPostfix, ""},
+      {"Ds18b20Pf", &zones[n].ds18b20Postfix, ""},
+      {"CdPrefix", &zones[n].countdownPrefix, ""},
+      {"CdSuffix", &zones[n].countdownSuffix, ""},
+      {"CdTarget", &countdownState[n].targetStr, ""},
+      {"StockSym", &zones[n].stockSymbols, ""},
+      {"StockPre", &zones[n].stockPrefix, ""},
+      {"StockPst", &zones[n].stockPostfix, ""},
+      {"WorkMode", &zones[n].workMode, "manualInput"},
+      {"ScrolAlign", &zones[n].scrollAlign, "PA_CENTER"},
+      {"ScrolEfIn", &zones[n].scrollEffectIn, "PA_SCROLL_DOWN"},
+      {"ScrolEfOut", &zones[n].scrollEffectOut, "PA_NO_EFFECT"},
+      {"Font", &zones[n].font, "wledFont_cyrillic"},
+      {"ClDispForm", &zones[n].clockDisplayFormat, "HHMM"},
+      {"OwmWhDisp", &zones[n].owmWhatToDisplay, "owmTemperature"},
+      {"CdFormat", &zones[n].countdownFormat, "DDHHMMSS"},
+      {"CdFinish", &zones[n].countdownFinish, "blinkForever"},
+      {"StockFmt", &zones[n].stockDisplayFormat, "namePrice"}};
+  for (const auto &setting : settings) {
+    if (*setting.value != setting.fallback) continue;
+    char key[24]; buildZoneKey(key, sizeof(key), n, setting.suffix);
+    if (storage.isKey(key) && storage.getString(key, "") == setting.fallback)
+      storage.remove(key);
+  }
 }
 
 uint8_t normalizedZoneCount(uint8_t raw) {
@@ -15,228 +178,59 @@ uint8_t normalizedZoneCount(uint8_t raw) {
     return kZoneCapacity;
   return raw;
 }
-} // namespace
 
-// ─── Template Processor
-// ────────────────────────────────────────────────────────
-String processor(const String &var) {
-  char buffer[10];
-  if (var == F("workModeZone0"))
-    return zones[0].workMode;
-  if (var == F("workModeZone1"))
-    return zones[1].workMode;
-  if (var == F("workModeZone2"))
-    return zones[2].workMode;
-  if (var == F("workModeZone3"))
-    return zones[3].workMode;
-  if (var == F("zoneNumbers"))
-    return itoa(zoneNumbers, buffer, 10);
-  if (var == F("zone0Begin"))
-    return itoa(zones[0].begin, buffer, 10);
-  if (var == F("zone0End"))
-    return itoa(zones[0].end, buffer, 10);
-  if (var == F("zone1Begin"))
-    return itoa(zones[1].begin, buffer, 10);
-  if (var == F("zone1End"))
-    return itoa(zones[1].end, buffer, 10);
-  if (var == F("zone2Begin"))
-    return itoa(zones[2].begin, buffer, 10);
-  if (var == F("zone2End"))
-    return itoa(zones[2].end, buffer, 10);
-  if (var == F("zone3Begin"))
-    return itoa(zones[3].begin, buffer, 10);
-  if (var == F("zone3End"))
-    return itoa(zones[3].end, buffer, 10);
-  if (var == F("wifiSsid"))
-    return WiFi.SSID();
-  if (var == F("wifiIp"))
-    return WiFi.localIP().toString();
-  if (var == F("wifiGateway"))
-    return WiFi.gatewayIP().toString();
-  if (var == F("intensity"))
-    return itoa(intensity + 1, buffer, 10);
-  if (var == F("scrollSpeedZone0"))
-    return itoa(zones[0].scrollSpeed, buffer, 10);
-  if (var == F("scrollSpeedZone1"))
-    return itoa(zones[1].scrollSpeed, buffer, 10);
-  if (var == F("scrollSpeedZone2"))
-    return itoa(zones[2].scrollSpeed, buffer, 10);
-  if (var == F("scrollSpeedZone3"))
-    return itoa(zones[3].scrollSpeed, buffer, 10);
-  if (var == F("scrollPauseZone0"))
-    return itoa(zones[0].scrollPause, buffer, 10);
-  if (var == F("scrollPauseZone1"))
-    return itoa(zones[1].scrollPause, buffer, 10);
-  if (var == F("scrollPauseZone2"))
-    return itoa(zones[2].scrollPause, buffer, 10);
-  if (var == F("scrollPauseZone3"))
-    return itoa(zones[3].scrollPause, buffer, 10);
-  if (var == F("scrollAlignZone0"))
-    return zones[0].scrollAlign;
-  if (var == F("scrollAlignZone1"))
-    return zones[1].scrollAlign;
-  if (var == F("scrollAlignZone2"))
-    return zones[2].scrollAlign;
-  if (var == F("scrollAlignZone3"))
-    return zones[3].scrollAlign;
-  if (var == F("scrollEffectZone0In"))
-    return zones[0].scrollEffectIn;
-  if (var == F("scrollEffectZone1In"))
-    return zones[1].scrollEffectIn;
-  if (var == F("scrollEffectZone2In"))
-    return zones[2].scrollEffectIn;
-  if (var == F("scrollEffectZone3In"))
-    return zones[3].scrollEffectIn;
-  if (var == F("scrollEffectZone0Out"))
-    return zones[0].scrollEffectOut;
-  if (var == F("scrollEffectZone1Out"))
-    return zones[1].scrollEffectOut;
-  if (var == F("scrollEffectZone2Out"))
-    return zones[2].scrollEffectOut;
-  if (var == F("scrollEffectZone3Out"))
-    return zones[3].scrollEffectOut;
-  if (var == F("mqttEnable")) {
-    if (mqttEnable)
-      return "true";
-    if (!mqttEnable)
-      return "false";
+void migrateLegacyScheduleProfile(const LegacyScheduleProfile &oldProfile,
+                                  ScheduleProfile &profile) {
+  profile.enabled = oldProfile.enabled;
+  profile.minute = oldProfile.minute;
+  profile.hour = oldProfile.hour;
+  profile.dayOfWeek = oldProfile.dayOfWeek;
+  profile.dayOfMonth = oldProfile.dayOfMonth;
+  profile.power = oldProfile.power;
+  profile.intensity = oldProfile.intensity;
+  profile.zoneCount = oldProfile.zoneCount;
+  profile.pbEnable = oldProfile.pbEnable;
+  memcpy(profile.zoneBegin, oldProfile.zoneBegin, sizeof(profile.zoneBegin));
+  memcpy(profile.zoneEnd, oldProfile.zoneEnd, sizeof(profile.zoneEnd));
+  memcpy(profile.zoneWorkMode, oldProfile.zoneWorkMode,
+         sizeof(profile.zoneWorkMode));
+  memcpy(profile.zoneOwmDisplay, oldProfile.zoneOwmDisplay,
+         sizeof(profile.zoneOwmDisplay));
+  memcpy(profile.zoneClockFmt, oldProfile.zoneClockFmt,
+         sizeof(profile.zoneClockFmt));
+  memcpy(profile.zoneFont, oldProfile.zoneFont, sizeof(profile.zoneFont));
+  for (uint8_t z = 0; z < kZoneCapacity; z++) {
+    memset(profile.zoneHaSensorId[z], 0, sizeof(profile.zoneHaSensorId[z]));
+    memcpy(profile.zoneHaSensorId[z], oldProfile.zoneHaSensorId[z],
+           sizeof(oldProfile.zoneHaSensorId[z]));
+    if ((uint8_t)oldProfile.zoneHaSensorId[z][0] != SCHED_STR_NO_CHANGE)
+      profile.zoneHaSensorId[z][sizeof(oldProfile.zoneHaSensorId[z]) - 1] =
+          '\0';
   }
-  if (var == F("mqttServerAddress"))
-    return mqttServerAddress;
-  if (var == F("mqttServerPort"))
-    return itoa(mqttServerPort, buffer, 10);
-  if (var == F("mqttUsername"))
-    return mqttUsername;
-  if (var == F("mqttPassword"))
-    return mqttPassword;
-  if (var == F("mqttDevicePrefix"))
-    return MQTTGlobalPrefix;
-  if (var == F("mqttTextTopicZone0"))
-    return MQTTZones[0].message;
-  if (var == F("mqttTextTopicZone1"))
-    return MQTTZones[1].message;
-  if (var == F("mqttTextTopicZone2"))
-    return MQTTZones[2].message;
-  if (var == F("mqttTextTopicZone3"))
-    return MQTTZones[3].message;
-  if (var == F("mqttPostfixZone0"))
-    return zones[0].mqttPostfix;
-  if (var == F("mqttPostfixZone1"))
-    return zones[1].mqttPostfix;
-  if (var == F("mqttPostfixZone2"))
-    return zones[2].mqttPostfix;
-  if (var == F("mqttPostfixZone3"))
-    return zones[3].mqttPostfix;
-  if (var == F("ntpTimeZone"))
-    return String(ntpTimeZone);
-  if (var == F("ntpUpdateInterval"))
-    return itoa(ntpUpdateInterval, buffer, 10);
-  if (var == F("ntpServer"))
-    return ntpServer;
-  if (var == F("clockDisplayFormatZone0"))
-    return zones[0].clockDisplayFormat;
-  if (var == F("clockDisplayFormatZone1"))
-    return zones[1].clockDisplayFormat;
-  if (var == F("clockDisplayFormatZone2"))
-    return zones[2].clockDisplayFormat;
-  if (var == F("clockDisplayFormatZone3"))
-    return zones[3].clockDisplayFormat;
-  if (var == F("owmApiToken"))
-    return owmApiToken;
-  if (var == F("owmUnitsFormat"))
-    return owmUnitsFormat;
-  if (var == F("owmUpdateInterval"))
-    return itoa(owmUpdateInterval, buffer, 10);
-  if (var == F("owmWhatToDisplayZone0"))
-    return zones[0].owmWhatToDisplay;
-  if (var == F("owmWhatToDisplayZone1"))
-    return zones[1].owmWhatToDisplay;
-  if (var == F("owmWhatToDisplayZone2"))
-    return zones[2].owmWhatToDisplay;
-  if (var == F("owmWhatToDisplayZone3"))
-    return zones[3].owmWhatToDisplay;
-  if (var == F("owmCity"))
-    return owmCity;
-  if (var == F("fontZone0"))
-    return zones[0].font;
-  if (var == F("fontZone1"))
-    return zones[1].font;
-  if (var == F("fontZone2"))
-    return zones[2].font;
-  if (var == F("fontZone3"))
-    return zones[3].font;
-  if (var == F("haAddr"))
-    return haAddr;
-  if (var == F("haApiToken"))
-    return haApiToken;
-  if (var == F("haApiHttpType"))
-    return haApiHttpType;
-  if (var == F("haApiPort"))
-    return itoa(haApiPort, buffer, 10);
-  if (var == F("haSensorIdZone0"))
-    return zones[0].haSensorId;
-  if (var == F("haSensorIdZone1"))
-    return zones[1].haSensorId;
-  if (var == F("haSensorIdZone2"))
-    return zones[2].haSensorId;
-  if (var == F("haSensorIdZone3"))
-    return zones[3].haSensorId;
-  if (var == F("haSensorPostfixZone0"))
-    return zones[0].haSensorPostfix;
-  if (var == F("haSensorPostfixZone1"))
-    return zones[1].haSensorPostfix;
-  if (var == F("haSensorPostfixZone2"))
-    return zones[2].haSensorPostfix;
-  if (var == F("haSensorPostfixZone3"))
-    return zones[3].haSensorPostfix;
-  if (var == F("haUpdateInterval"))
-    return itoa(haUpdateInterval, buffer, 10);
-  if (var == F("charspacingZone0"))
-    return itoa(zones[0].charspacing, buffer, 10);
-  if (var == F("charspacingZone1"))
-    return itoa(zones[1].charspacing, buffer, 10);
-  if (var == F("charspacingZone2"))
-    return itoa(zones[2].charspacing, buffer, 10);
-  if (var == F("charspacingZone3"))
-    return itoa(zones[3].charspacing, buffer, 10);
-  if (var == F("firmwareVer"))
-    return firmwareVer;
-  if (var == F("deviceName"))
-    return shortMACaddr;
-  if (var == F("disableServiceMessages"))
-    return String(disableServiceMessages);
-  if (var == F("disableDotsBlink"))
-    return String(disableDotsBlink);
-  if (var == F("ds18b20Enable"))
-    return String(ds18b20Enable);
-  if (var == F("ds18b20Temp"))
-    return (dsTemp == "-127") ? "Not connected" : dsTemp;
-  if (var == F("ds18b20UpdateInterval"))
-    return itoa(ds18b20UpdateInterval, buffer, 10);
-  if (var == F("ds18b20UnitsFormat"))
-    return ds18b20UnitsFormat;
-  if (var == F("ds18b20PostfixZone0"))
-    return zones[0].ds18b20Postfix;
-  if (var == F("ds18b20PostfixZone1"))
-    return zones[1].ds18b20Postfix;
-  if (var == F("ds18b20PostfixZone2"))
-    return zones[2].ds18b20Postfix;
-  if (var == F("ds18b20PostfixZone3"))
-    return zones[3].ds18b20Postfix;
-  return String();
+  memcpy(profile.zoneHaPostfix, oldProfile.zoneHaPostfix,
+         sizeof(profile.zoneHaPostfix));
+  memcpy(profile.zoneMqttTopic, oldProfile.zoneMqttTopic,
+         sizeof(profile.zoneMqttTopic));
+  memcpy(profile.name, oldProfile.name, sizeof(profile.name));
+  profile.name[sizeof(profile.name) - 1] = '\0';
 }
+
+} // namespace
 
 // ─── Save Config
 // ───────────────────────────────────────────────────────────────
-void saveVarsToConfFile(String groupName, uint8_t n) {
-  preferences.begin(groupName.c_str(), false);
+void saveVarsToConfFile(const char *groupName, uint8_t n) {
+  if (!groupName)
+    return;
+  preferences.begin(groupName, false);
 
-  if (groupName == "systemSettings") {
+  if (strcmp(groupName, "systemSettings") == 0) {
     preferences.putString("deviceName", shortMACaddr);
     preferences.putBool("disablServMess", disableServiceMessages);
+    preferences.putBool("displayFlip", displayFlip);
   }
 
-  if (groupName == "displaySettings") {
+  if (strcmp(groupName, "displaySettings") == 0) {
     preferences.putUChar("zoneNumbers", normalizedZoneCount(zoneNumbers));
     preferences.putUChar("zones0Begin", zones[0].begin);
     preferences.putUChar("zones0End", zones[0].end);
@@ -248,74 +242,86 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
     preferences.putUChar("zones3End", zones[3].end);
   }
 
-  if (groupName == "zoneSettings") {
+  if (strcmp(groupName, "zoneSettings") == 0) {
     if (n >= kZoneCapacity) {
       preferences.end();
       return;
     }
 
     char key[24];
+    reclaimZoneDefaultStrings(n);
+    const char *optionalKeys[] = {"mqttPosfix", "HaSensorId", "HaSensorPf",
+        "Ds18b20Pf", "CdPrefix", "CdSuffix", "CdTarget", "StockSym", "StockPre", "StockPst"};
+    const String *optionalValues[] = {&zones[n].mqttPostfix, &zones[n].haSensorId,
+        &zones[n].haSensorPostfix, &zones[n].ds18b20Postfix, &zones[n].countdownPrefix,
+        &zones[n].countdownSuffix, &countdownState[n].targetStr, &zones[n].stockSymbols,
+        &zones[n].stockPrefix, &zones[n].stockPostfix};
+    for (uint8_t i = 0; i < 10; ++i) {
+      if (optionalValues[i]->length()) continue;
+      buildZoneKey(key, sizeof(key), n, optionalKeys[i]);
+      storeOptionalConfigString(preferences, key, *optionalValues[i]);
+    }
     buildZoneKey(key, sizeof(key), n, "WorkMode");
-    preferences.putString(key, zones[n].workMode);
+    storeDefaultConfigString(preferences, key, zones[n].workMode, "manualInput");
     buildZoneKey(key, sizeof(key), n, "ScrolSpeed");
     preferences.putUChar(key, zones[n].scrollSpeed);
     buildZoneKey(key, sizeof(key), n, "ScrolPause");
     preferences.putUChar(key, zones[n].scrollPause);
     buildZoneKey(key, sizeof(key), n, "ScrolAlign");
-    preferences.putString(key, zones[n].scrollAlign);
+    storeDefaultConfigString(preferences, key, zones[n].scrollAlign, "PA_CENTER");
     buildZoneKey(key, sizeof(key), n, "ScrolEfIn");
-    preferences.putString(key, zones[n].scrollEffectIn);
+    storeDefaultConfigString(preferences, key, zones[n].scrollEffectIn, "PA_SCROLL_DOWN");
     buildZoneKey(key, sizeof(key), n, "ScrolEfOut");
-    preferences.putString(key, zones[n].scrollEffectOut);
+    storeDefaultConfigString(preferences, key, zones[n].scrollEffectOut, "PA_NO_EFFECT");
     buildZoneKey(key, sizeof(key), n, "Font");
-    preferences.putString(key, zones[n].font);
+    storeDefaultConfigString(preferences, key, zones[n].font, "wledFont_cyrillic");
     buildZoneKey(key, sizeof(key), n, "Charspac");
     preferences.putUChar(key, zones[n].charspacing);
     buildZoneKey(key, sizeof(key), n, "mqttTexTop");
     preferences.putString(key, MQTTZones[n].message);
     buildZoneKey(key, sizeof(key), n, "mqttPosfix");
-    preferences.putString(key, zones[n].mqttPostfix);
+    storeOptionalConfigString(preferences, key, zones[n].mqttPostfix);
     buildZoneKey(key, sizeof(key), n, "ClDispForm");
-    preferences.putString(key, zones[n].clockDisplayFormat);
+    storeDefaultConfigString(preferences, key, zones[n].clockDisplayFormat, "HHMM");
     buildZoneKey(key, sizeof(key), n, "OwmWhDisp");
-    preferences.putString(key, zones[n].owmWhatToDisplay);
+    storeDefaultConfigString(preferences, key, zones[n].owmWhatToDisplay, "owmTemperature");
     buildZoneKey(key, sizeof(key), n, "HaSensorId");
-    preferences.putString(key, zones[n].haSensorId);
+    storeOptionalConfigString(preferences, key, zones[n].haSensorId);
     buildZoneKey(key, sizeof(key), n, "HaSensorPf");
-    preferences.putString(key, zones[n].haSensorPostfix);
+    storeOptionalConfigString(preferences, key, zones[n].haSensorPostfix);
     buildZoneKey(key, sizeof(key), n, "Ds18b20Pf");
-    preferences.putString(key, zones[n].ds18b20Postfix);
+    storeOptionalConfigString(preferences, key, zones[n].ds18b20Postfix);
     buildZoneKey(key, sizeof(key), n, "WoprUpdInt");
     preferences.putUShort(key, woprZones[n].updateInterval);
     buildZoneKey(key, sizeof(key), n, "ScrolInf");
     preferences.putBool(key, zones[n].scrollInfinite);
     // Countdown settings
     buildZoneKey(key, sizeof(key), n, "CdFormat");
-    preferences.putString(key, zones[n].countdownFormat);
+    storeDefaultConfigString(preferences, key, zones[n].countdownFormat, "DDHHMMSS");
     buildZoneKey(key, sizeof(key), n, "CdFinish");
-    preferences.putString(key, zones[n].countdownFinish);
+    storeDefaultConfigString(preferences, key, zones[n].countdownFinish, "blinkForever");
     buildZoneKey(key, sizeof(key), n, "CdUnits");
     preferences.putBool(key, zones[n].countdownShowUnits);
     buildZoneKey(key, sizeof(key), n, "CdPrefix");
-    preferences.putString(key, zones[n].countdownPrefix);
+    storeOptionalConfigString(preferences, key, zones[n].countdownPrefix);
     buildZoneKey(key, sizeof(key), n, "CdSuffix");
-    preferences.putString(key, zones[n].countdownSuffix);
+    storeOptionalConfigString(preferences, key, zones[n].countdownSuffix);
     buildZoneKey(key, sizeof(key), n, "CdTarget");
-    preferences.putString(key, countdownState[n].targetStr);
+    storeOptionalConfigString(preferences, key, countdownState[n].targetStr);
     // Stock ticker settings
     buildZoneKey(key, sizeof(key), n, "StockSym");
-    preferences.putString(key, zones[n].stockSymbols);
+    storeOptionalConfigString(preferences, key, zones[n].stockSymbols);
     buildZoneKey(key, sizeof(key), n, "StockFmt");
-    preferences.putString(key, zones[n].stockDisplayFormat);
+    storeDefaultConfigString(preferences, key, zones[n].stockDisplayFormat, "namePrice");
     buildZoneKey(key, sizeof(key), n, "StockPre");
-    preferences.putString(key, zones[n].stockPrefix);
+    storeOptionalConfigString(preferences, key, zones[n].stockPrefix);
     buildZoneKey(key, sizeof(key), n, "StockPst");
-    preferences.putString(key, zones[n].stockPostfix);
+    storeOptionalConfigString(preferences, key, zones[n].stockPostfix);
     buildZoneKey(key, sizeof(key), n, "StockArr");
     preferences.putBool(key, zones[n].stockShowArrows);
   }
 
-  if (groupName == "mqttSettings") {
+  if (strcmp(groupName, "mqttSettings") == 0) {
     preferences.putBool("mqttEnable", mqttEnable);
     preferences.putString("mqttServerAddr", mqttServerAddress);
     preferences.putUShort("mqttServerPort", mqttServerPort);
@@ -323,21 +329,21 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
     preferences.putString("mqttPassword", mqttPassword);
   }
 
-  if (groupName == "wallClockSett") {
+  if (strcmp(groupName, "wallClockSett") == 0) {
     preferences.putFloat("ntpTz", ntpTimeZone);
     preferences.putBool("disableDotBlink", disableDotsBlink);
     preferences.putUShort("ntpUpdateInt", ntpUpdateInterval);
     preferences.putString("ntpServer", ntpServer);
   }
 
-  if (groupName == "owmSettings") {
+  if (strcmp(groupName, "owmSettings") == 0) {
     preferences.putString("owmApiToken", owmApiToken);
     preferences.putString("owmUnitsFormat", owmUnitsFormat);
     preferences.putUShort("owmUpdateInt", owmUpdateInterval);
     preferences.putString("owmCity", owmCity);
   }
 
-  if (groupName == "haSettings") {
+  if (strcmp(groupName, "haSettings") == 0) {
     preferences.putString("haAddr", haAddr);
     preferences.putString("haApiToken", haApiToken);
     preferences.putString("haApiHttpType", haApiHttpType);
@@ -345,18 +351,37 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
     preferences.putUShort("haUpdateInt", haUpdateInterval);
   }
 
-  if (groupName == "ds18b20Settings") {
+  if (strcmp(groupName, "ds18b20Settings") == 0) {
     preferences.putBool("ds18b20Enable", ds18b20Enable);
     preferences.putUShort("ds18b20UpdInt", ds18b20UpdateInterval);
     preferences.putString("ds18b20UnitFr", ds18b20UnitsFormat);
   }
 
-  if (groupName == "stockSettings") {
+  if (strcmp(groupName, "stockSettings") == 0) {
     preferences.putString("stApiToken", stockApiToken);
     preferences.putUShort("stUpdateInt", stockUpdateInterval);
   }
 
-  if (groupName == "pbSettings") {
+  if (strcmp(groupName, "pbSettings") == 0) {
+    // Reclaim unset live strings before appending any other settings. Existing
+    // ESP32 NVS partitions can otherwise be full of empty/default records.
+    const char *optionalKeys[] = {"pb%uSrcId", "pb%uCdSrcI", "pb%uCdVal",
+                                  "pb%uDSrcI", "pb%uDR1V", "pb%uDR2V"};
+    for (uint8_t i = 0; i < kZoneCapacity; ++i) {
+      const String *values[] = {&progressBars[i].dataSourceId,
+                               &progressBars[i].conditionSourceId,
+                               &progressBars[i].conditionValue,
+                               &progressBars[i].dynSourceId,
+                               &progressBars[i].dynRule1Value,
+                               &progressBars[i].dynRule2Value};
+      for (uint8_t field = 0; field < 6; ++field) {
+        if (values[field]->length() != 0) continue;
+        char key[24];
+        snprintf(key, sizeof(key), optionalKeys[field], i);
+        if (!storeOptionalConfigString(preferences, key, *values[field]))
+          Serial.printf("\n[Config] Failed to clear optional PB key %s", key);
+      }
+    }
     for (uint8_t i = 0; i < kZoneCapacity; i++) {
       char key[24];
       snprintf(key, sizeof(key), "pb%uEnable", i);
@@ -364,7 +389,7 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
       snprintf(key, sizeof(key), "pb%uSrcType", i);
       preferences.putString(key, progressBars[i].dataSourceType);
       snprintf(key, sizeof(key), "pb%uSrcId", i);
-      preferences.putString(key, progressBars[i].dataSourceId);
+      storeOptionalConfigString(preferences, key, progressBars[i].dataSourceId);
       snprintf(key, sizeof(key), "pb%uMin", i);
       preferences.putFloat(key, progressBars[i].minValue);
       snprintf(key, sizeof(key), "pb%uMax", i);
@@ -374,31 +399,76 @@ void saveVarsToConfFile(String groupName, uint8_t n) {
       snprintf(key, sizeof(key), "pb%uCdSrcT", i);
       preferences.putString(key, progressBars[i].conditionSourceType);
       snprintf(key, sizeof(key), "pb%uCdSrcI", i);
-      preferences.putString(key, progressBars[i].conditionSourceId);
+      storeOptionalConfigString(preferences, key, progressBars[i].conditionSourceId);
       snprintf(key, sizeof(key), "pb%uCdVal", i);
-      preferences.putString(key, progressBars[i].conditionValue);
+      storeOptionalConfigString(preferences, key, progressBars[i].conditionValue);
+      snprintf(key, sizeof(key), "pb%uDynMode", i);
+      preferences.putBool(key, progressBars[i].dynamicMode);
+      snprintf(key, sizeof(key), "pb%uDynAnim", i);
+      preferences.putUChar(key, progressBars[i].dynamicAnimation);
+      snprintf(key, sizeof(key), "pb%uDynSpd", i);
+      preferences.putUShort(key, progressBars[i].dynamicSpeedMs);
+      snprintf(key, sizeof(key), "pb%uDSrcT", i);
+      preferences.putString(key, progressBars[i].dynSourceType);
+      snprintf(key, sizeof(key), "pb%uDSrcI", i);
+      storeOptionalConfigString(preferences, key, progressBars[i].dynSourceId);
+      snprintf(key, sizeof(key), "pb%uDR1V", i);
+      storeOptionalConfigString(preferences, key, progressBars[i].dynRule1Value);
+      snprintf(key, sizeof(key), "pb%uDR2V", i);
+      storeOptionalConfigString(preferences, key, progressBars[i].dynRule2Value);
+      snprintf(key, sizeof(key), "pb%uDR2A", i);
+      preferences.putUChar(key, progressBars[i].dynRule2Animation);
+      snprintf(key, sizeof(key), "pb%uDR2S", i);
+      preferences.putUShort(key, progressBars[i].dynRule2SpeedMs);
     }
   }
 
-  if (groupName == "intensity") {
+  if (strcmp(groupName, "cronSettings") == 0) {
+    preferences.putBool("schEnable", schedulerEnabled);
+    preferences.end();
+#if !defined(ESP8266)
+    // ESP32: save from in-memory array
+    for (uint8_t i = 0; i < MAX_PROFILES; i++) {
+      char ns[8];
+      snprintf(ns, sizeof(ns), "cronP%u", i);
+      preferences.begin(ns, false);
+      preferences.putBytes("data", &scheduleProfiles[i],
+                           sizeof(ScheduleProfile));
+      preferences.end();
+    }
+#endif
+    // ESP8266: profiles are saved individually via schedulerSaveProfile()
+    return; // Already called preferences.end()
+  }
+
+  if (strcmp(groupName, "intensity") == 0) {
     preferences.putUChar("intensity", intensity);
   }
 
   preferences.end();
 }
 
+void saveSchedulerEnabledToConfFile() {
+  preferences.begin("cronSettings", false);
+  preferences.putBool("schEnable", schedulerEnabled);
+  preferences.end();
+}
+
 // ─── Read Config
 // ───────────────────────────────────────────────────────────────
-void readConfig(String groupName, uint8_t n) {
-  preferences.begin(groupName.c_str(), true);
+void readConfig(const char *groupName, uint8_t n) {
+  if (!groupName)
+    return;
+  preferences.begin(groupName, true);
 
-  if (groupName == "systemSettings") {
+  if (strcmp(groupName, "systemSettings") == 0) {
     shortMACaddr = preferences.getString("deviceName", shortMACaddr);
     disableServiceMessages =
         preferences.getBool("disablServMess", disableServiceMessages);
+    displayFlip = preferences.getBool("displayFlip", false);
   }
 
-  if (groupName == "displaySettings") {
+  if (strcmp(groupName, "displaySettings") == 0) {
     zoneNumbers =
         normalizedZoneCount(preferences.getUChar("zoneNumbers", zoneNumbers));
     zones[0].begin = preferences.getUChar("zones0Begin", zones[0].begin);
@@ -411,7 +481,7 @@ void readConfig(String groupName, uint8_t n) {
     zones[3].end = preferences.getUChar("zones3End", zones[3].end);
   }
 
-  if (groupName == "zoneSettings") {
+  if (strcmp(groupName, "zoneSettings") == 0) {
     if (n >= kZoneCapacity) {
       preferences.end();
       return;
@@ -475,6 +545,8 @@ void readConfig(String groupName, uint8_t n) {
     if (savedTarget.length() > 0) {
       parseCountdownTarget(savedTarget, n, timeClient.getEpochTime(),
                            ntpTimeZone);
+    } else {
+      countdownState[n] = CountdownState{};
     }
     // Stock ticker settings
     buildZoneKey(key, sizeof(key), n, "StockSym");
@@ -491,7 +563,7 @@ void readConfig(String groupName, uint8_t n) {
         preferences.getBool(key, zones[n].stockShowArrows);
   }
 
-  if (groupName == "mqttSettings") {
+  if (strcmp(groupName, "mqttSettings") == 0) {
     mqttEnable = preferences.getBool("mqttEnable", mqttEnable);
     mqttServerAddress =
         preferences.getString("mqttServerAddr", mqttServerAddress);
@@ -502,7 +574,7 @@ void readConfig(String groupName, uint8_t n) {
     Serial.println(mqttPassword.length() > 0 ? "EXISTS" : "EMPTY");
   }
 
-  if (groupName == "wallClockSett") {
+  if (strcmp(groupName, "wallClockSett") == 0) {
     ntpTimeZone = preferences.getFloat("ntpTz", ntpTimeZone);
     disableDotsBlink = preferences.getBool("disableDotBlink", disableDotsBlink);
     ntpUpdateInterval =
@@ -510,7 +582,7 @@ void readConfig(String groupName, uint8_t n) {
     ntpServer = preferences.getString("ntpServer", ntpServer);
   }
 
-  if (groupName == "owmSettings") {
+  if (strcmp(groupName, "owmSettings") == 0) {
     owmApiToken = preferences.getString("owmApiToken", owmApiToken);
     owmUnitsFormat = preferences.getString("owmUnitsFormat", owmUnitsFormat);
     owmUpdateInterval =
@@ -518,7 +590,7 @@ void readConfig(String groupName, uint8_t n) {
     owmCity = preferences.getString("owmCity", owmCity);
   }
 
-  if (groupName == "haSettings") {
+  if (strcmp(groupName, "haSettings") == 0) {
     haAddr = preferences.getString("haAddr", haAddr);
     haApiToken = preferences.getString("haApiToken", haApiToken);
     haApiHttpType = preferences.getString("haApiHttpType", haApiHttpType);
@@ -526,7 +598,7 @@ void readConfig(String groupName, uint8_t n) {
     haUpdateInterval = preferences.getUShort("haUpdateInt", haUpdateInterval);
   }
 
-  if (groupName == "ds18b20Settings") {
+  if (strcmp(groupName, "ds18b20Settings") == 0) {
     ds18b20Enable = preferences.getBool("ds18b20Enable", ds18b20Enable);
     ds18b20UpdateInterval =
         preferences.getUShort("ds18b20UpdInt", ds18b20UpdateInterval);
@@ -534,17 +606,17 @@ void readConfig(String groupName, uint8_t n) {
         preferences.getString("ds18b20UnitFr", ds18b20UnitsFormat);
   }
 
-  if (groupName == "intensity") {
+  if (strcmp(groupName, "intensity") == 0) {
     intensity = preferences.getUChar("intensity", intensity);
   }
 
-  if (groupName == "stockSettings") {
+  if (strcmp(groupName, "stockSettings") == 0) {
     stockApiToken = preferences.getString("stApiToken", stockApiToken);
     stockUpdateInterval =
         preferences.getUShort("stUpdateInt", stockUpdateInterval);
   }
 
-  if (groupName == "pbSettings") {
+  if (strcmp(groupName, "pbSettings") == 0) {
     for (uint8_t i = 0; i < kZoneCapacity; i++) {
       char key[24];
       snprintf(key, sizeof(key), "pb%uEnable", i);
@@ -573,6 +645,33 @@ void readConfig(String groupName, uint8_t n) {
       snprintf(key, sizeof(key), "pb%uCdVal", i);
       progressBars[i].conditionValue =
           preferences.getString(key, progressBars[i].conditionValue);
+      snprintf(key, sizeof(key), "pb%uDynMode", i);
+      progressBars[i].dynamicMode =
+          preferences.getBool(key, progressBars[i].dynamicMode);
+      snprintf(key, sizeof(key), "pb%uDynAnim", i);
+      progressBars[i].dynamicAnimation =
+          preferences.getUChar(key, progressBars[i].dynamicAnimation);
+      snprintf(key, sizeof(key), "pb%uDynSpd", i);
+      progressBars[i].dynamicSpeedMs =
+          preferences.getUShort(key, progressBars[i].dynamicSpeedMs);
+      snprintf(key, sizeof(key), "pb%uDSrcT", i);
+      progressBars[i].dynSourceType =
+          preferences.getString(key, progressBars[i].dynSourceType);
+      snprintf(key, sizeof(key), "pb%uDSrcI", i);
+      progressBars[i].dynSourceId =
+          preferences.getString(key, progressBars[i].dynSourceId);
+      snprintf(key, sizeof(key), "pb%uDR1V", i);
+      progressBars[i].dynRule1Value =
+          preferences.getString(key, progressBars[i].dynRule1Value);
+      snprintf(key, sizeof(key), "pb%uDR2V", i);
+      progressBars[i].dynRule2Value =
+          preferences.getString(key, progressBars[i].dynRule2Value);
+      snprintf(key, sizeof(key), "pb%uDR2A", i);
+      progressBars[i].dynRule2Animation =
+          preferences.getUChar(key, progressBars[i].dynRule2Animation);
+      snprintf(key, sizeof(key), "pb%uDR2S", i);
+      progressBars[i].dynRule2SpeedMs =
+          preferences.getUShort(key, progressBars[i].dynRule2SpeedMs);
       // Reset runtime state
       progressBars[i].currentValue = 0.0;
       progressBars[i].conditionMet = !progressBars[i].conditionEnabled;
@@ -580,7 +679,106 @@ void readConfig(String groupName, uint8_t n) {
       progressBars[i].lastDataUpdate = 0;
       progressBars[i].lastCondUpdate = 0;
       progressBars[i].lastCondReceivedValue = "";
+      progressBars[i].dynCurrentSensorValue = "";
+      progressBars[i].lastDynSrcUpdate = 0;
+      progressBars[i].dynPhase = 0;
+      progressBars[i].dynPosition = 0;
+      progressBars[i].dynLastStep = 0;
+      progressBars[i].dynActiveAnim = 0;
     }
+  }
+
+  if (strcmp(groupName, "cronSettings") == 0) {
+    schedulerEnabled = preferences.getBool("schEnable", false);
+    preferences.end();
+    // Read each profile from its own namespace
+    for (uint8_t i = 0; i < MAX_PROFILES; i++) {
+      char ns[8];
+      snprintf(ns, sizeof(ns), "cronP%u", i);
+      preferences.begin(ns, true);
+
+      // ESP8266 must not place a ~1.5KB profile on its small setup stack.
+#if defined(ESP8266)
+      ScheduleProfile &tmpProf = schedulerSharedProfileBuffer();
+#else
+      ScheduleProfile tmpProf;
+#endif
+      schedulerInitProfileForEdit(i, tmpProf);
+      bool loaded = false;
+
+#if defined(ESP32)
+      size_t len = preferences.getBytesLength("data");
+#else
+      uint8_t probe;
+      size_t len = preferences.getBytes("data", &probe, 0);
+#endif
+      if (schedulerProfileBank(i) != 0) {
+        loaded = schedulerLoadStoredProfile(i, tmpProf);
+      } else if (len == sizeof(ScheduleProfile)) {
+        preferences.getBytes("data", &tmpProf, sizeof(ScheduleProfile));
+        loaded = true;
+      } else if (len == sizeof(ScheduleProfileV2)) {
+        preferences.getBytes("data", &tmpProf, sizeof(ScheduleProfileV2));
+        schedulerMigrateProfileV2InPlace(tmpProf);
+        loaded = true;
+      } else if (len == sizeof(LegacyScheduleProfile)) {
+        LegacyScheduleProfile lp;
+        preferences.getBytes("data", &lp, sizeof(lp));
+        migrateLegacyScheduleProfile(lp, tmpProf);
+        loaded = true;
+      } else if (len == 0) {
+        // Migration: try old single-namespace format (sp0, sp1, etc.)
+        preferences.end();
+        preferences.begin("cronSettings", true);
+        char oldKey[8];
+        snprintf(oldKey, sizeof(oldKey), "sp%u", i);
+#if defined(ESP32)
+        size_t oldLen = preferences.getBytesLength(oldKey);
+#else
+        size_t oldLen = preferences.getBytes(oldKey, &probe, 0);
+#endif
+        if (oldLen == sizeof(ScheduleProfile)) {
+          preferences.getBytes(oldKey, &tmpProf, sizeof(ScheduleProfile));
+          loaded = true;
+        } else if (oldLen == sizeof(ScheduleProfileV2)) {
+          preferences.getBytes(oldKey, &tmpProf, sizeof(ScheduleProfileV2));
+          schedulerMigrateProfileV2InPlace(tmpProf);
+          loaded = true;
+        } else if (oldLen == sizeof(LegacyScheduleProfile)) {
+          LegacyScheduleProfile lp;
+          preferences.getBytes(oldKey, &lp, sizeof(lp));
+          migrateLegacyScheduleProfile(lp, tmpProf);
+          loaded = true;
+        }
+        preferences.end();
+        // Re-save migrated profile to new namespace
+        if (loaded) {
+          sanitizeScheduleProfile(tmpProf);
+          schedulerSaveProfile(i, tmpProf);
+        }
+        // Skip the normal end/store below since we already handled it
+        goto nextProfile;
+      }
+      preferences.end();
+
+      if (loaded) {
+        sanitizeScheduleProfile(tmpProf);
+#if defined(ESP8266)
+        // The earliest format is not supported by on-demand loads: migrate it
+        // once now, preserving no-change defaults for newly introduced fields.
+        if (schedulerProfileBank(i) == 0 && len == sizeof(LegacyScheduleProfile))
+          schedulerSaveProfile(i, tmpProf);
+        else
+          schedulerSyncMeta(i, tmpProf);
+#else
+        // ESP32: store in the in-memory array
+        scheduleProfiles[i] = tmpProf;
+#endif
+      }
+      nextProfile:;
+      yield();
+    }
+    return; // Already called preferences.end()
   }
 
   preferences.end();
@@ -602,4 +800,10 @@ void readAllConfig() {
   readConfig("stockSettings", 99);
   readConfig("pbSettings", 99);
   readConfig("intensity", 99);
+  schedulerInitDefaults();  // fill defaults before loading
+  readConfig("cronSettings", 99);
+#if defined(ESP32)
+  for (uint8_t n = 0; n < normalizedZoneCount(zoneNumbers); ++n)
+    reclaimZoneDefaultStrings(n);
+#endif
 }

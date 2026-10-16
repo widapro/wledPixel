@@ -5,10 +5,16 @@
 
 #include "ConfigStore.h"
 #include "DisplayUtils.h"
+#include "HilTest.h"
 #include "MqttHandler.h"
+#include "Scheduler.h"
+#include "WebPriority.h"
 #include "WebRoutes.h"
 
 // ─── WiFi helpers (tiny, stays here) ────────────────────────────────────────
+static bool dsConversionPending = false;
+static unsigned long dsConversionStarted = 0;
+
 void saveConfigCallback() { shouldSaveConfig = true; }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -19,6 +25,9 @@ void setup() {
   Serial.begin(115200);
   Serial.print(F("Start serial...."));
   Serial.printf("\nCPU frequency: %u MHz\n", ESP.getCpuFreqMHz());
+#if defined(ESP8266)
+  Serial.printf("Reset reason: %s\n", ESP.getResetReason().c_str());
+#endif
 
   initDisplay();
 
@@ -77,15 +86,28 @@ void setup() {
     }
   }
 
+#if defined(ESP8266)
+  // AsyncWiFiManager is only needed during autoConnect/config portal.
+  // Keeping it after normal boot costs heap that the web UI needs later.
+  if (wifiManagerPtr) {
+    delete wifiManagerPtr;
+    wifiManagerPtr = nullptr;
+  }
+#endif
+
   // Start MQTT client
   if (mqttEnable) {
     mqttClient.setServer(mqttServerAddress.c_str(), mqttServerPort);
     mqttClient.setCallback(MQTTCallback);
+#if defined(ESP8266)
+    mqttClient.setBufferSize(1024);
+#else
     mqttClient.setBufferSize(1536);
+#endif
   }
 
   // Pre-fetch OWM weather data during boot so it's ready immediately
-  if (owmApiToken.length() > 0 && owmCity.length() > 0) {
+  if (power && owmApiToken.length() > 0 && owmCity.length() > 0) {
     for (uint8_t n = 0; n < zoneNumbers; n++) {
       if (zones[n].workMode == "owmWeather") {
         Serial.println(F("[OWM] Pre-fetching weather data during boot..."));
@@ -146,6 +168,7 @@ void setup() {
 
   // Start ds18b20
   sensors.begin();
+  sensors.setWaitForConversion(false);
 
   // Re-initialize all zones properly with loaded config
   P.begin(zoneNumbers);
@@ -161,6 +184,67 @@ void setup() {
 //  LOOP
 // ════════════════════════════════════════════════════════════════════════════
 void loop() {
+  currentMillis = millis();
+
+  if (shouldReboot && !webPriorityHasActiveRequests() && !webPriorityIsActive(currentMillis) &&
+      !schedulerHasPendingProgressBarSave() &&
+      !hasDeferredConfigSaves() && !schedulerHasPendingProfileSave() &&
+      !schedulerHasPendingProfileApply()) {
+    Serial.println("Rebooting...");
+    delay(100);
+    ESP.restart();
+  }
+
+  // If OTA update is in progress, block main loop execution
+  if (globalOtaInProgress) {
+    yield();
+    return;
+  }
+
+  serviceDisplayOrientation();
+
+  // During page load the ESP8266 should give the async web server the heap and
+  // CPU budget first. Reboot requests still win; routine background work waits.
+  if (restartESP && !webPriorityHasActiveRequests() && !webPriorityIsActive(currentMillis) &&
+      !hasDeferredConfigSaves() && !schedulerHasPendingProfileSave() &&
+      !schedulerHasPendingProgressBarSave() &&
+      !schedulerHasPendingProfileApply()) {
+    Serial.print(F("Rebooting ESP..."));
+    delay(100);
+    ESP.restart();
+  }
+
+#if defined(ESP8266)
+  if (webPriorityIsActive(currentMillis)) {
+    serviceWebPriorityMode(currentMillis);
+    yield();
+    return;
+  }
+#endif
+
+  // A queued write must not reuse request workspaces before a response drains.
+  if (webPriorityHasActiveRequests()) {
+    yield();
+    return;
+  }
+
+  // Persist while MQTT still has its small web-priority buffer. Restoring the
+  // 1KB MQTT buffer before a LittleFS write can leave ESP8266 without a large
+  // enough contiguous heap block.
+  if (schedulerServicePendingProfileSave() ||
+      schedulerServicePendingProgressBarSave() ||
+      schedulerServicePendingProfileApply() || serviceDeferredConfigSave() ||
+      webServicePendingRestore()) {
+    yield();
+    return;
+  }
+
+#if defined(ESP8266)
+  // No web work or pending flash writes remain; background networking may now
+  // reclaim its normal buffers.
+  serviceWebPriorityMode(currentMillis);
+#endif
+
   // ── Font hot-swap ─────────────────────────────────────────────────────────
   for (uint8_t n = 0; n < zoneNumbers; n++) {
     if (zones[n].updateFont) {
@@ -189,11 +273,14 @@ void loop() {
     }
   }
 
-  if (shouldReboot) {
-    Serial.println("Rebooting...");
-    delay(2000);
-    ESP.restart();
+#if defined(ESP8266)
+  // A web request can arrive from the async TCP callback after the top-of-loop
+  // priority check. Stop before boot/config work if that happened mid-loop.
+  if (webPriorityIsActive(millis())) {
+    yield();
+    return;
   }
+#endif
 
   if (shouldUpdateNtp) {
     Serial.println("Deferred NTP update...");
@@ -201,22 +288,15 @@ void loop() {
     shouldUpdateNtp = false;
   }
 
-  // If OTA update is in progress, block main loop execution
-  if (globalOtaInProgress) {
-    yield();
-    return;
-  }
-
   // Handle OTA updates
   ArduinoOTA.handle();
 
-  currentMillis = millis();
-
-  // Handle a restart ESP request
-  if (restartESP) {
-    Serial.print(F("Rebooting ESP..."));
-    delay(1000);
-    ESP.restart();
+  // HIL display commands are queued by async HTTP callbacks and applied here,
+  // on the same execution path as normal Parola rendering.
+  hilTestService(currentMillis);
+  if (hilTestDisplayHoldActive(currentMillis)) {
+    yield();
+    return;
   }
 
   // ── Init display animation (boot sequence) ───────────────────────────────
@@ -235,10 +315,19 @@ void loop() {
     }
   }
 
+#if defined(ESP8266)
+  if (webPriorityIsActive(millis())) {
+    yield();
+    return;
+  }
+#endif
+
   // ── Apply saved config for display ────────────────────────────────────────
   if (initConfig) {
+    SchedulerWorkGuard work;
     Serial.print(F("Init configuration"));
     initConfig = false;
+    const bool preserveVisibleFrame = displayWakePending && power;
     readAllConfig();
 
     if (mqttEnable)
@@ -261,14 +350,17 @@ void loop() {
         woprZones[n].active = true;
       }
 
-      if (zones[n].workMode == "mqttClient" && !disableServiceMessages)
+      if (!preserveVisibleFrame && zones[n].workMode == "mqttClient" &&
+          !disableServiceMessages)
         zoneShowModeMessage(n, "MQTT");
-      if (zones[n].workMode == "manualInput" && !disableServiceMessages)
+      if (!preserveVisibleFrame && zones[n].workMode == "manualInput" &&
+          !disableServiceMessages)
         zoneShowModeMessage(n, "Manual");
       if (zones[n].workMode == "owmWeather") {
-        if (!disableServiceMessages)
+        if (!preserveVisibleFrame && !disableServiceMessages)
           zoneShowModeMessage(n, "OWM");
-        zoneNewMessage(n, "Loading...", "");
+        if (!preserveVisibleFrame)
+          zoneNewMessage(n, "Loading...", "");
         zones[n].previousMillis = -1000000;
         if (zones[n].owmWhatToDisplay == "owmWeatherIcon") {
           P.setFont(n, wledSymbolFont);
@@ -277,40 +369,63 @@ void loop() {
         }
       }
       if (zones[n].workMode == "haClient") {
-        if (!disableServiceMessages)
+        if (!preserveVisibleFrame && !disableServiceMessages)
           zoneShowModeMessage(n, "HA");
-        zoneNewMessage(n, "Loading...", "");
+        if (!preserveVisibleFrame)
+          zoneNewMessage(n, "Loading...", "");
         zones[n].previousMillis = -1000000;
       }
 
       if (zones[n].workMode == "intTempSensor") {
-        if (!disableServiceMessages)
+        if (!preserveVisibleFrame && !disableServiceMessages)
           zoneShowModeMessage(n, "TempS");
-        zoneNewMessage(n, "Loading...", "");
+        if (!preserveVisibleFrame)
+          zoneNewMessage(n, "Loading...", "");
         previousDsMillis = -1000000;
       }
 
       if (zones[n].workMode == "stockTicker") {
-        if (!disableServiceMessages)
+        if (!preserveVisibleFrame && !disableServiceMessages)
           zoneShowModeMessage(n, "Stock");
-        zoneNewMessage(n, "Loading...", "");
+        if (!preserveVisibleFrame)
+          zoneNewMessage(n, "Loading...", "");
         stockLastTime = 0;
         stockParseSymbols(n, zones[n].stockSymbols);
       }
 
       // Clear boot messages to prevent them from looping in MQTT mode
-      if (zones[n].workMode == "mqttClient" && disableServiceMessages) {
+      if (!preserveVisibleFrame && zones[n].workMode == "mqttClient" &&
+          disableServiceMessages) {
         strcpy(zoneMessages[n], "");
         strcpy(zoneMessagesPending[n], "");
         P.displayClear(n);
       }
       // Only call displayReset if we didn't just set a mode message
-      if (zones[n].workMode != "mqttClient" &&
+      if (!preserveVisibleFrame && zones[n].workMode != "mqttClient" &&
           zones[n].workMode != "manualInput") {
         P.displayReset(n);
       }
     }
+
+    // During a scheduled wake the already visible cached frame was preserved
+    // while the new settings were installed. Normal sensor updates can now
+    // replace it without an intermediate clear/reset.
+    if (displayWakePending) {
+      if (power)
+        Serial.print(F("\n[SLEEP] Display wake configuration committed"));
+      displayWakePending = false;
+    }
   }
+
+#if defined(ESP8266)
+  if (webPriorityIsActive(millis())) {
+    yield();
+    return;
+  }
+#endif
+
+  // ── Scheduler: check profiles every ~60s ──────────────────────────────────
+  schedulerCheck();
 
   // ── Stock ticker statics (declared early so config-save can reset them) ──
   static uint8_t stockCurrentZone = 0;
@@ -327,6 +442,7 @@ void loop() {
     if (!heavyTaskExecutedThisLoop &&
         currentMillis - lastHeavyTaskTime > 2000) {
       heavyTaskExecutedThisLoop = true;
+      SchedulerWorkGuard work;
       Serial.println(F("Saving deferred configuration..."));
       for (uint8_t n = 0; n < zoneNumbers; n++) {
         saveVarsToConfFile("zoneSettings", n);
@@ -380,15 +496,87 @@ void loop() {
       }
     }
 
+    // ── Display-off sleep mode ─────────────────────────────────────────────
+    // Keep only the control plane alive while the display is off: web/OTA,
+    // MQTT (so Home Assistant can wake the device), NTP and the scheduler.
+    // Sensor reads, external data requests and display animation resume only
+    // after power is turned back on.
+    static bool previousDisplayPower = power;
+
+    // A scheduled wake is still being configured. Keep the control plane
+    // responsive, but do not animate the old frame or start sensor requests.
+    if (displayWakePending) {
+      yield();
+      return;
+    }
+
+    if (power != previousDisplayPower) {
+      if (power) {
+        Serial.print(F("\n[SLEEP] Display ON; refreshing data sources"));
+
+        // Make every display data source eligible on the first safe loop.
+        previousDsMillis =
+            currentMillis -
+            (static_cast<unsigned long>(ds18b20UpdateInterval) * 1000UL) - 1UL;
+        owmLastTime =
+            currentMillis -
+            (static_cast<unsigned long>(owmUpdateInterval) * 1000UL) - 1UL;
+        stockLastTime = 0;
+        stockFetchingRound = false;
+
+        for (uint8_t n = 0; n < zoneNumbers; n++) {
+          zones[n].forceUpdate = true;
+          if (zones[n].workMode == "haClient") {
+            zones[n].previousMillis =
+                currentMillis -
+                (static_cast<unsigned long>(haUpdateInterval) * 1000UL) - 1UL;
+          } else if (zones[n].workMode == "owmWeather") {
+            zones[n].previousMillis =
+                currentMillis -
+                (static_cast<unsigned long>(owmUpdateInterval) * 1000UL) - 1UL;
+          }
+
+          if (n < 4) {
+            progressBars[n].lastDataUpdate =
+                currentMillis -
+                (static_cast<unsigned long>(haUpdateInterval) * 1000UL) - 1UL;
+            progressBars[n].lastCondUpdate =
+                progressBars[n].lastDataUpdate;
+            progressBars[n].lastDynSrcUpdate =
+                progressBars[n].lastDataUpdate;
+            progressBars[n].dynLastStep = currentMillis;
+          }
+        }
+      } else {
+        Serial.print(F("\n[SLEEP] Display OFF; sensor polling suspended"));
+        stockFetchingRound = false;
+        dsTempToDisplay = false;
+      }
+      previousDisplayPower = power;
+    }
+
+    if (!power) {
+      yield();
+      return;
+    }
+
     // DS18B20 measurement
     if (ds18b20Enable) {
-      if (!heavyTaskExecutedThisLoop &&
+      if (!dsConversionPending && !heavyTaskExecutedThisLoop &&
           currentMillis - lastHeavyTaskTime > 2000 &&
           currentMillis - previousDsMillis >=
               (unsigned)ds18b20UpdateInterval * 1000) {
         heavyTaskExecutedThisLoop = true;
         previousDsMillis = currentMillis;
         sensors.requestTemperatures();
+        dsConversionStarted = millis();
+        dsConversionPending = true;
+        lastHeavyTaskTime = millis();
+      }
+      // Maximum 12-bit conversion time; keep animation and networking running.
+      if (dsConversionPending && millis() - dsConversionStarted >= 750UL) {
+        dsConversionPending = false;
+        heavyTaskExecutedThisLoop = true;
         float dsTempC = sensors.getTempCByIndex(0);
         if (dsTempC == DEVICE_DISCONNECTED_C) {
           Serial.print(F("\nERROR: ds18b20 getting temperature failed"));
@@ -397,19 +585,23 @@ void loop() {
           if (ds18b20UnitsFormat == "Fahrenheit") {
             float dsTempF = DallasTemperature::toFahrenheit(dsTempC);
             dtostrf(dsTempF, 4, 1, dsTempBuff);
-            dsTemp = String(dsTempBuff);
+            dsTemp = dsTempBuff;
             Serial.printf("\nds18b20 measurement temperature: %s F",
                           dsTemp.c_str());
           } else {
             dtostrf(dsTempC, 4, 1, dsTempBuff);
-            dsTemp = (char *)dsTempBuff;
+            dsTemp = dsTempBuff;
             Serial.printf("\nds18b20 measurement temperature: %s C",
                           dsTemp.c_str());
           }
-          if (mqttEnable)
-            mqttClient.publish(
-                String("wledPixel-" + shortMACaddr + "/temperature").c_str(),
-                dsTemp.c_str());
+          if (mqttEnable) {
+            static char dsTopic[80] = {0};
+            if (dsTopic[0] == '\0') {
+              snprintf(dsTopic, sizeof(dsTopic), "%s/temperature",
+                       MQTTGlobalPrefix.c_str());
+            }
+            mqttClient.publish(dsTopic, dsTemp.c_str());
+          }
         }
         lastHeavyTaskTime = millis();
       }
@@ -417,6 +609,7 @@ void loop() {
 
     // OWM update
     owmWeatherEnable = false;
+    bool hasFreshDsReading = dsTempToDisplay;
     for (uint8_t n = 0; n < zoneNumbers; n++) {
       if (zones[n].workMode == "owmWeather" && owmApiToken.length() > 0 &&
           owmCity.length() > 0)
@@ -517,6 +710,8 @@ void loop() {
         String curTimeNew =
             getCurTime(zones[n].font, zones[n].clockDisplayFormat);
         if (zones[n].clockDisplayFormat == "HHMM" ||
+            zones[n].clockDisplayFormat == "HHMM12" ||
+            zones[n].clockDisplayFormat == "HHMM12AP" ||
             zones[n].clockDisplayFormat == "HHMMSS" ||
             zones[n].clockDisplayFormat == "ddmmaahhmm") {
           if (!disableDotsBlink &&
@@ -715,9 +910,8 @@ void loop() {
       }
 
       // DS18B20
-      if (zones[n].workMode == "intTempSensor" && dsTempToDisplay == true) {
-        zoneNewMessage(n, String(dsTemp), zones[n].ds18b20Postfix);
-        dsTempToDisplay = false;
+      if (zones[n].workMode == "intTempSensor" && hasFreshDsReading) {
+        zoneNewMessage(n, dsTemp, zones[n].ds18b20Postfix);
       }
 
       // Stock Ticker
@@ -731,6 +925,9 @@ void loop() {
         }
       }
     }
+    if (hasFreshDsReading) {
+      dsTempToDisplay = false;
+    }
   }
 
   displayAnimation();
@@ -741,8 +938,9 @@ void loop() {
       if (!progressBars[i].enabled || woprZones[i].active)
         continue;
 
-      // ── HA data source polling ──
-      if (progressBars[i].dataSourceType == "ha" &&
+      // ── HA data source polling (Regular mode only) ──
+      if (!progressBars[i].dynamicMode &&
+          progressBars[i].dataSourceType == "ha" &&
           progressBars[i].dataSourceId.length() > 0 && haAddr.length() > 0 &&
           haApiToken.length() > 0) {
         if (!heavyTaskExecutedThisLoop &&
@@ -761,8 +959,9 @@ void loop() {
         }
       }
 
-      // ── HA condition source polling ──
-      if (progressBars[i].conditionEnabled &&
+      // ── HA condition source polling (Regular mode only) ──
+      if (!progressBars[i].dynamicMode &&
+          progressBars[i].conditionEnabled &&
           progressBars[i].conditionSourceType == "ha" &&
           progressBars[i].conditionSourceId.length() > 0 &&
           haAddr.length() > 0 && haApiToken.length() > 0) {
@@ -782,6 +981,27 @@ void loop() {
                           progressBars[i].conditionMet ? "true" : "false");
           }
           progressBars[i].lastCondUpdate = currentMillis;
+          lastHeavyTaskTime = millis();
+        }
+      }
+
+      // ── HA dynamic source polling (Dynamic mode only) ──
+      if (progressBars[i].dynamicMode &&
+          progressBars[i].dynSourceType == "ha" &&
+          progressBars[i].dynSourceId.length() > 0 &&
+          haAddr.length() > 0 && haApiToken.length() > 0) {
+        if (!heavyTaskExecutedThisLoop &&
+            currentMillis - lastHeavyTaskTime > 2000 &&
+            currentMillis - progressBars[i].lastDynSrcUpdate >=
+                (unsigned long)haUpdateInterval * 1000) {
+          heavyTaskExecutedThisLoop = true;
+          String state = haApiGetState(progressBars[i].dynSourceId);
+          if (state.length() > 0) {
+            progressBars[i].dynCurrentSensorValue = state;
+            Serial.printf("\n[PB] Zone %u HA dyn src: '%s'", i,
+                          state.c_str());
+          }
+          progressBars[i].lastDynSrcUpdate = currentMillis;
           lastHeavyTaskTime = millis();
         }
       }

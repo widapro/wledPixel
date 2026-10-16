@@ -10,7 +10,30 @@
 **/*.o
 **/*.a
 compile_commands.json
+__pycache__/
+*.pyc
 
 # Local scripts and notes
 CHANGELOG.md
 RELEASE_NOTES_v3.6.md
+
+# Private release review material and unpublished build history
+/RELEASE_REVIEW_*.md
+/release/
+
+# Private device exports and local connection data
+/backups/
+/.private/
+*_backup.json
+backup-*.json
+backup_*.json
+*-backup.json
+*-backup-*.json
+before-*.json
+baseline-*.json
+runtime-before-*.json
+*.local.json
+*.log
+.env
+.env.*
+!.env.example

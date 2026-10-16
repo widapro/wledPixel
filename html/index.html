@@ -26,7 +26,7 @@
               </li>
               <li>
                 <a href="/zone-settings" class="nav-link text-white">
-                  Zone Settings
+                  Profiles
                 </a>
               </li>
               <li>
@@ -253,17 +253,26 @@
     }
 
     // Fetch settings and initialize
-    function fetchWithRetry(url, options = {}, retries = 10, delayMs = 2000) {
-      return fetch(url, options).then(res => {
+    function fetchWithRetry(url, options, retries, delayMs) {
+      if (retries === undefined) retries = 10;
+      if (delayMs === undefined) delayMs = 2000;
+      function doRetry() {
+        return new Promise(function(r) { setTimeout(r, delayMs); })
+          .then(function() { return fetchWithRetry(url, options, retries - 1, delayMs); });
+      }
+      return fetch(url, options).then(function(res) {
         if (res.status === 503 && retries > 0) {
-          console.log(`503 received, retrying in ${delayMs}ms...`);
-          return new Promise(resolve => setTimeout(resolve, delayMs))
-            .then(() => fetchWithRetry(url, options, retries - 1, delayMs));
+          console.log('503 received, retrying...');
+          return doRetry();
         }
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
+      }, function(err) {
+        if (retries > 0) {
+          console.log('Network error, retrying...');
+          return doRetry();
+        }
+        throw err;
       });
     }
 

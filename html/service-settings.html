@@ -32,7 +32,7 @@
             </li>
             <li>
               <a href="/zone-settings" class="nav-link text-white">
-                Zone Settings
+                Profiles
               </a>
             </li>
             <li>
@@ -137,7 +137,9 @@
           <div>
             <h6 class="my-2">Wall clock</h6>
             <small class="text-muted">Clock mode. It has the following display options:
-              <br><b>HH:MM</b> - Hours : Minutes [21:43]
+              <br><b>HH:MM (24-hour)</b> - Hours : Minutes [21:43]
+              <br><b>hh:mm (12-hour)</b> - Hours : Minutes without am/pm [09:43]
+              <br><b>hh:mm am/pm (12-hour)</b> - Hours : Minutes with am/pm [09:43 pm]
               <br><b>HH:MM:SS</b> - Hours : Minutes : Seconds [21:43:54]
               <br><b>HH</b> - Hours [21]
               <br><b>MM</b> - Minutes [43]
@@ -262,6 +264,13 @@
                     Disable service messages on display
                   </label>
                 </div>
+              </div>
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" id="displayFlip">
+                  <label class="form-check-label" for="displayFlip">Rotate display 180°</label>
+                </div>
+                <small class="text-muted">Applies to the entire display in every profile.</small>
               </div>
               <div class="row">
                 <div class="col-6">
@@ -498,19 +507,6 @@
               <button id="applyStockSettings" class="w-100 btn btn-primary btn-lg"
                 onClick="preparePostRequest(event, this.id, null);">Apply</button>
 
-
-              <hr class="my-4">
-              <h3 class="mb-4">Progress Bar settings</h3>
-              <p class="text-muted">Configure a progress bar overlay on the bottom row of each zone. The bar fills
-                left-to-right based on a numeric value from Home Assistant sensor or MQTT topic.</p>
-
-              <div id="pbSettingsContainer"></div>
-
-              <button id="applyPbSettings" class="w-100 btn btn-primary btn-lg"
-                onClick="preparePostRequest(event, this.id, null);">Apply</button>
-
-
-
               <div class="col-sm-12"></div>
               <footer class="my-5 pt-5 text-muted text-center text-small border-top">
                 <p class="mb-1">&copy; 2026 wledPixel <span id="footerFwVer"></span></p>
@@ -574,17 +570,27 @@
 
 
   <script>
-    function fetchWithRetry(url, options = {}, retries = 10, delayMs = 2000) {
-      return fetch(url, options).then(res => {
-        if (res.status === 503 && retries > 0) {
-          console.log(`503 received, retrying in ${delayMs}ms...`);
-          return new Promise(resolve => setTimeout(resolve, delayMs))
-            .then(() => fetchWithRetry(url, options, retries - 1, delayMs));
+    var mqttIsConnected = false;
+    function fetchWithRetry(url, options, retries, delayMs) {
+      if (retries === undefined) retries = 10;
+      if (delayMs === undefined) delayMs = 2000;
+      function doRetry() {
+        return new Promise(function(r) { setTimeout(r, delayMs); })
+          .then(function() { return fetchWithRetry(url, options, retries - 1, delayMs); });
+      }
+      return fetch(url, options).then(function(res) {
+        if ((res.status === 429 || res.status === 503) && retries > 0) {
+          console.log('Device busy, retrying...');
+          return doRetry();
         }
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
+      }, function(err) {
+        if (retries > 0) {
+          console.log('Network error, retrying...');
+          return doRetry();
+        }
+        throw err;
       });
     }
 
@@ -739,6 +745,7 @@
           setVal("ds18b20UnitsFormat", data.ds18b20UnitsFormat);
 
           setChecked("disableServiceMessages", data.disableServiceMessages);
+          setChecked("displayFlip", data.displayFlip);
           setChecked("disableDotsBlink", data.disableDotsBlink);
           setChecked("ds18b20Enable", data.ds18b20Enable);
           setText("ds18b20TempVal", data.ds18b20Temp);
@@ -776,46 +783,58 @@
           setText("ds18b20TempInfo", data.ds18b20Temp);
 
           // ── Generate Progress Bar forms per zone ──
+          mqttIsConnected = !!data.mqttConnected;
           var zn = data.zoneNumbers || 1;
           var pbContainer = document.getElementById('pbSettingsContainer');
           if (pbContainer) {
             var html = '';
             for (var z = 0; z < zn; z++) {
               html += '<div class="card mb-3"><div class="card-body">';
-              html += '<h5 class="card-title">Zone ' + z + ' Progress Bar</h5>';
-              html += '<div class="row g-3">';
-              // Enable
-              html += '<div class="col-12"><div class="form-check">';
-              html += '<input class="form-check-input" type="checkbox" id="pbEnable' + z + '">';
-              html += '<label class="form-check-label" for="pbEnable' + z + '">Enable progress bar</label>';
+              // Title row: zone title on left, enable checkbox on right
+              html += '<div class="d-flex justify-content-between align-items-center mb-3">';
+              html += '<h5 class="card-title mb-0">Zone ' + z + ' Progress Bar</h5>';
+              html += '<div class="form-check">';
+              html += '<input class="form-check-input pb-enable-toggle" type="checkbox" id="pbEnable' + z + '" data-zone="' + z + '">';
+              html += '<label class="form-check-label" for="pbEnable' + z + '">Enable</label>';
               html += '</div></div>';
-              // Data Source Type
+
+              // All settings wrapper (hidden when disabled)
+              html += '<div id="pbSettingsWrap' + z + '" style="display:none">';
+
+              // Mode selector (left side)
+              html += '<div class="row g-3">';
+              html += '<div class="col-6"><label class="form-label">Mode</label>';
+              html += '<select class="form-select pb-mode-toggle" id="pbMode' + z + '" data-zone="' + z + '">';
+              html += '<option value="regular">Regular (value-based)</option>';
+              html += '<option value="dynamic">Dynamic (animation)</option>';
+              html += '</select></div>';
+              html += '</div>';
+
+              // ── Regular mode fields ──
+              html += '<div id="pbRegularFields' + z + '" class="mt-3"><div class="row g-3">';
               html += '<div class="col-6"><label class="form-label">Data source</label>';
               html += '<select class="form-select pb-src-type-toggle" id="pbSrcType' + z + '" data-zone="' + z + '">';
               html += '<option value="ha">Home Assistant</option>';
               html += '<option value="mqtt">MQTT</option>';
               html += '<option value="time">Time</option></select></div>';
-              // Data Source ID (shown for ha/mqtt)
               html += '<div class="col-6" id="pbSrcIdWrap' + z + '"><label class="form-label">Sensor ID / MQTT topic</label>';
-              html += '<input type="text" class="form-control" id="pbSrcId' + z + '" placeholder="sensor.battery_level or home/battery"></div>';
-              // Time mode (shown for time, hidden by default)
+              html += '<input type="text" class="form-control" id="pbSrcId' + z + '" placeholder="sensor.battery_level"></div>';
               html += '<div class="col-6" id="pbTimeWrap' + z + '" style="display:none"><label class="form-label">Time mode</label>';
               html += '<select class="form-select" id="pbTimeMode' + z + '">';
               html += '<option value="seconds">Seconds (until next minute)</option>';
               html += '<option value="minutes">Minutes (until next hour)</option>';
               html += '<option value="hours">Hours (until next day)</option></select></div>';
-              // Min (hidden for time)
+              // Min & Max under Sensor ID (right-aligned with col-6 offset)
+              html += '<div class="col-6" id="pbMinMaxSpacer' + z + '"></div>';
               html += '<div class="col-3" id="pbMinWrap' + z + '"><label class="form-label">Min value</label>';
               html += '<input type="number" step="any" class="form-control" id="pbMin' + z + '" value="0"></div>';
-              // Max (hidden for time)
               html += '<div class="col-3" id="pbMaxWrap' + z + '"><label class="form-label">Max value</label>';
               html += '<input type="number" step="any" class="form-control" id="pbMax' + z + '" value="100"></div>';
-              // Condition Enable
+              // Condition
               html += '<div class="col-12"><div class="form-check">';
               html += '<input class="form-check-input pb-cond-toggle" type="checkbox" id="pbCondEn' + z + '" data-zone="' + z + '">';
               html += '<label class="form-check-label" for="pbCondEn' + z + '">Enable condition</label>';
               html += '</div></div>';
-              // Condition fields (hidden by default)
               html += '<div id="pbCondFields' + z + '" style="display:none" class="row g-3">';
               html += '<div class="col-6"><label class="form-label">Condition source</label>';
               html += '<select class="form-select" id="pbCondSrcT' + z + '">';
@@ -826,11 +845,76 @@
               html += '<div class="col-6"><label class="form-label">Expected value (exact match)</label>';
               html += '<input type="text" class="form-control" id="pbCondVal' + z + '"></div>';
               html += '</div>'; // condFields
-              html += '</div></div></div>'; // row, card-body, card
+              html += '</div></div>'; // regular row, regularFields
+
+              // ── Dynamic mode fields ──
+              var animOpts = '<option value="1">Fill L\u2192R, Erase L\u2192R</option>'
+                + '<option value="2">Fill R\u2192L, Erase R\u2192L</option>'
+                + '<option value="3">Fill L\u2192R, Erase R\u2192L (snake)</option>'
+                + '<option value="4">Fill R\u2192L, Erase L\u2192R (snake)</option>'
+                + '<option value="5">Edges\u2192Center, Erase from edges</option>'
+                + '<option value="6">Edges\u2192Center, Erase from center</option>'
+                + '<option value="7">Larson Scanner (bounce dot)</option>'
+                + '<option value="8">Heartbeat</option>'
+                + '<option value="9">Running Wave \u2192</option>'
+                + '<option value="10">Breathing (center pulse)</option>'
+                + '<option value="11">Bouncing Pixel</option>'
+                + '<option value="12">Comet \u2192</option>'
+                + '<option value="13">Firework (sparkle)</option>'
+                + '<option value="14">Morse Code (SOS)</option>'
+                + '<option value="15">Alternating Flash</option>'
+                + '<option value="16">Stack Builder</option>';
+
+              html += '<div id="pbDynamicFields' + z + '" style="display:none" class="mt-3"><div class="row g-3">';
+              // Source
+              html += '<div class="col-6"><label class="form-label">Source</label>';
+              html += '<select class="form-select" id="pbDynSrcType' + z + '">';
+              html += '<option value="ha">Home Assistant</option>';
+              html += '<option value="mqtt">MQTT</option></select></div>';
+              html += '<div class="col-6"><label class="form-label">Sensor ID / MQTT topic</label>';
+              html += '<input type="text" class="form-control" id="pbDynSrcId' + z + '" placeholder="sensor.car_state"></div>';
+              // Rule 1
+              html += '<div class="col-12"><strong>Rule 1</strong></div>';
+              html += '<div class="col-4"><label class="form-label">Sensor value / MQTT payload</label>';
+              html += '<input type="text" class="form-control" id="pbDynR1Val' + z + '" placeholder="charging"></div>';
+              html += '<div class="col-4"><label class="form-label">Animation</label>';
+              html += '<select class="form-select" id="pbDynR1Anim' + z + '">' + animOpts + '</select></div>';
+              html += '<div class="col-4"><label class="form-label">Speed: <span id="pbDynR1SpdVal' + z + '">100</span> ms</label>';
+              html += '<input type="range" class="form-range" id="pbDynR1Spd' + z + '" min="10" max="1000" step="10" value="100" ';
+              html += 'oninput="document.getElementById(\'pbDynR1SpdVal' + z + '\').innerText=this.value"></div>';
+              // Rule 2
+              html += '<div class="col-12"><strong>Rule 2</strong></div>';
+              html += '<div class="col-4"><label class="form-label">Sensor value / MQTT payload</label>';
+              html += '<input type="text" class="form-control" id="pbDynR2Val' + z + '" placeholder="driving"></div>';
+              html += '<div class="col-4"><label class="form-label">Animation</label>';
+              html += '<select class="form-select" id="pbDynR2Anim' + z + '">' + animOpts + '</select></div>';
+              html += '<div class="col-4"><label class="form-label">Speed: <span id="pbDynR2SpdVal' + z + '">100</span> ms</label>';
+              html += '<input type="range" class="form-range" id="pbDynR2Spd' + z + '" min="10" max="1000" step="10" value="100" ';
+              html += 'oninput="document.getElementById(\'pbDynR2SpdVal' + z + '\').innerText=this.value"></div>';
+              html += '</div></div>'; // dynamic row, dynamicFields
+
+              html += '</div>'; // pbSettingsWrap
+              html += '</div></div>'; // card-body, card
             }
             pbContainer.innerHTML = html;
 
-            // Helper: update visibility based on source type
+            // Helper: toggle settings visibility based on Enable checkbox
+            function pbUpdateEnable(z) {
+              var wrap = document.getElementById('pbSettingsWrap' + z);
+              var en = document.getElementById('pbEnable' + z);
+              if (wrap && en) wrap.style.display = en.checked ? '' : 'none';
+            }
+
+            // Helper: toggle Regular/Dynamic field visibility
+            function pbUpdateMode(z) {
+              var mode = document.getElementById('pbMode' + z).value;
+              var isRegular = (mode === 'regular');
+              document.getElementById('pbRegularFields' + z).style.display = isRegular ? '' : 'none';
+              document.getElementById('pbDynamicFields' + z).style.display = isRegular ? 'none' : '';
+              if (isRegular) pbUpdateSourceUI(z);
+            }
+
+            // Helper: update visibility for Regular mode source type
             function pbUpdateSourceUI(z) {
               var srcType = document.getElementById('pbSrcType' + z).value;
               var isTime = (srcType === 'time');
@@ -838,44 +922,70 @@
               document.getElementById('pbTimeWrap' + z).style.display = isTime ? '' : 'none';
               document.getElementById('pbMinWrap' + z).style.display = isTime ? 'none' : '';
               document.getElementById('pbMaxWrap' + z).style.display = isTime ? 'none' : '';
+              document.getElementById('pbMinMaxSpacer' + z).style.display = isTime ? 'none' : '';
             }
 
             // Populate PB fields from data
             for (var z = 0; z < zn; z++) {
               setChecked('pbEnable' + z, !!data['pbEnableZone' + z]);
+              // Mode
+              var isDynamic = !!data['pbDynModeZone' + z];
+              setVal('pbMode' + z, isDynamic ? 'dynamic' : 'regular');
+              // Regular fields
               var srcType = data['pbSrcTypeZone' + z] || 'ha';
               setVal('pbSrcType' + z, srcType);
-
               if (srcType === 'time') {
-                // For time, dataSourceId holds the time mode
                 setVal('pbTimeMode' + z, data['pbSrcIdZone' + z] || 'seconds');
                 setVal('pbSrcId' + z, '');
               } else {
                 setVal('pbSrcId' + z, data['pbSrcIdZone' + z] || '');
                 setVal('pbTimeMode' + z, 'seconds');
               }
-
               setVal('pbMin' + z, data['pbMinZone' + z] !== undefined ? data['pbMinZone' + z] : 0);
               setVal('pbMax' + z, data['pbMaxZone' + z] !== undefined ? data['pbMaxZone' + z] : 100);
               setChecked('pbCondEn' + z, !!data['pbCondEnZone' + z]);
               setVal('pbCondSrcT' + z, data['pbCondSrcTZone' + z] || 'ha');
               setVal('pbCondSrcI' + z, data['pbCondSrcIZone' + z] || '');
               setVal('pbCondVal' + z, data['pbCondValZone' + z] || '');
-              // Show/hide condition fields
               var condFields = document.getElementById('pbCondFields' + z);
               if (condFields && data['pbCondEnZone' + z]) condFields.style.display = '';
-              // Apply source type visibility
+              // Dynamic fields
+              setVal('pbDynSrcType' + z, data['pbDynSrcTZone' + z] || 'ha');
+              setVal('pbDynSrcId' + z, data['pbDynSrcIZone' + z] || '');
+              setVal('pbDynR1Val' + z, data['pbDynR1ValZone' + z] || '');
+              setVal('pbDynR1Anim' + z, data['pbDynAnimZone' + z] || 1);
+              var r1spd = data['pbDynSpdZone' + z] || 100;
+              setVal('pbDynR1Spd' + z, r1spd);
+              var r1spdLabel = document.getElementById('pbDynR1SpdVal' + z);
+              if (r1spdLabel) r1spdLabel.innerText = r1spd;
+              setVal('pbDynR2Val' + z, data['pbDynR2ValZone' + z] || '');
+              setVal('pbDynR2Anim' + z, data['pbDynR2AnimZone' + z] || 1);
+              var r2spd = data['pbDynR2SpdZone' + z] || 100;
+              setVal('pbDynR2Spd' + z, r2spd);
+              var r2spdLabel = document.getElementById('pbDynR2SpdVal' + z);
+              if (r2spdLabel) r2spdLabel.innerText = r2spd;
+              // Apply visibility
+              pbUpdateEnable(z);
+              pbUpdateMode(z);
               pbUpdateSourceUI(z);
             }
 
-            // Source type change handlers
+            // Event handlers
+            document.querySelectorAll('.pb-enable-toggle').forEach(function(el) {
+              el.addEventListener('change', function() {
+                pbUpdateEnable(this.getAttribute('data-zone'));
+              });
+            });
+            document.querySelectorAll('.pb-mode-toggle').forEach(function(el) {
+              el.addEventListener('change', function() {
+                pbUpdateMode(this.getAttribute('data-zone'));
+              });
+            });
             document.querySelectorAll('.pb-src-type-toggle').forEach(function(el) {
               el.addEventListener('change', function() {
                 pbUpdateSourceUI(this.getAttribute('data-zone'));
               });
             });
-
-            // Condition toggle handlers
             document.querySelectorAll('.pb-cond-toggle').forEach(function(el) {
               el.addEventListener('change', function() {
                 var zIdx = this.getAttribute('data-zone');
@@ -1105,7 +1215,8 @@
         data = {
           key: "systemSettings",
           deviceName: document.getElementById("deviceName").value,
-          disableServiceMessages: document.querySelector('#disableServiceMessages').checked
+          disableServiceMessages: document.querySelector('#disableServiceMessages').checked,
+          displayFlip: document.getElementById('displayFlip').checked
         }
         sendPost(data);
       }
@@ -1147,8 +1258,49 @@
           data['pbCondSrcT' + z] = document.getElementById('pbCondSrcT' + z).value;
           data['pbCondSrcI' + z] = document.getElementById('pbCondSrcI' + z).value;
           data['pbCondVal' + z] = document.getElementById('pbCondVal' + z).value;
+          data['pbDynMode' + z] = (document.getElementById('pbMode' + z).value === 'dynamic');
+          data['pbDynAnim' + z] = document.getElementById('pbDynR1Anim' + z).value;
+          data['pbDynSpd' + z] = document.getElementById('pbDynR1Spd' + z).value;
+          data['pbDynSrcT' + z] = document.getElementById('pbDynSrcType' + z).value;
+          data['pbDynSrcI' + z] = document.getElementById('pbDynSrcId' + z).value;
+          data['pbDynR1Val' + z] = document.getElementById('pbDynR1Val' + z).value;
+          data['pbDynR2Val' + z] = document.getElementById('pbDynR2Val' + z).value;
+          data['pbDynR2Anim' + z] = document.getElementById('pbDynR2Anim' + z).value;
+          data['pbDynR2Spd' + z] = document.getElementById('pbDynR2Spd' + z).value;
         }
-        sendPost(data);
+        // Check MQTT connectivity before saving (fetch live status)
+        var mqttWarnings = [];
+        for (var z = 0; z < 4; z++) {
+          var el = document.getElementById('pbEnable' + z);
+          if (!el || !el.checked) continue;
+          var isDyn = (document.getElementById('pbMode' + z).value === 'dynamic');
+          if (!isDyn) {
+            var st = document.getElementById('pbSrcType' + z).value;
+            if (st === 'mqtt') mqttWarnings.push('Zone ' + z + ': data source uses MQTT');
+            var ce = document.getElementById('pbCondEn' + z);
+            if (ce && ce.checked) {
+              var ct = document.getElementById('pbCondSrcT' + z).value;
+              if (ct === 'mqtt') mqttWarnings.push('Zone ' + z + ': condition uses MQTT');
+            }
+          } else {
+            var dt = document.getElementById('pbDynSrcType' + z).value;
+            if (dt === 'mqtt') mqttWarnings.push('Zone ' + z + ': dynamic source uses MQTT');
+          }
+        }
+        if (mqttWarnings.length > 0) {
+          // Fetch live MQTT status before warning
+          fetch('/api/pb-debug').then(function(r) { return r.json(); }).then(function(dbg) {
+            if (!dbg.mqttConnected) {
+              alert('Warning: MQTT is not connected!\n\n' + mqttWarnings.join('\n') + '\n\nProgress bar will not work until MQTT is connected. Check MQTT settings.');
+            }
+            sendPost(data);
+          }).catch(function() {
+            // If debug endpoint fails, just save anyway
+            sendPost(data);
+          });
+        } else {
+          sendPost(data);
+        }
       }
 
 
@@ -1172,13 +1324,13 @@
       });
 
       request.fail(function (jqXHR, textStatus, responseText) {
-        if (jqXHR.status === 503 && retryCount < 2) {
+        if ((jqXHR.status === 429 || jqXHR.status === 503) && retryCount < 2) {
           var toastBusy = new bootstrap.Toast(document.getElementById('liveToastBusy'));
           toastBusy.show();
           console.log("Device busy, retry " + (retryCount + 1) + "/3 in 2s...");
           setTimeout(function () { sendPost(dataPost, retryCount + 1); }, 2000);
         } else {
-          if (jqXHR.status === 503) {
+          if (jqXHR.status === 429 || jqXHR.status === 503) {
             alert("Device busy after 3 attempts. Please try again later.");
           } else {
             alert("Request failed: " + responseText);
