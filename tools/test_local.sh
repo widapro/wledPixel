@@ -46,6 +46,15 @@ run_unit_tests() {
   "$build_dir/profile_tests"
   "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
+    -I"$json_include" -I"$project_dir/lib/owm" \
+    -I"$project_dir/test/native/stubs" \
+    -I"$project_dir/src" \
+    -I"$project_dir/lib/httpsRequestJson" \
+    "$project_dir/test/native/test_weather_network.cpp" \
+    -o "$build_dir/weather_tests"
+  "$build_dir/weather_tests"
+  "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror \
+    -fsanitize=address,undefined -fno-omit-frame-pointer \
     -I"$project_dir/test/native/storage_stubs" -I"$project_dir/test/native/stubs" -I"$project_dir/src" \
     "$project_dir/test/native/test_profile_storage.cpp" "$project_dir/src/SchedulerLogic.cpp" \
     -o "$build_dir/storage_tests"

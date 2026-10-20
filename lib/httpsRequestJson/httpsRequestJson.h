@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
+#include "NetworkRequestResult.h"
 
 #if defined(ESP8266)
 #include <ESP8266HTTPClient.h>
@@ -18,13 +19,15 @@
 extern bool isFetchingHttps;
 void requestHttpsAbortForWeb();
 bool httpsAbortWasRequested();
+networkMemory::Heap secondaryNetworkHeap();
+
+NetworkRequestResult requestJson(const String &addr, int port,
+                                const String &path, const String &token,
+                                bool https, JsonDocument &doc,
+                                const JsonDocument *filter = nullptr);
 
 // Returns true on success, fills the provided JsonDocument with the response
 bool httpsRequestToDoc(const String &addr, int port, const String &path,
                        const String &token, bool https, JsonDocument &doc);
-
-// Legacy function - kept for backward compatibility but marked as deprecated
-// WARNING: This function has memory safety issues - use httpsRequestToDoc
-// instead
 
 #endif

@@ -1,166 +1,162 @@
 #include "httpsRequestJson.h"
-#include "../../src/WebPriority.h"
+#include "NetworkRequestGuard.h"
+#include <memory>
 
 #if defined(ESP8266)
-// (Unused includes removed to prevent SPI concurrent access issues)
+#include <umm_malloc/umm_heap_select.h>
+#ifndef UMM_HEAP_IRAM
+#error "ESP8266 HTTPS requires the secondary IRAM heap configured in platformio.ini"
+#endif
 #endif
 
 bool isFetchingHttps = false;
 volatile bool httpsAbortRequested = false;
-#include <memory>
-
-struct HttpsGuard {
-  explicit HttpsGuard(bool tls) : ready(false) {
-    httpsAbortRequested = false;
-    ready = beginExternalNetworkRequest(tls);
-    isFetchingHttps = ready;
-  }
-  ~HttpsGuard() {
-    isFetchingHttps = false;
-    if (ready)
-      endExternalNetworkRequest();
-  }
-  bool ready;
-};
 
 void requestHttpsAbortForWeb() { httpsAbortRequested = true; }
-
 bool httpsAbortWasRequested() { return httpsAbortRequested; }
 
-// Internal helper function to perform the HTTP request and parse directly
-static bool performHttpRequestToDoc(const String &addr, int port,
-                                    const String &path, const String &token,
-                                    bool https, JsonDocument &doc) {
-  HttpsGuard guard(https);
-  if (!guard.ready) {
-    Serial.print(F("\n[NET] External request deferred for web/API priority"));
-    return false;
-  }
 #if defined(ESP8266)
-  uint32_t freeHeap = ESP.getFreeHeap();
-  uint32_t maxBlock = ESP.getMaxFreeBlockSize();
-  const uint32_t minHeap = https ? 6500 : 4000;
-  const uint32_t minBlock = https ? 3200 : 1500;
-  if (freeHeap < minHeap || maxBlock < minBlock) {
-    Serial.printf("\n[NET] Request deferred after memory release. "
-                  "TLS=%s Heap=%u/%u MaxBlock=%u/%u",
-                  https ? "yes" : "no", freeHeap, minHeap, maxBlock,
-                  minBlock);
-    return false;
-  }
+static networkMemory::Heap dramHeap() {
+  HeapSelectDram heap;
+  return {ESP.getFreeHeap(), ESP.getMaxFreeBlockSize()};
+}
+static networkMemory::Heap iramHeap() {
+  HeapSelectIram heap;
+  return {ESP.getFreeHeap(), ESP.getMaxFreeBlockSize()};
+}
 #endif
 
-  bool httpBegin = false;
-  bool success = false;
-  HTTPClient httpClient;
+networkMemory::Heap secondaryNetworkHeap() {
+#if defined(ESP8266)
+  return iramHeap();
+#else
+  return {0, 0};
+#endif
+}
 
+NetworkRequestResult requestJson(const String &addr, int port,
+                                const String &path, const String &token,
+                                bool https, JsonDocument &doc,
+                                const JsonDocument *filter) {
+  HttpsGuard guard(https);
+  if (!guard.ready)
+    return NetworkRequestResult::Deferred;
+
+#if defined(ESP8266)
+  auto dram = dramHeap();
+  if (dram.freeBytes < 4096 || dram.largestBlock < 1536) {
+    Serial.println(F("\n[NET] Request deferred: insufficient TCP memory"));
+    return NetworkRequestResult::Deferred;
+  }
+  if (https && (dram.freeBytes < 11264 || dram.largestBlock < 7168))
+    return NetworkRequestResult::Deferred;
+
+  // A reduced RX buffer is safe only when the peer negotiates MFLN. The
+  // probe uses a small plain TCP client, not the fatal BearSSL constructor.
+  // Without MFLN use a complete 16KB TLS record instead of guessing its size.
+  bool compactRecords = https &&
+      BearSSL::WiFiClientSecure::probeMaxFragmentLength(addr, port, 1024);
+  if (httpsAbortRequested)
+    return NetworkRequestResult::Deferred;
+  if (https) {
+    dram = dramHeap();
+    const auto iram = iramHeap();
+    if (!networkMemory::canStartTls(dram, iram, compactRecords)) {
+      Serial.printf_P(PSTR("\n[NET] TLS deferred. DRAM=%u/%u IRAM=%u/%u MFLN=%u"),
+                      dram.freeBytes, dram.largestBlock, iram.freeBytes,
+                      iram.largestBlock, compactRecords);
+      return NetworkRequestResult::Deferred;
+    }
+    Serial.printf_P(PSTR("\n[NET] TLS budget DRAM=%u/%u IRAM=%u/%u RX=%u"),
+                    dram.freeBytes, dram.largestBlock, iram.freeBytes,
+                    iram.largestBlock, compactRecords ? 1024 : 16384);
+  }
+
+  // Keep the scope alive through GET and parsing: BearSSL allocates its SSL
+  // and certificate contexts lazily during connect(). Its stack explicitly
+  // selects DRAM in the core. The guard restores MQTT only after this heap
+  // selection and all HTTP/client objects have been destroyed.
+  HeapSelect requestHeap(https && compactRecords ? UMM_HEAP_IRAM : UMM_HEAP_DRAM);
+#endif
+
+  // HTTPClient references its client. Declare clients first so HTTPClient is
+  // destroyed before their storage, including on every early return.
 #if defined(ESP8266)
   std::unique_ptr<BearSSL::WiFiClientSecure> clientSsl;
-#elif defined(ESP32)
+#else
   std::unique_ptr<WiFiClientSecure> clientSsl;
 #endif
-  std::unique_ptr<WiFiClient> espClient;
+  std::unique_ptr<WiFiClient> client;
+  HTTPClient http;
+  bool began;
 
   if (https) {
 #if defined(ESP8266)
-    // Use std::nothrow to prevent unhandled C++ exceptions (OOM) if memory is
-    // too fragmented
     clientSsl.reset(new (std::nothrow) BearSSL::WiFiClientSecure);
-    if (!clientSsl) {
-      Serial.println(F("\n[HTTPS] Failed to allocate BearSSL client (OOM)."));
-      return false;
-    }
-    clientSsl->setInsecure();
-    // ESP8266 core clamps these to its documented 512-byte data minimum and
-    // adds TLS record overhead internally (837 RX + 597 TX allocated).
-    clientSsl->setBufferSizes(512, 512);
-    clientSsl->setTimeout(1000);
-#elif defined(ESP32)
+#else
     clientSsl.reset(new (std::nothrow) WiFiClientSecure);
+#endif
     if (!clientSsl)
-      return false;
+      return NetworkRequestResult::Deferred;
     clientSsl->setInsecure();
+#if defined(ESP8266)
+    clientSsl->setBufferSizes(compactRecords ? 1024 : 16384, 512);
 #endif
-    httpBegin = httpClient.begin(*clientSsl, addr, port, path, true);
+    clientSsl->setTimeout(5000);
+    began = http.begin(*clientSsl, addr, port, path, true);
   } else {
-    espClient.reset(new (std::nothrow) WiFiClient);
-    if (!espClient)
-      return false;
-    espClient->setTimeout(1000);
-    httpBegin = httpClient.begin(*espClient, addr, port, path, false);
+    client.reset(new (std::nothrow) WiFiClient);
+    if (!client)
+      return NetworkRequestResult::Deferred;
+    client->setTimeout(2000);
+    began = http.begin(*client, addr, port, path, false);
   }
+  if (!began)
+    return NetworkRequestResult::Failed;
 
-  if (httpBegin) {
-    if (token.length() > 0) {
-      httpClient.addHeader("Authorization", token);
+  // HTTP/1.0 avoids chunk framing in the raw stream passed to ArduinoJson.
+  // No response body is accumulated in a heap-backed String.
+  http.useHTTP10(true);
+  http.setReuse(false);
+  http.setTimeout(2000);
+  if (token.length())
+    http.addHeader(F("Authorization"), token);
+  int code = http.GET();
+
+  if (httpsAbortRequested) {
+    Serial.println(F("\n[NET] Request interrupted for web/API priority"));
+    return NetworkRequestResult::Deferred;
+  }
+  if (code == HTTP_CODE_OK) {
+    doc.clear();
+    DeserializationError error = filter
+        ? deserializeJson(doc, http.getStream(), DeserializationOption::Filter(*filter))
+        : deserializeJson(doc, http.getStream());
+    if (httpsAbortRequested)
+      return NetworkRequestResult::Deferred;
+    if (!error) {
+      Serial.println(F("\n[NET] JSON response OK"));
+      return NetworkRequestResult::Success;
     }
-
-    int httpCode = httpClient.GET();
-
-    if (httpsAbortRequested) {
-      Serial.print(F("\n[HTTPS] Aborted for incoming web request"));
-      success = false;
-      httpClient.end();
-      if (clientSsl)
-        clientSsl->stop();
-      if (espClient)
-        espClient->stop();
-      return false;
-    }
-
-    if (httpCode == HTTP_CODE_OK) {
-      Serial.print(F("\n[HTTPS] Start json parsing from stream"));
-      // Parse directly from stream to avoid massive String heap allocation
-      DeserializationError error = deserializeJson(doc, httpClient.getStream());
-      if (error) {
-        Serial.printf("\n[HTTPS] JSON parse error: %s", error.c_str());
-        success = false;
-      } else {
-        success = true;
-      }
-    } else {
-      if (httpCode > 0) {
-        Serial.printf("\n[HTTPS] HTTP status error: %d", httpCode);
-        // HA and most other JSON APIs return a short explanation for 4xx
-        // responses. Parse it into the caller-provided document instead of
-        // allocating a heap-backed response String.
-        int errorSize = httpClient.getSize();
-        if (httpCode >= 400 && errorSize > 0 && errorSize <= 512) {
-          doc.clear();
-          DeserializationError error =
-              deserializeJson(doc, httpClient.getStream());
-          if (!error) {
-            const char *message = doc[F("message")].as<const char *>();
-            if (message && message[0] != '\0')
-              Serial.printf(" message='%s'", message);
-          }
-        }
-      } else {
-        Serial.printf("\n[HTTPS] api error: %s",
-                      httpClient.errorToString(httpCode).c_str());
-      }
-      success = false;
+    Serial.printf_P(PSTR("\n[NET] JSON parse error: %s"), error.c_str());
+  } else if (code > 0) {
+    Serial.printf_P(PSTR("\n[NET] HTTP status: %d"), code);
+    int size = http.getSize();
+    if (code >= 400 && size > 0 && size <= 512) {
+      doc.clear();
+      // Preserve error details for existing callers without retaining a body
+      // String. A malformed/error response never replaces cached readings.
+      deserializeJson(doc, http.getStream());
     }
   } else {
-    Serial.print(F("\n[HTTPS] api error start connection"));
-    success = false;
+    Serial.printf_P(PSTR("\n[NET] Connection error: %s"),
+                    http.errorToString(code).c_str());
   }
-
-  httpClient.end();
-
-  // Force BearSSL to release its 5KB memory block immediately
-#if defined(ESP8266) || defined(ESP32)
-  if (clientSsl)
-    clientSsl->stop();
-#endif
-  if (espClient)
-    espClient->stop();
-
-  return success;
+  return NetworkRequestResult::Failed;
 }
 
-// New safe function - caller provides the JsonDocument
 bool httpsRequestToDoc(const String &addr, int port, const String &path,
                        const String &token, bool https, JsonDocument &doc) {
-  return performHttpRequestToDoc(addr, port, path, token, https, doc);
+  return requestJson(addr, port, path, token, https, doc) ==
+         NetworkRequestResult::Success;
 }

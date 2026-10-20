@@ -1,33 +1,50 @@
 #include "owm.h"
 #include "sharedScratch.h"
+#include "WeatherData.h"
 
 String owmWeatherIcon;
 byte owmHumidity;
 int owmPressure;
 int owmWindSpeed;
 int owmTemperature;
+static uint32_t successfulUpdates = 0;
+static uint32_t lastSuccessMillis = 0;
 
-void owmWeatherUpdate(const String &city, const String &unitsFormat,
-                      const String &token) {
+uint32_t owmSuccessfulUpdates() { return successfulUpdates; }
+uint32_t owmLastSuccessMillis() { return lastSuccessMillis; }
+
+NetworkRequestResult owmWeatherUpdate(const String &city,
+                                     const String &unitsFormat,
+                                     const String &token) {
   Serial.print(F("\nGetting weather from Open Weather Map"));
   StaticJsonDocument<2048> &doc = sharedJsonDocument();
   doc.clear();
-  bool success = httpsRequestToDoc("api.openweathermap.org", 443,
+  StaticJsonDocument<256> filter;
+  makeWeatherFilter(filter);
+  NetworkRequestResult result = requestJson("api.openweathermap.org", 443,
                                    "/data/2.5/weather?q=" + city + "&units=" +
                                        unitsFormat + "&appid=" + token,
-                                   "", true, doc);
-  JsonObject owmWeatherPostObj = doc.as<JsonObject>();
+                                   "", true, doc, &filter);
 
   // Only update cached values if we got a valid response
-  if (success && owmWeatherPostObj.containsKey(F("main"))) {
-    owmHumidity = owmWeatherPostObj[F("main")][F("humidity")].as<byte>();
-    owmPressure = owmWeatherPostObj[F("main")][F("pressure")].as<int>();
-    owmWindSpeed = owmWeatherPostObj[F("wind")][F("speed")].as<int>();
-    owmTemperature = (int)(owmWeatherPostObj[F("main")][F("temp")].as<int>());
-    owmWeatherIcon = owmWeatherPostObj[F("weather")][0][F("icon")].as<String>();
+  WeatherData reading;
+  if (result == NetworkRequestResult::Success &&
+      decodeWeatherData(doc.as<JsonVariantConst>(), reading)) {
+    owmHumidity = reading.humidity;
+    owmPressure = reading.pressure;
+    owmWindSpeed = reading.windSpeed;
+    owmTemperature = reading.temperature;
+    owmWeatherIcon = reading.icon;
+    ++successfulUpdates;
+    lastSuccessMillis = millis();
     Serial.print(F(" - OK"));
+    return NetworkRequestResult::Success;
+  } else if (result == NetworkRequestResult::Deferred) {
+    Serial.print(F(" - DEFERRED, keeping cached values"));
+    return result;
   } else {
     Serial.print(F(" - FAILED, keeping cached values"));
+    return NetworkRequestResult::Failed;
   }
 }
 

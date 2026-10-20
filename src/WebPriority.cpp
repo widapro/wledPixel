@@ -36,7 +36,7 @@ void enterWebPriorityMode(unsigned long now) {
     }
   }
 
-  Serial.printf("\n[WEB] Priority ON. Heap=%u MaxBlock=%u Frag=%u%%",
+  Serial.printf_P(PSTR("\n[WEB] Priority ON. Heap=%u MaxBlock=%u Frag=%u%%"),
                 ESP.getFreeHeap(), ESP.getMaxFreeBlockSize(),
                 ESP.getHeapFragmentation());
 }
@@ -57,7 +57,7 @@ void exitWebPriorityMode(unsigned long now) {
       shouldMqttPublish = true;
   }
 
-  Serial.printf("\n[WEB] Priority OFF after %lu ms. Heap=%u MaxBlock=%u",
+  Serial.printf_P(PSTR("\n[WEB] Priority OFF after %lu ms. Heap=%u MaxBlock=%u"),
                 now - webPriorityStartedMillis, ESP.getFreeHeap(),
                 ESP.getMaxFreeBlockSize());
   if (!mqttBufferReady) {
@@ -95,8 +95,8 @@ bool beginExternalNetworkRequest(bool tls) {
     yield();
   }
 
-  Serial.printf("\n[NET] External %s request ON. Heap=%u MaxBlock=%u Frag=%u%%"
-                " MQTT=%s",
+  Serial.printf_P(PSTR("\n[NET] External %s request ON. Heap=%u MaxBlock=%u Frag=%u%%"
+                " MQTT=%s"),
                 tls ? "TLS" : "HTTP", ESP.getFreeHeap(),
                 ESP.getMaxFreeBlockSize(), ESP.getHeapFragmentation(),
                 externalMqttReleased ? "released" : "kept");
@@ -129,7 +129,7 @@ void endExternalNetworkRequest() {
       Serial.print(F("\n[NET] MQTT buffer restore deferred"));
   }
 
-  Serial.printf("\n[NET] External request OFF. Heap=%u MaxBlock=%u",
+  Serial.printf_P(PSTR("\n[NET] External request OFF. Heap=%u MaxBlock=%u"),
                 ESP.getFreeHeap(), ESP.getMaxFreeBlockSize());
   externalMqttReleased = false;
   externalMqttWasConnected = false;
@@ -139,10 +139,10 @@ void endExternalNetworkRequest() {
 void noteWebActivity() {
   unsigned long now = millis();
   webActivityMillis = now;
-
-#if defined(ESP8266)
-  enterWebPriorityMode(now);
-#endif
+  // Async callbacks can run inside a yielding MQTT socket write. They only
+  // claim priority here: disconnecting or resizing MQTT at that point would
+  // reenter the same client. serviceWebPriorityMode() releases its resources
+  // from loop(), after the interrupted foreground operation has returned.
 }
 
 bool beginTrackedWebRequest(bool apiRequest) {

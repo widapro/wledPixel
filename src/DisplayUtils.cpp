@@ -212,16 +212,16 @@ void zoneNewMessage(int zone, const String &newMessage, const String &postfix,
 // ────────────────────────────────────────────────────
 void zoneShowModeMessage(int zone, const String &modeName) {
   if (zone >= 0 && zone < 4) {
-    Serial.print("Debug: zoneShowModeMessage called for zone ");
+    Serial.print(F("Debug: zoneShowModeMessage called for zone "));
     Serial.print(zone);
-    Serial.print(" with: ");
+    Serial.print(F(" with: "));
     Serial.println(modeName);
 
     if (disableServiceMessages)
       return;
 
     if (strcmp(zoneMessages[zone], modeName.c_str()) == 0) {
-      Serial.println("Debug: Message already displayed, skipping update.");
+      Serial.println(F("Debug: Message already displayed, skipping update."));
       return;
     }
 
@@ -718,7 +718,7 @@ bool fetchHaStateValue(const String &sensorId, String &outState) {
   }
 
   bool https = (haApiHttpType == "https");
-  Serial.printf("\n[HA] GET %s://%s:%u%s (entity length=%u, token length=%u)",
+  Serial.printf_P(PSTR("\n[HA] GET %s://%s:%u%s (entity length=%u, token length=%u)"),
                 https ? "https" : "http", haAddr.c_str(), haApiPort,
                 path.c_str(), static_cast<unsigned>(sensorId.length()),
                 static_cast<unsigned>(haApiToken.length()));
@@ -741,7 +741,7 @@ bool fetchHaStateValue(const String &sensorId, String &outState) {
 // ─── HA API Get
 // ────────────────────────────────────────────────────────────────
 String haApiGet(const String &sensorId, const String &sensorPostfix) {
-  Serial.printf("\nHA updating...");
+  Serial.printf_P(PSTR("\nHA updating..."));
   String state;
   if (!fetchHaStateValue(sensorId, state))
     return "err";
@@ -1223,6 +1223,6 @@ void wifiApWelcomeMessage(AsyncWiFiManager *wifiManager) {
   P.setTextAlignment(0, PA_CENTER);
   P.setIntensity(7);
   P.setSpeed(0, 100);
-  P.print("AP Mode");
+  P.print(F("AP Mode"));
   P.displayAnimate();
 }

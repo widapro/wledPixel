@@ -79,7 +79,7 @@ bool queueConfigSave(const char *groupName, uint8_t n) {
       return true;
   }
   if (deferredSaveCount >= kDeferredSaveCapacity) {
-    Serial.printf("\n[Config] Deferred save queue full: %s/%u", groupName, n);
+    Serial.printf_P(PSTR("\n[Config] Deferred save queue full: %s/%u"), groupName, n);
     return false;
   }
   DeferredConfigSave &entry = deferredSaves[deferredSaveCount++];
@@ -97,7 +97,7 @@ bool serviceDeferredConfigSave() {
     deferredSaves[i - 1] = deferredSaves[i];
   deferredSaveCount--;
   const char *groupName = deferredGroupName(entry.group);
-  Serial.printf("\n[Config] Deferred save: %s/%u", groupName, entry.index);
+  Serial.printf_P(PSTR("\n[Config] Deferred save: %s/%u"), groupName, entry.index);
   if (entry.group == DG_CRON_GLOBAL)
     saveSchedulerEnabledToConfFile();
   else
@@ -133,7 +133,7 @@ typedef struct __attribute__((packed)) {
 } LegacyScheduleProfile;
 
 void buildZoneKey(char *out, size_t outSize, uint8_t zone, const char *suffix) {
-  snprintf(out, outSize, "zone%u%s", zone, suffix);
+  snprintf_P(out, outSize, PSTR("zone%u%s"), zone, suffix);
 }
 
 // These missing-key defaults match every zone's initial values in Globals.cpp.
@@ -379,46 +379,46 @@ void saveVarsToConfFile(const char *groupName, uint8_t n) {
         char key[24];
         snprintf(key, sizeof(key), optionalKeys[field], i);
         if (!storeOptionalConfigString(preferences, key, *values[field]))
-          Serial.printf("\n[Config] Failed to clear optional PB key %s", key);
+          Serial.printf_P(PSTR("\n[Config] Failed to clear optional PB key %s"), key);
       }
     }
     for (uint8_t i = 0; i < kZoneCapacity; i++) {
       char key[24];
-      snprintf(key, sizeof(key), "pb%uEnable", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uEnable"), i);
       preferences.putBool(key, progressBars[i].enabled);
-      snprintf(key, sizeof(key), "pb%uSrcType", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uSrcType"), i);
       preferences.putString(key, progressBars[i].dataSourceType);
-      snprintf(key, sizeof(key), "pb%uSrcId", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uSrcId"), i);
       storeOptionalConfigString(preferences, key, progressBars[i].dataSourceId);
-      snprintf(key, sizeof(key), "pb%uMin", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uMin"), i);
       preferences.putFloat(key, progressBars[i].minValue);
-      snprintf(key, sizeof(key), "pb%uMax", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uMax"), i);
       preferences.putFloat(key, progressBars[i].maxValue);
-      snprintf(key, sizeof(key), "pb%uCondEn", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCondEn"), i);
       preferences.putBool(key, progressBars[i].conditionEnabled);
-      snprintf(key, sizeof(key), "pb%uCdSrcT", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCdSrcT"), i);
       preferences.putString(key, progressBars[i].conditionSourceType);
-      snprintf(key, sizeof(key), "pb%uCdSrcI", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCdSrcI"), i);
       storeOptionalConfigString(preferences, key, progressBars[i].conditionSourceId);
-      snprintf(key, sizeof(key), "pb%uCdVal", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCdVal"), i);
       storeOptionalConfigString(preferences, key, progressBars[i].conditionValue);
-      snprintf(key, sizeof(key), "pb%uDynMode", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDynMode"), i);
       preferences.putBool(key, progressBars[i].dynamicMode);
-      snprintf(key, sizeof(key), "pb%uDynAnim", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDynAnim"), i);
       preferences.putUChar(key, progressBars[i].dynamicAnimation);
-      snprintf(key, sizeof(key), "pb%uDynSpd", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDynSpd"), i);
       preferences.putUShort(key, progressBars[i].dynamicSpeedMs);
-      snprintf(key, sizeof(key), "pb%uDSrcT", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDSrcT"), i);
       preferences.putString(key, progressBars[i].dynSourceType);
-      snprintf(key, sizeof(key), "pb%uDSrcI", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDSrcI"), i);
       storeOptionalConfigString(preferences, key, progressBars[i].dynSourceId);
-      snprintf(key, sizeof(key), "pb%uDR1V", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR1V"), i);
       storeOptionalConfigString(preferences, key, progressBars[i].dynRule1Value);
-      snprintf(key, sizeof(key), "pb%uDR2V", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR2V"), i);
       storeOptionalConfigString(preferences, key, progressBars[i].dynRule2Value);
-      snprintf(key, sizeof(key), "pb%uDR2A", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR2A"), i);
       preferences.putUChar(key, progressBars[i].dynRule2Animation);
-      snprintf(key, sizeof(key), "pb%uDR2S", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR2S"), i);
       preferences.putUShort(key, progressBars[i].dynRule2SpeedMs);
     }
   }
@@ -430,7 +430,7 @@ void saveVarsToConfFile(const char *groupName, uint8_t n) {
     // ESP32: save from in-memory array
     for (uint8_t i = 0; i < MAX_PROFILES; i++) {
       char ns[8];
-      snprintf(ns, sizeof(ns), "cronP%u", i);
+      snprintf_P(ns, sizeof(ns), PSTR("cronP%u"), i);
       preferences.begin(ns, false);
       preferences.putBytes("data", &scheduleProfiles[i],
                            sizeof(ScheduleProfile));
@@ -570,7 +570,7 @@ void readConfig(const char *groupName, uint8_t n) {
     mqttServerPort = preferences.getUShort("mqttServerPort", mqttServerPort);
     mqttUsername = preferences.getString("mqttUsername", mqttUsername);
     mqttPassword = preferences.getString("mqttPassword", mqttPassword);
-    Serial.print("readConfig: Loaded mqttPassword: ");
+    Serial.print(F("readConfig: Loaded mqttPassword: "));
     Serial.println(mqttPassword.length() > 0 ? "EXISTS" : "EMPTY");
   }
 
@@ -619,57 +619,57 @@ void readConfig(const char *groupName, uint8_t n) {
   if (strcmp(groupName, "pbSettings") == 0) {
     for (uint8_t i = 0; i < kZoneCapacity; i++) {
       char key[24];
-      snprintf(key, sizeof(key), "pb%uEnable", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uEnable"), i);
       progressBars[i].enabled = preferences.getBool(key, progressBars[i].enabled);
-      snprintf(key, sizeof(key), "pb%uSrcType", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uSrcType"), i);
       progressBars[i].dataSourceType =
           preferences.getString(key, progressBars[i].dataSourceType);
-      snprintf(key, sizeof(key), "pb%uSrcId", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uSrcId"), i);
       progressBars[i].dataSourceId =
           preferences.getString(key, progressBars[i].dataSourceId);
-      snprintf(key, sizeof(key), "pb%uMin", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uMin"), i);
       progressBars[i].minValue =
           preferences.getFloat(key, progressBars[i].minValue);
-      snprintf(key, sizeof(key), "pb%uMax", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uMax"), i);
       progressBars[i].maxValue =
           preferences.getFloat(key, progressBars[i].maxValue);
-      snprintf(key, sizeof(key), "pb%uCondEn", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCondEn"), i);
       progressBars[i].conditionEnabled =
           preferences.getBool(key, progressBars[i].conditionEnabled);
-      snprintf(key, sizeof(key), "pb%uCdSrcT", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCdSrcT"), i);
       progressBars[i].conditionSourceType =
           preferences.getString(key, progressBars[i].conditionSourceType);
-      snprintf(key, sizeof(key), "pb%uCdSrcI", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCdSrcI"), i);
       progressBars[i].conditionSourceId =
           preferences.getString(key, progressBars[i].conditionSourceId);
-      snprintf(key, sizeof(key), "pb%uCdVal", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uCdVal"), i);
       progressBars[i].conditionValue =
           preferences.getString(key, progressBars[i].conditionValue);
-      snprintf(key, sizeof(key), "pb%uDynMode", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDynMode"), i);
       progressBars[i].dynamicMode =
           preferences.getBool(key, progressBars[i].dynamicMode);
-      snprintf(key, sizeof(key), "pb%uDynAnim", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDynAnim"), i);
       progressBars[i].dynamicAnimation =
           preferences.getUChar(key, progressBars[i].dynamicAnimation);
-      snprintf(key, sizeof(key), "pb%uDynSpd", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDynSpd"), i);
       progressBars[i].dynamicSpeedMs =
           preferences.getUShort(key, progressBars[i].dynamicSpeedMs);
-      snprintf(key, sizeof(key), "pb%uDSrcT", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDSrcT"), i);
       progressBars[i].dynSourceType =
           preferences.getString(key, progressBars[i].dynSourceType);
-      snprintf(key, sizeof(key), "pb%uDSrcI", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDSrcI"), i);
       progressBars[i].dynSourceId =
           preferences.getString(key, progressBars[i].dynSourceId);
-      snprintf(key, sizeof(key), "pb%uDR1V", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR1V"), i);
       progressBars[i].dynRule1Value =
           preferences.getString(key, progressBars[i].dynRule1Value);
-      snprintf(key, sizeof(key), "pb%uDR2V", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR2V"), i);
       progressBars[i].dynRule2Value =
           preferences.getString(key, progressBars[i].dynRule2Value);
-      snprintf(key, sizeof(key), "pb%uDR2A", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR2A"), i);
       progressBars[i].dynRule2Animation =
           preferences.getUChar(key, progressBars[i].dynRule2Animation);
-      snprintf(key, sizeof(key), "pb%uDR2S", i);
+      snprintf_P(key, sizeof(key), PSTR("pb%uDR2S"), i);
       progressBars[i].dynRule2SpeedMs =
           preferences.getUShort(key, progressBars[i].dynRule2SpeedMs);
       // Reset runtime state
@@ -694,7 +694,7 @@ void readConfig(const char *groupName, uint8_t n) {
     // Read each profile from its own namespace
     for (uint8_t i = 0; i < MAX_PROFILES; i++) {
       char ns[8];
-      snprintf(ns, sizeof(ns), "cronP%u", i);
+      snprintf_P(ns, sizeof(ns), PSTR("cronP%u"), i);
       preferences.begin(ns, true);
 
       // ESP8266 must not place a ~1.5KB profile on its small setup stack.
@@ -731,7 +731,7 @@ void readConfig(const char *groupName, uint8_t n) {
         preferences.end();
         preferences.begin("cronSettings", true);
         char oldKey[8];
-        snprintf(oldKey, sizeof(oldKey), "sp%u", i);
+        snprintf_P(oldKey, sizeof(oldKey), PSTR("sp%u"), i);
 #if defined(ESP32)
         size_t oldLen = preferences.getBytesLength(oldKey);
 #else

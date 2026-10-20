@@ -7,12 +7,14 @@
 #include "ProfileJson.h"
 #include "ProfileRecordStore.h"
 #include "WebPriority.h"
+#include "BackupStream.h"
 #include <cstdio>
 #include <cmath>
 #include <httpsRequestJson.h>
 
 #if defined(ESP8266)
 #include <LittleFS.h>
+#include <umm_malloc/umm_heap_select.h>
 #endif
 
 namespace {
@@ -37,36 +39,14 @@ uint8_t restoreState = 0; // 0 idle, 1 queued, 2 running, 3 succeeded, 4 failed
 // Print adapter used by AsyncChunkedResponse. The JSON writer can render from
 // the beginning on every callback while this adapter only copies the requested
 // byte window. Responses are never accumulated in a heap-backed String.
-class ChunkWindowPrint : public Print {
+class ChunkWindowPrint : public Print, public ByteWindow {
 public:
   ChunkWindowPrint(uint8_t *buffer, size_t capacity, size_t skip)
-      : buffer_(buffer), capacity_(capacity), skip_(skip) {}
-
-  size_t write(uint8_t value) override { return write(&value, 1); }
-
+      : ByteWindow(buffer, capacity, skip) {}
+  size_t write(uint8_t value) override { return ByteWindow::write(&value, 1); }
   size_t write(const uint8_t *data, size_t len) override {
-    size_t start = total_;
-    total_ += len;
-    if (!buffer_ || copied_ >= capacity_ || start + len <= skip_)
-      return len;
-
-    size_t sourceOffset = (skip_ > start) ? (skip_ - start) : 0;
-    size_t available = len - sourceOffset;
-    size_t room = capacity_ - copied_;
-    size_t count = available < room ? available : room;
-    memcpy(buffer_ + copied_, data + sourceOffset, count);
-    copied_ += count;
-    return len;
+    return ByteWindow::write(data, len);
   }
-
-  size_t copied() const { return copied_; }
-
-private:
-  uint8_t *buffer_;
-  size_t capacity_;
-  size_t skip_;
-  size_t total_ = 0;
-  size_t copied_ = 0;
 };
 
 int parseProfileIndex(const String &value, int limit) {
@@ -159,7 +139,7 @@ void sendProgmemPage(AsyncWebServerRequest *request, const char *contentType,
                      const uint8_t *page, size_t pageLen) {
   if (!canServeProgmemPage()) {
 #if defined(ESP8266)
-    Serial.printf("\n[WEB] Static busy. Heap=%u MaxBlock=%u TLS=%u",
+    Serial.printf_P(PSTR("\n[WEB] Static busy. Heap=%u MaxBlock=%u TLS=%u"),
                   ESP.getFreeHeap(), ESP.getMaxFreeBlockSize(),
                   isFetchingHttps ? 1 : 0);
 #endif
@@ -171,7 +151,7 @@ void sendProgmemPage(AsyncWebServerRequest *request, const char *contentType,
       request->beginResponse(200, contentType, page, pageLen);
   if (!response) {
 #if defined(ESP8266)
-    Serial.printf("\n[WEB] Static response alloc failed. Heap=%u MaxBlock=%u",
+    Serial.printf_P(PSTR("\n[WEB] Static response alloc failed. Heap=%u MaxBlock=%u"),
                   ESP.getFreeHeap(), ESP.getMaxFreeBlockSize());
 #endif
     sendBusyRetryPage(request);
@@ -250,30 +230,30 @@ void writeJsonEscaped(Print &out, const char *value) {
       uint8_t c = static_cast<uint8_t>(*value++);
       switch (c) {
       case '"':
-        out.print("\\\"");
+        out.print(F("\\\""));
         break;
       case '\\':
-        out.print("\\\\");
+        out.print(F("\\\\"));
         break;
       case '\b':
-        out.print("\\b");
+        out.print(F("\\b"));
         break;
       case '\f':
-        out.print("\\f");
+        out.print(F("\\f"));
         break;
       case '\n':
-        out.print("\\n");
+        out.print(F("\\n"));
         break;
       case '\r':
-        out.print("\\r");
+        out.print(F("\\r"));
         break;
       case '\t':
-        out.print("\\t");
+        out.print(F("\\t"));
         break;
       default:
         if (c < 0x20) {
           char escaped[7];
-          snprintf(escaped, sizeof(escaped), "\\u%04x", c);
+          snprintf_P(escaped, sizeof(escaped), PSTR("\\u%04x"), c);
           out.print(escaped);
         } else {
           out.write(c);
@@ -289,74 +269,80 @@ void writeJsonEscaped(Print &out, const String &value) {
   writeJsonEscaped(out, value.c_str());
 }
 
-void writeJsonKey(Print &out, const char *key, bool &first) {
+template <typename Key>
+void writeJsonKey(Print &out, Key key, bool &first) {
   if (!first)
     out.print(',');
   first = false;
   out.print('"');
   out.print(key);
-  out.print("\":");
+  out.print(F("\":"));
 }
 
-void writeJsonStringField(Print &out, const char *key, const String &value,
+template <typename Key>
+void writeJsonStringField(Print &out, Key key, const String &value,
                           bool &first) {
   writeJsonKey(out, key, first);
   writeJsonEscaped(out, value);
 }
 
-void writeJsonCStringField(Print &out, const char *key, const char *value,
+template <typename Key>
+void writeJsonCStringField(Print &out, Key key, const char *value,
                            bool &first) {
   writeJsonKey(out, key, first);
   writeJsonEscaped(out, value);
 }
 
-void writeJsonBoolField(Print &out, const char *key, bool value, bool &first) {
+template <typename Key>
+void writeJsonBoolField(Print &out, Key key, bool value, bool &first) {
   writeJsonKey(out, key, first);
   out.print(value ? "true" : "false");
 }
 
-template <typename T>
-void writeJsonNumberField(Print &out, const char *key, T value, bool &first) {
+template <typename Key, typename T>
+void writeJsonNumberField(Print &out, Key key, T value, bool &first) {
   writeJsonKey(out, key, first);
   out.print(value);
 }
 
 // Preserve float settings in backups instead of Print's two-decimal default.
-void writeJsonNumberField(Print &out, const char *key, float value, bool &first) {
+template <typename Key>
+void writeJsonNumberField(Print &out, Key key, float value, bool &first) {
   writeJsonKey(out, key, first);
   if (!std::isfinite(value)) {
-    out.print("null");
+    out.print(F("null"));
     return;
   }
   char number[32];
-  snprintf(number, sizeof(number), "%.9g", static_cast<double>(value));
+  snprintf_P(number, sizeof(number), PSTR("%.9g"), static_cast<double>(value));
   out.print(number);
 }
 
-void writeScheduleU8Array(Print &out, const char *key,
+template <typename Key>
+void writeScheduleU8Array(Print &out, Key key,
                           const uint8_t values[4]) {
   out.print('"');
   out.print(key);
-  out.print("\":[");
+  out.print(F("\":["));
   for (uint8_t i = 0; i < 4; i++) {
     if (i)
       out.print(',');
     out.print(values[i]);
   }
-  out.print("],");
+  out.print(F("],"));
 }
 
-template <size_t N>
-void writeScheduleStringArray(Print &out, const char *key,
+template <size_t N, typename Key>
+void writeScheduleStringArray(Print &out, Key key,
                               const char (&values)[4][N]) {
   out.print('"');
   out.print(key);
-  out.print("\":[");
+  out.print(F("\":["));
   for (uint8_t i = 0; i < 4; i++) {
     if (i)
       out.print(',');
     if ((uint8_t)values[i][0] == SCHED_STR_NO_CHANGE)
-      out.print("null");
+      out.print(F("null"));
     else {
       char tmp[N];
       memcpy(tmp, values[i], N);
@@ -364,13 +350,13 @@ void writeScheduleStringArray(Print &out, const char *key,
       writeJsonEscaped(out, tmp);
     }
   }
-  out.print("],");
+  out.print(F("],"));
 }
 
 template <size_t N>
 void writeScheduleJsonMaybeString(Print &out, const char (&value)[N]) {
   if ((uint8_t)value[0] == SCHED_STR_NO_CHANGE) {
-    out.print("null");
+    out.print(F("null"));
     return;
   }
   char tmp[N];
@@ -518,66 +504,66 @@ bool applyCronProfileParam(ScheduleProfile &profile,
 void writeZoneSettingsFields(Print &out, uint8_t zone, bool &first) {
   char key[48];
 
-  snprintf(key, sizeof(key), "zone%uBegin", zone);
+  snprintf_P(key, sizeof(key), PSTR("zone%uBegin"), zone);
   writeJsonNumberField(out, key, zones[zone].begin, first);
-  snprintf(key, sizeof(key), "zone%uEnd", zone);
+  snprintf_P(key, sizeof(key), PSTR("zone%uEnd"), zone);
   writeJsonNumberField(out, key, zones[zone].end, first);
 
-  snprintf(key, sizeof(key), "workModeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("workModeZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].workMode, first);
-  snprintf(key, sizeof(key), "scrollSpeedZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollSpeedZone%u"), zone);
   writeJsonNumberField(out, key, zones[zone].scrollSpeed, first);
-  snprintf(key, sizeof(key), "scrollPauseZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollPauseZone%u"), zone);
   writeJsonNumberField(out, key, zones[zone].scrollPause, first);
-  snprintf(key, sizeof(key), "scrollAlignZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollAlignZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].scrollAlign, first);
-  snprintf(key, sizeof(key), "scrollEffectZone%uIn", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uIn"), zone);
   writeJsonStringField(out, key, zones[zone].scrollEffectIn, first);
-  snprintf(key, sizeof(key), "scrollEffectZone%uOut", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uOut"), zone);
   writeJsonStringField(out, key, zones[zone].scrollEffectOut, first);
-  snprintf(key, sizeof(key), "charspacingZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("charspacingZone%u"), zone);
   writeJsonNumberField(out, key, zones[zone].charspacing, first);
-  snprintf(key, sizeof(key), "fontZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("fontZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].font, first);
-  snprintf(key, sizeof(key), "mqttTextTopicZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("mqttTextTopicZone%u"), zone);
   writeJsonStringField(out, key, MQTTZones[zone].message, first);
-  snprintf(key, sizeof(key), "mqttPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("mqttPostfixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].mqttPostfix, first);
-  snprintf(key, sizeof(key), "clockDisplayFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("clockDisplayFormatZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].clockDisplayFormat, first);
-  snprintf(key, sizeof(key), "owmWhatToDisplayZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("owmWhatToDisplayZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].owmWhatToDisplay, first);
-  snprintf(key, sizeof(key), "haSensorIdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("haSensorIdZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].haSensorId, first);
-  snprintf(key, sizeof(key), "haSensorPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("haSensorPostfixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].haSensorPostfix, first);
-  snprintf(key, sizeof(key), "ds18b20PostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("ds18b20PostfixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].ds18b20Postfix, first);
-  snprintf(key, sizeof(key), "scrollInfiniteZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollInfiniteZone%u"), zone);
   writeJsonBoolField(out, key, zones[zone].scrollInfinite, first);
 
-  snprintf(key, sizeof(key), "countdownFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownFormatZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].countdownFormat, first);
-  snprintf(key, sizeof(key), "countdownFinishZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownFinishZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].countdownFinish, first);
-  snprintf(key, sizeof(key), "countdownShowUnitsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownShowUnitsZone%u"), zone);
   writeJsonBoolField(out, key, zones[zone].countdownShowUnits, first);
-  snprintf(key, sizeof(key), "countdownPrefixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownPrefixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].countdownPrefix, first);
-  snprintf(key, sizeof(key), "countdownSuffixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownSuffixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].countdownSuffix, first);
-  snprintf(key, sizeof(key), "countdownTargetZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownTargetZone%u"), zone);
   writeJsonStringField(out, key, countdownState[zone].targetStr, first);
 
-  snprintf(key, sizeof(key), "stockSymbolsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockSymbolsZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].stockSymbols, first);
-  snprintf(key, sizeof(key), "stockDisplayFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockDisplayFormatZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].stockDisplayFormat, first);
-  snprintf(key, sizeof(key), "stockPrefixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockPrefixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].stockPrefix, first);
-  snprintf(key, sizeof(key), "stockPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockPostfixZone%u"), zone);
   writeJsonStringField(out, key, zones[zone].stockPostfix, first);
-  snprintf(key, sizeof(key), "stockShowArrowsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockShowArrowsZone%u"), zone);
   writeJsonBoolField(out, key, zones[zone].stockShowArrows, first);
 }
 
@@ -621,25 +607,25 @@ void writeScheduleProgressBarJson(Print &out, const ScheduleProgressBar &pb,
                                   bool inherited) {
   bool first = true;
   out.print('{');
-  writeJsonBoolField(out, "inherited", inherited, first);
-  writeJsonCStringField(out, "dataSourceType", pb.dataSourceType, first);
-  writeJsonCStringField(out, "dataSourceId", pb.dataSourceId, first);
-  writeJsonNumberField(out, "minValue", pb.minValue, first);
-  writeJsonNumberField(out, "maxValue", pb.maxValue, first);
-  writeJsonBoolField(out, "conditionEnabled", pb.conditionEnabled, first);
-  writeJsonCStringField(out, "conditionSourceType",
+  writeJsonBoolField(out, F("inherited"), inherited, first);
+  writeJsonCStringField(out, F("dataSourceType"), pb.dataSourceType, first);
+  writeJsonCStringField(out, F("dataSourceId"), pb.dataSourceId, first);
+  writeJsonNumberField(out, F("minValue"), pb.minValue, first);
+  writeJsonNumberField(out, F("maxValue"), pb.maxValue, first);
+  writeJsonBoolField(out, F("conditionEnabled"), pb.conditionEnabled, first);
+  writeJsonCStringField(out, F("conditionSourceType"),
                         pb.conditionSourceType, first);
-  writeJsonCStringField(out, "conditionSourceId", pb.conditionSourceId, first);
-  writeJsonCStringField(out, "conditionValue", pb.conditionValue, first);
-  writeJsonBoolField(out, "dynamicMode", pb.dynamicMode, first);
-  writeJsonNumberField(out, "dynamicAnimation", pb.dynamicAnimation, first);
-  writeJsonNumberField(out, "dynamicSpeedMs", pb.dynamicSpeedMs, first);
-  writeJsonCStringField(out, "dynSourceType", pb.dynSourceType, first);
-  writeJsonCStringField(out, "dynSourceId", pb.dynSourceId, first);
-  writeJsonCStringField(out, "dynRule1Value", pb.dynRule1Value, first);
-  writeJsonCStringField(out, "dynRule2Value", pb.dynRule2Value, first);
-  writeJsonNumberField(out, "dynRule2Animation", pb.dynRule2Animation, first);
-  writeJsonNumberField(out, "dynRule2SpeedMs", pb.dynRule2SpeedMs, first);
+  writeJsonCStringField(out, F("conditionSourceId"), pb.conditionSourceId, first);
+  writeJsonCStringField(out, F("conditionValue"), pb.conditionValue, first);
+  writeJsonBoolField(out, F("dynamicMode"), pb.dynamicMode, first);
+  writeJsonNumberField(out, F("dynamicAnimation"), pb.dynamicAnimation, first);
+  writeJsonNumberField(out, F("dynamicSpeedMs"), pb.dynamicSpeedMs, first);
+  writeJsonCStringField(out, F("dynSourceType"), pb.dynSourceType, first);
+  writeJsonCStringField(out, F("dynSourceId"), pb.dynSourceId, first);
+  writeJsonCStringField(out, F("dynRule1Value"), pb.dynRule1Value, first);
+  writeJsonCStringField(out, F("dynRule2Value"), pb.dynRule2Value, first);
+  writeJsonNumberField(out, F("dynRule2Animation"), pb.dynRule2Animation, first);
+  writeJsonNumberField(out, F("dynRule2SpeedMs"), pb.dynRule2SpeedMs, first);
   out.print('}');
 }
 
@@ -651,127 +637,137 @@ void copyProgressBarParam(char *dest, size_t size,
   dest[size - 1] = '\0';
 }
 
-void writeServiceSettingsJson(Print &out) {
+// A chunked response must render the same bytes at every offset, including
+// its final EOF callback. MQTT may disconnect in loop() after the first chunk.
+// Avoid PubSubClient::connected() here: it can close a failed client while an
+// async callback is interrupting another MQTT operation.
+struct WebRuntimeSnapshot {
+  int rssi = WiFi.RSSI();
+  bool mqttConnected = mqttClient.state() == MQTT_CONNECTED && mqttEspClient.connected();
+  String temperature = dsTemp;
+};
+
+void writeServiceSettingsJson(Print &out, const WebRuntimeSnapshot &runtime) {
   bool first = true;
   out.print('{');
-  writeJsonStringField(out, "deviceName", shortMACaddr, first);
+  writeJsonStringField(out, F("deviceName"), shortMACaddr, first);
 #if defined(ESP32)
-  writeJsonCStringField(out, "platform", "ESP32", first);
+  writeJsonCStringField(out, F("platform"), "ESP32", first);
 #elif defined(ESP8266)
-  writeJsonCStringField(out, "platform", "ESP8266", first);
+  writeJsonCStringField(out, F("platform"), "ESP8266", first);
 #else
-  writeJsonCStringField(out, "platform", "Unknown", first);
+  writeJsonCStringField(out, F("platform"), "Unknown", first);
 #endif
-  writeJsonCStringField(out, "firmwareVer", firmwareVer, first);
-  writeJsonBoolField(out, "disableServiceMessages", disableServiceMessages,
+  writeJsonCStringField(out, F("firmwareVer"), firmwareVer, first);
+  writeJsonBoolField(out, F("disableServiceMessages"), disableServiceMessages,
                      first);
-  writeJsonBoolField(out, "displayFlip", displayFlip, first);
-  writeJsonBoolField(out, "disableDotsBlink", disableDotsBlink, first);
-  writeJsonStringField(out, "wifiSsid", WiFi.SSID(), first);
-  writeJsonStringField(out, "wifiIp", WiFi.localIP().toString(), first);
-  writeJsonStringField(out, "wifiGateway", WiFi.gatewayIP().toString(), first);
-  writeJsonNumberField(out, "wifiRssi", WiFi.RSSI(), first);
-  writeJsonBoolField(out, "mqttEnable", mqttEnable, first);
-  writeJsonBoolField(out, "mqttConnected", mqttClient.connected(), first);
-  writeJsonStringField(out, "mqttServerAddress", mqttServerAddress, first);
-  writeJsonNumberField(out, "mqttServerPort", mqttServerPort, first);
-  writeJsonStringField(out, "mqttUsername", mqttUsername, first);
-  writeJsonCStringField(out, "mqttPassword",
+  writeJsonBoolField(out, F("displayFlip"), displayFlip, first);
+  writeJsonBoolField(out, F("disableDotsBlink"), disableDotsBlink, first);
+  writeJsonStringField(out, F("wifiSsid"), WiFi.SSID(), first);
+  writeJsonStringField(out, F("wifiIp"), WiFi.localIP().toString(), first);
+  writeJsonStringField(out, F("wifiGateway"), WiFi.gatewayIP().toString(), first);
+  writeJsonNumberField(out, F("wifiRssi"), runtime.rssi, first);
+  writeJsonBoolField(out, F("mqttEnable"), mqttEnable, first);
+  writeJsonBoolField(out, F("mqttConnected"), runtime.mqttConnected, first);
+  writeJsonStringField(out, F("mqttServerAddress"), mqttServerAddress, first);
+  writeJsonNumberField(out, F("mqttServerPort"), mqttServerPort, first);
+  writeJsonStringField(out, F("mqttUsername"), mqttUsername, first);
+  writeJsonCStringField(out, F("mqttPassword"),
                         mqttPassword.length() ? "********" : "", first);
-  writeJsonStringField(out, "mqttDevicePrefix", MQTTGlobalPrefix, first);
-  writeJsonNumberField(out, "ntpTimeZone", ntpTimeZone, first);
-  writeJsonNumberField(out, "ntpUpdateInterval", ntpUpdateInterval, first);
-  writeJsonStringField(out, "ntpServer", ntpServer, first);
-  writeJsonCStringField(out, "owmApiToken",
+  writeJsonStringField(out, F("mqttDevicePrefix"), MQTTGlobalPrefix, first);
+  writeJsonNumberField(out, F("ntpTimeZone"), ntpTimeZone, first);
+  writeJsonNumberField(out, F("ntpUpdateInterval"), ntpUpdateInterval, first);
+  writeJsonStringField(out, F("ntpServer"), ntpServer, first);
+  writeJsonCStringField(out, F("owmApiToken"),
                         owmApiToken.length() ? "********" : "", first);
-  writeJsonStringField(out, "owmUnitsFormat", owmUnitsFormat, first);
-  writeJsonNumberField(out, "owmUpdateInterval", owmUpdateInterval, first);
-  writeJsonStringField(out, "owmCity", owmCity, first);
-  writeJsonStringField(out, "haAddr", haAddr, first);
-  writeJsonStringField(out, "haApiHttpType", haApiHttpType, first);
-  writeJsonCStringField(out, "haApiToken",
+  writeJsonStringField(out, F("owmUnitsFormat"), owmUnitsFormat, first);
+  writeJsonNumberField(out, F("owmUpdateInterval"), owmUpdateInterval, first);
+  writeJsonStringField(out, F("owmCity"), owmCity, first);
+  writeJsonStringField(out, F("haAddr"), haAddr, first);
+  writeJsonStringField(out, F("haApiHttpType"), haApiHttpType, first);
+  writeJsonCStringField(out, F("haApiToken"),
                         haApiToken.length() ? "********" : "", first);
-  writeJsonNumberField(out, "haApiPort", haApiPort, first);
-  writeJsonNumberField(out, "haUpdateInterval", haUpdateInterval, first);
-  writeJsonBoolField(out, "ds18b20Enable", ds18b20Enable, first);
-  writeJsonStringField(out, "ds18b20Temp",
-                       dsTemp == "-127" ? String("Not connected") : dsTemp,
+  writeJsonNumberField(out, F("haApiPort"), haApiPort, first);
+  writeJsonNumberField(out, F("haUpdateInterval"), haUpdateInterval, first);
+  writeJsonBoolField(out, F("ds18b20Enable"), ds18b20Enable, first);
+  writeJsonStringField(out, F("ds18b20Temp"),
+                       runtime.temperature == "-127" ? String("Not connected") : runtime.temperature,
                        first);
-  writeJsonNumberField(out, "ds18b20UpdateInterval", ds18b20UpdateInterval,
+  writeJsonNumberField(out, F("ds18b20UpdateInterval"), ds18b20UpdateInterval,
                        first);
-  writeJsonStringField(out, "ds18b20UnitsFormat", ds18b20UnitsFormat, first);
-  writeJsonCStringField(out, "stockApiToken",
+  writeJsonStringField(out, F("ds18b20UnitsFormat"), ds18b20UnitsFormat, first);
+  writeJsonCStringField(out, F("stockApiToken"),
                         stockApiToken.length() ? "********" : "", first);
-  writeJsonNumberField(out, "stockUpdateInterval", stockUpdateInterval, first);
-  writeJsonNumberField(out, "zoneNumbers", zoneNumbers, first);
+  writeJsonNumberField(out, F("stockUpdateInterval"), stockUpdateInterval, first);
+  writeJsonNumberField(out, F("zoneNumbers"), zoneNumbers, first);
   out.print('}');
 }
 
 void writeScheduleProfileJson(Print &out, const ScheduleProfile &p,
                               uint8_t index) {
   out.print('{');
-  out.printf("\"enabled\":%s,", p.enabled ? "true" : "false");
-  out.printf("\"minute\":%u,\"hour\":%u,\"dayOfWeek\":%u,",
+  out.printf_P(PSTR("\"enabled\":%s,"), p.enabled ? "true" : "false");
+  out.printf_P(PSTR("\"minute\":%u,\"hour\":%u,\"dayOfWeek\":%u,"),
              p.minute, p.hour, p.dayOfWeek);
-  out.printf("\"dayOfMonth\":%lu,\"power\":%u,\"intensity\":%u,",
+  out.printf_P(PSTR("\"dayOfMonth\":%lu,\"power\":%u,\"intensity\":%u,"),
              (unsigned long)p.dayOfMonth, p.power, p.intensity);
-  out.printf("\"zoneCount\":%u,\"pbEnable\":%u,", p.zoneCount,
+  out.printf_P(PSTR("\"zoneCount\":%u,\"pbEnable\":%u,"), p.zoneCount,
              p.pbEnable);
-  out.printf("\"zoneBegin\":[%u,%u,%u,%u],", p.zoneBegin[0], p.zoneBegin[1],
+  out.printf_P(PSTR("\"zoneBegin\":[%u,%u,%u,%u],"), p.zoneBegin[0], p.zoneBegin[1],
              p.zoneBegin[2], p.zoneBegin[3]);
-  out.printf("\"zoneEnd\":[%u,%u,%u,%u],", p.zoneEnd[0], p.zoneEnd[1],
+  out.printf_P(PSTR("\"zoneEnd\":[%u,%u,%u,%u],"), p.zoneEnd[0], p.zoneEnd[1],
              p.zoneEnd[2], p.zoneEnd[3]);
-  out.printf("\"zoneWorkMode\":[%u,%u,%u,%u],", p.zoneWorkMode[0],
+  out.printf_P(PSTR("\"zoneWorkMode\":[%u,%u,%u,%u],"), p.zoneWorkMode[0],
              p.zoneWorkMode[1], p.zoneWorkMode[2], p.zoneWorkMode[3]);
-  out.printf("\"zoneOwmDisplay\":[%u,%u,%u,%u],", p.zoneOwmDisplay[0],
+  out.printf_P(PSTR("\"zoneOwmDisplay\":[%u,%u,%u,%u],"), p.zoneOwmDisplay[0],
              p.zoneOwmDisplay[1], p.zoneOwmDisplay[2], p.zoneOwmDisplay[3]);
-  out.printf("\"zoneClockFmt\":[%u,%u,%u,%u],", p.zoneClockFmt[0],
+  out.printf_P(PSTR("\"zoneClockFmt\":[%u,%u,%u,%u],"), p.zoneClockFmt[0],
              p.zoneClockFmt[1], p.zoneClockFmt[2], p.zoneClockFmt[3]);
-  out.printf("\"zoneFont\":[%u,%u,%u,%u],", p.zoneFont[0], p.zoneFont[1],
+  out.printf_P(PSTR("\"zoneFont\":[%u,%u,%u,%u],"), p.zoneFont[0], p.zoneFont[1],
              p.zoneFont[2], p.zoneFont[3]);
-  out.print("\"zoneHaSensorId\":[");
+  out.print(F("\"zoneHaSensorId\":["));
   for (uint8_t z = 0; z < 4; z++) {
     if (z)
       out.print(',');
     writeScheduleJsonMaybeString(out, p.zoneHaSensorId[z]);
   }
-  out.print("],\"zoneHaPostfix\":[");
+  out.print(F("],\"zoneHaPostfix\":["));
   for (uint8_t z = 0; z < 4; z++) {
     if (z)
       out.print(',');
     writeScheduleJsonMaybeString(out, p.zoneHaPostfix[z]);
   }
-  out.print("],\"zoneMqttTopic\":[");
+  out.print(F("],\"zoneMqttTopic\":["));
   for (uint8_t z = 0; z < 4; z++) {
     if (z)
       out.print(',');
     writeScheduleJsonMaybeString(out, p.zoneMqttTopic[z]);
   }
-  out.print("],");
-  writeScheduleU8Array(out, "zoneScrollSpeed", p.zoneScrollSpeed);
-  writeScheduleU8Array(out, "zoneScrollPause", p.zoneScrollPause);
-  writeScheduleU8Array(out, "zoneCharspacing", p.zoneCharspacing);
-  out.printf("\"zoneScrollInfinite\":%u,", p.zoneScrollInfinite);
-  out.printf("\"zoneCountdownShowUnits\":%u,", p.zoneCountdownShowUnits);
-  out.printf("\"zoneStockShowArrows\":%u,", p.zoneStockShowArrows);
-  writeScheduleStringArray(out, "zoneScrollAlign", p.zoneScrollAlign);
-  writeScheduleStringArray(out, "zoneScrollEffectIn", p.zoneScrollEffectIn);
-  writeScheduleStringArray(out, "zoneScrollEffectOut", p.zoneScrollEffectOut);
-  writeScheduleStringArray(out, "zoneMqttPostfix", p.zoneMqttPostfix);
-  writeScheduleStringArray(out, "zoneDs18b20Postfix", p.zoneDs18b20Postfix);
-  writeScheduleStringArray(out, "zoneCountdownTarget", p.zoneCountdownTarget);
-  writeScheduleStringArray(out, "zoneCountdownFormat", p.zoneCountdownFormat);
-  writeScheduleStringArray(out, "zoneCountdownFinish", p.zoneCountdownFinish);
-  writeScheduleStringArray(out, "zoneCountdownPrefix", p.zoneCountdownPrefix);
-  writeScheduleStringArray(out, "zoneCountdownSuffix", p.zoneCountdownSuffix);
-  writeScheduleStringArray(out, "zoneStockSymbols", p.zoneStockSymbols);
-  writeScheduleStringArray(out, "zoneStockDisplayFormat",
+  out.print(F("],"));
+  writeScheduleU8Array(out, F("zoneScrollSpeed"), p.zoneScrollSpeed);
+  writeScheduleU8Array(out, F("zoneScrollPause"), p.zoneScrollPause);
+  writeScheduleU8Array(out, F("zoneCharspacing"), p.zoneCharspacing);
+  out.printf_P(PSTR("\"zoneScrollInfinite\":%u,"), p.zoneScrollInfinite);
+  out.printf_P(PSTR("\"zoneCountdownShowUnits\":%u,"), p.zoneCountdownShowUnits);
+  out.printf_P(PSTR("\"zoneStockShowArrows\":%u,"), p.zoneStockShowArrows);
+  writeScheduleStringArray(out, F("zoneScrollAlign"), p.zoneScrollAlign);
+  writeScheduleStringArray(out, F("zoneScrollEffectIn"), p.zoneScrollEffectIn);
+  writeScheduleStringArray(out, F("zoneScrollEffectOut"), p.zoneScrollEffectOut);
+  writeScheduleStringArray(out, F("zoneMqttPostfix"), p.zoneMqttPostfix);
+  writeScheduleStringArray(out, F("zoneDs18b20Postfix"), p.zoneDs18b20Postfix);
+  writeScheduleStringArray(out, F("zoneCountdownTarget"), p.zoneCountdownTarget);
+  writeScheduleStringArray(out, F("zoneCountdownFormat"), p.zoneCountdownFormat);
+  writeScheduleStringArray(out, F("zoneCountdownFinish"), p.zoneCountdownFinish);
+  writeScheduleStringArray(out, F("zoneCountdownPrefix"), p.zoneCountdownPrefix);
+  writeScheduleStringArray(out, F("zoneCountdownSuffix"), p.zoneCountdownSuffix);
+  writeScheduleStringArray(out, F("zoneStockSymbols"), p.zoneStockSymbols);
+  writeScheduleStringArray(out, F("zoneStockDisplayFormat"),
                            p.zoneStockDisplayFormat);
-  writeScheduleStringArray(out, "zoneStockPrefix", p.zoneStockPrefix);
-  writeScheduleStringArray(out, "zoneStockPostfix", p.zoneStockPostfix);
-  out.print("\"name\":");
+  writeScheduleStringArray(out, F("zoneStockPrefix"), p.zoneStockPrefix);
+  writeScheduleStringArray(out, F("zoneStockPostfix"), p.zoneStockPostfix);
+  out.print(F("\"name\":"));
   writeScheduleJsonMaybeString(out, p.name);
-  out.printf(",\"lastRun\":%lu}", (unsigned long)profileLastRun[index]);
+  out.printf_P(PSTR(",\"lastRun\":%lu}"), (unsigned long)profileLastRun[index]);
 }
 
 void writeBase64JsonString(Print &out, const String &value) {
@@ -801,77 +797,93 @@ void writeBase64JsonString(Print &out, const String &value) {
   out.print('"');
 }
 
-void writeBackupJson(Print &out) {
+void writeBackupPrefix(Print &out) {
   bool first = true;
   out.print('{');
-  writeJsonNumberField(out, "backupVersion", 3, first);
-  writeJsonStringField(out, "deviceName", shortMACaddr, first);
-  writeJsonBoolField(out, "disableServiceMessages", disableServiceMessages,
+  writeJsonNumberField(out, F("backupVersion"), 3, first);
+  writeJsonStringField(out, F("deviceName"), shortMACaddr, first);
+  writeJsonBoolField(out, F("disableServiceMessages"), disableServiceMessages,
                      first);
-  writeJsonBoolField(out, "displayFlip", displayFlip, first);
-  writeJsonNumberField(out, "zoneNumbers", zoneNumbers, first);
-  writeJsonNumberField(out, "intensity", intensity, first);
-  writeJsonBoolField(out, "mqttEnable", mqttEnable, first);
-  writeJsonStringField(out, "mqttServerAddress", mqttServerAddress, first);
-  writeJsonNumberField(out, "mqttServerPort", mqttServerPort, first);
-  writeJsonStringField(out, "mqttUsername", mqttUsername, first);
-  writeJsonKey(out, "mqttPassword", first);
+  writeJsonBoolField(out, F("displayFlip"), displayFlip, first);
+  writeJsonNumberField(out, F("zoneNumbers"), zoneNumbers, first);
+  writeJsonNumberField(out, F("intensity"), intensity, first);
+  writeJsonBoolField(out, F("mqttEnable"), mqttEnable, first);
+  writeJsonStringField(out, F("mqttServerAddress"), mqttServerAddress, first);
+  writeJsonNumberField(out, F("mqttServerPort"), mqttServerPort, first);
+  writeJsonStringField(out, F("mqttUsername"), mqttUsername, first);
+  writeJsonKey(out, F("mqttPassword"), first);
   writeBase64JsonString(out, mqttPassword);
-  writeJsonStringField(out, "mqttDevicePrefix", MQTTGlobalPrefix, first);
-  writeJsonNumberField(out, "ntpTimeZone", ntpTimeZone, first);
-  writeJsonNumberField(out, "ntpUpdateInterval", ntpUpdateInterval, first);
-  writeJsonStringField(out, "ntpServer", ntpServer, first);
-  writeJsonBoolField(out, "disableDotsBlink", disableDotsBlink, first);
-  writeJsonKey(out, "owmApiToken", first);
+  writeJsonStringField(out, F("mqttDevicePrefix"), MQTTGlobalPrefix, first);
+  writeJsonNumberField(out, F("ntpTimeZone"), ntpTimeZone, first);
+  writeJsonNumberField(out, F("ntpUpdateInterval"), ntpUpdateInterval, first);
+  writeJsonStringField(out, F("ntpServer"), ntpServer, first);
+  writeJsonBoolField(out, F("disableDotsBlink"), disableDotsBlink, first);
+  writeJsonKey(out, F("owmApiToken"), first);
   writeBase64JsonString(out, owmApiToken);
-  writeJsonStringField(out, "owmUnitsFormat", owmUnitsFormat, first);
-  writeJsonNumberField(out, "owmUpdateInterval", owmUpdateInterval, first);
-  writeJsonStringField(out, "owmCity", owmCity, first);
-  writeJsonStringField(out, "haAddr", haAddr, first);
-  writeJsonStringField(out, "haApiHttpType", haApiHttpType, first);
-  writeJsonKey(out, "haApiToken", first);
+  writeJsonStringField(out, F("owmUnitsFormat"), owmUnitsFormat, first);
+  writeJsonNumberField(out, F("owmUpdateInterval"), owmUpdateInterval, first);
+  writeJsonStringField(out, F("owmCity"), owmCity, first);
+  writeJsonStringField(out, F("haAddr"), haAddr, first);
+  writeJsonStringField(out, F("haApiHttpType"), haApiHttpType, first);
+  writeJsonKey(out, F("haApiToken"), first);
   writeBase64JsonString(out, haApiToken);
-  writeJsonNumberField(out, "haApiPort", haApiPort, first);
-  writeJsonNumberField(out, "haUpdateInterval", haUpdateInterval, first);
-  writeJsonBoolField(out, "ds18b20Enable", ds18b20Enable, first);
-  writeJsonNumberField(out, "ds18b20UpdateInterval", ds18b20UpdateInterval,
+  writeJsonNumberField(out, F("haApiPort"), haApiPort, first);
+  writeJsonNumberField(out, F("haUpdateInterval"), haUpdateInterval, first);
+  writeJsonBoolField(out, F("ds18b20Enable"), ds18b20Enable, first);
+  writeJsonNumberField(out, F("ds18b20UpdateInterval"), ds18b20UpdateInterval,
                        first);
-  writeJsonStringField(out, "ds18b20UnitsFormat", ds18b20UnitsFormat, first);
-  writeJsonKey(out, "stockApiToken", first);
+  writeJsonStringField(out, F("ds18b20UnitsFormat"), ds18b20UnitsFormat, first);
+  writeJsonKey(out, F("stockApiToken"), first);
   writeBase64JsonString(out, stockApiToken);
-  writeJsonNumberField(out, "stockUpdateInterval", stockUpdateInterval, first);
+  writeJsonNumberField(out, F("stockUpdateInterval"), stockUpdateInterval, first);
   for (uint8_t i = 0; i < kZoneCapacity; i++) {
     writeZoneSettingsFields(out, i, first);
     char key[32];
-    snprintf(key, sizeof(key), "woprUpdateIntervalZone%u", i);
+    snprintf_P(key, sizeof(key), PSTR("woprUpdateIntervalZone%u"), i);
     writeJsonNumberField(out, key, woprZones[i].updateInterval, first);
     writeProgressBarSettingsFields(out, i, first);
   }
-  writeJsonBoolField(out, "schedulerEnabled", schedulerEnabled, first);
-  for (uint8_t i = 0; i < MAX_PROFILES; i++) {
-    char profileKey[24];
-    snprintf(profileKey, sizeof(profileKey), "scheduleProfile%u", i);
-    writeJsonKey(out, profileKey, first);
+  writeJsonBoolField(out, F("schedulerEnabled"), schedulerEnabled, first);
+}
+
+struct BackupWriter {
+  bool barStored = false;
+  void load(BackupPart part, uint8_t profile, uint8_t zone) {
 #if defined(ESP8266)
-    schedulerLoadProfile(i, schedulerSharedProfileBuffer());
-    const ScheduleProfile &p = schedulerSharedProfileBuffer();
-#else
-    const ScheduleProfile &p = scheduleProfiles[i];
+    if (part == BackupPart::Profile)
+      schedulerLoadProfile(profile, schedulerSharedProfileBuffer());
 #endif
-    writeScheduleProfileJson(out, p, i);
-    for (uint8_t z = 0; z < kZoneCapacity; z++) {
-      char key[32];
-      snprintf(key, sizeof(key), "scheduleBar%uZone%u", i, z);
+    if (part == BackupPart::Bar)
+      barStored = schedulerLoadProgressBar(profile, zone,
+                                           schedulerSharedProgressBarBuffer());
+  }
+  void render(Print &out, BackupPart part, uint8_t profile, uint8_t zone) {
+    if (part == BackupPart::Prefix) {
+      writeBackupPrefix(out);
+    } else if (part == BackupPart::Profile) {
+      char key[24];
+      snprintf_P(key, sizeof(key), PSTR("scheduleProfile%u"), profile);
+      bool first = false;
       writeJsonKey(out, key, first);
-      ScheduleProgressBar &pb = schedulerSharedProgressBarBuffer();
-      if (schedulerLoadProgressBar(i, z, pb))
-        writeScheduleProgressBarJson(out, pb, false);
+#if defined(ESP8266)
+      writeScheduleProfileJson(out, schedulerSharedProfileBuffer(), profile);
+#else
+      writeScheduleProfileJson(out, scheduleProfiles[profile], profile);
+#endif
+    } else if (part == BackupPart::Bar) {
+      char key[32];
+      snprintf_P(key, sizeof(key), PSTR("scheduleBar%uZone%u"), profile, zone);
+      bool first = false;
+      writeJsonKey(out, key, first);
+      if (barStored)
+        writeScheduleProgressBarJson(out, schedulerSharedProgressBarBuffer(), false);
       else
-        out.print("null");
+        out.print(F("null"));
+    } else if (part == BackupPart::End) {
+      out.print('}');
     }
   }
-  out.print('}');
-}
+};
 
 void __attribute__((unused)) addZoneSettingsToDoc(JsonDocument &doc,
                                                   uint8_t zone,
@@ -879,169 +891,169 @@ void __attribute__((unused)) addZoneSettingsToDoc(JsonDocument &doc,
                                                   bool includeProgressBar) {
   char key[48];
 
-  snprintf(key, sizeof(key), "zone%uBegin", zone);
+  snprintf_P(key, sizeof(key), PSTR("zone%uBegin"), zone);
   doc[key] = zones[zone].begin;
-  snprintf(key, sizeof(key), "zone%uEnd", zone);
+  snprintf_P(key, sizeof(key), PSTR("zone%uEnd"), zone);
   doc[key] = zones[zone].end;
 
-  snprintf(key, sizeof(key), "workModeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("workModeZone%u"), zone);
   doc[key] = zones[zone].workMode;
-  snprintf(key, sizeof(key), "scrollSpeedZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollSpeedZone%u"), zone);
   doc[key] = zones[zone].scrollSpeed;
-  snprintf(key, sizeof(key), "scrollPauseZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollPauseZone%u"), zone);
   doc[key] = zones[zone].scrollPause;
-  snprintf(key, sizeof(key), "scrollAlignZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollAlignZone%u"), zone);
   doc[key] = zones[zone].scrollAlign;
-  snprintf(key, sizeof(key), "scrollEffectZone%uIn", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uIn"), zone);
   doc[key] = zones[zone].scrollEffectIn;
-  snprintf(key, sizeof(key), "scrollEffectZone%uOut", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uOut"), zone);
   doc[key] = zones[zone].scrollEffectOut;
-  snprintf(key, sizeof(key), "charspacingZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("charspacingZone%u"), zone);
   doc[key] = zones[zone].charspacing;
-  snprintf(key, sizeof(key), "fontZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("fontZone%u"), zone);
   doc[key] = zones[zone].font;
-  snprintf(key, sizeof(key), "mqttTextTopicZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("mqttTextTopicZone%u"), zone);
   doc[key] = MQTTZones[zone].message;
-  snprintf(key, sizeof(key), "mqttPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("mqttPostfixZone%u"), zone);
   doc[key] = zones[zone].mqttPostfix;
-  snprintf(key, sizeof(key), "clockDisplayFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("clockDisplayFormatZone%u"), zone);
   doc[key] = zones[zone].clockDisplayFormat;
-  snprintf(key, sizeof(key), "owmWhatToDisplayZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("owmWhatToDisplayZone%u"), zone);
   doc[key] = zones[zone].owmWhatToDisplay;
-  snprintf(key, sizeof(key), "haSensorIdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("haSensorIdZone%u"), zone);
   doc[key] = zones[zone].haSensorId;
-  snprintf(key, sizeof(key), "haSensorPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("haSensorPostfixZone%u"), zone);
   doc[key] = zones[zone].haSensorPostfix;
-  snprintf(key, sizeof(key), "ds18b20PostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("ds18b20PostfixZone%u"), zone);
   doc[key] = zones[zone].ds18b20Postfix;
-  snprintf(key, sizeof(key), "scrollInfiniteZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollInfiniteZone%u"), zone);
   doc[key] = zones[zone].scrollInfinite;
 
   if (includeWoprUpdate) {
-    snprintf(key, sizeof(key), "woprUpdateIntervalZone%u", zone);
+    snprintf_P(key, sizeof(key), PSTR("woprUpdateIntervalZone%u"), zone);
     doc[key] = woprZones[zone].updateInterval;
   }
 
-  snprintf(key, sizeof(key), "countdownFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownFormatZone%u"), zone);
   doc[key] = zones[zone].countdownFormat;
-  snprintf(key, sizeof(key), "countdownFinishZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownFinishZone%u"), zone);
   doc[key] = zones[zone].countdownFinish;
-  snprintf(key, sizeof(key), "countdownShowUnitsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownShowUnitsZone%u"), zone);
   doc[key] = zones[zone].countdownShowUnits;
-  snprintf(key, sizeof(key), "countdownPrefixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownPrefixZone%u"), zone);
   doc[key] = zones[zone].countdownPrefix;
-  snprintf(key, sizeof(key), "countdownSuffixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownSuffixZone%u"), zone);
   doc[key] = zones[zone].countdownSuffix;
-  snprintf(key, sizeof(key), "countdownTargetZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownTargetZone%u"), zone);
   doc[key] = countdownState[zone].targetStr;
 
-  snprintf(key, sizeof(key), "stockSymbolsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockSymbolsZone%u"), zone);
   doc[key] = zones[zone].stockSymbols;
-  snprintf(key, sizeof(key), "stockDisplayFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockDisplayFormatZone%u"), zone);
   doc[key] = zones[zone].stockDisplayFormat;
-  snprintf(key, sizeof(key), "stockPrefixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockPrefixZone%u"), zone);
   doc[key] = zones[zone].stockPrefix;
-  snprintf(key, sizeof(key), "stockPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockPostfixZone%u"), zone);
   doc[key] = zones[zone].stockPostfix;
-  snprintf(key, sizeof(key), "stockShowArrowsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockShowArrowsZone%u"), zone);
   doc[key] = zones[zone].stockShowArrows;
 
   if (!includeProgressBar)
     return;
 
   // Progress Bar
-  snprintf(key, sizeof(key), "pbEnableZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbEnableZone%u"), zone);
   doc[key] = progressBars[zone].enabled;
-  snprintf(key, sizeof(key), "pbSrcTypeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbSrcTypeZone%u"), zone);
   doc[key] = progressBars[zone].dataSourceType;
-  snprintf(key, sizeof(key), "pbSrcIdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbSrcIdZone%u"), zone);
   doc[key] = progressBars[zone].dataSourceId;
-  snprintf(key, sizeof(key), "pbMinZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbMinZone%u"), zone);
   doc[key] = progressBars[zone].minValue;
-  snprintf(key, sizeof(key), "pbMaxZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbMaxZone%u"), zone);
   doc[key] = progressBars[zone].maxValue;
-  snprintf(key, sizeof(key), "pbCondEnZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondEnZone%u"), zone);
   doc[key] = progressBars[zone].conditionEnabled;
-  snprintf(key, sizeof(key), "pbCondSrcTZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondSrcTZone%u"), zone);
   doc[key] = progressBars[zone].conditionSourceType;
-  snprintf(key, sizeof(key), "pbCondSrcIZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondSrcIZone%u"), zone);
   doc[key] = progressBars[zone].conditionSourceId;
-  snprintf(key, sizeof(key), "pbCondValZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondValZone%u"), zone);
   doc[key] = progressBars[zone].conditionValue;
-  snprintf(key, sizeof(key), "pbDynModeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynModeZone%u"), zone);
   doc[key] = progressBars[zone].dynamicMode;
-  snprintf(key, sizeof(key), "pbDynAnimZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynAnimZone%u"), zone);
   doc[key] = progressBars[zone].dynamicAnimation;
-  snprintf(key, sizeof(key), "pbDynSpdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynSpdZone%u"), zone);
   doc[key] = progressBars[zone].dynamicSpeedMs;
-  snprintf(key, sizeof(key), "pbDynSrcTZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynSrcTZone%u"), zone);
   doc[key] = progressBars[zone].dynSourceType;
-  snprintf(key, sizeof(key), "pbDynSrcIZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynSrcIZone%u"), zone);
   doc[key] = progressBars[zone].dynSourceId;
-  snprintf(key, sizeof(key), "pbDynR1ValZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR1ValZone%u"), zone);
   doc[key] = progressBars[zone].dynRule1Value;
-  snprintf(key, sizeof(key), "pbDynR2ValZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR2ValZone%u"), zone);
   doc[key] = progressBars[zone].dynRule2Value;
-  snprintf(key, sizeof(key), "pbDynR2AnimZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR2AnimZone%u"), zone);
   doc[key] = progressBars[zone].dynRule2Animation;
-  snprintf(key, sizeof(key), "pbDynR2SpdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR2SpdZone%u"), zone);
   doc[key] = progressBars[zone].dynRule2SpeedMs;
 }
 
 void restoreZoneSettingsFromDoc(const JsonDocument &doc, uint8_t zone) {
   char key[48];
 
-  snprintf(key, sizeof(key), "zone%uBegin", zone);
+  snprintf_P(key, sizeof(key), PSTR("zone%uBegin"), zone);
   assignIfPresent(doc, key, zones[zone].begin);
-  snprintf(key, sizeof(key), "zone%uEnd", zone);
+  snprintf_P(key, sizeof(key), PSTR("zone%uEnd"), zone);
   assignIfPresent(doc, key, zones[zone].end);
 
-  snprintf(key, sizeof(key), "workModeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("workModeZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].workMode);
-  snprintf(key, sizeof(key), "scrollSpeedZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollSpeedZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].scrollSpeed);
-  snprintf(key, sizeof(key), "scrollPauseZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollPauseZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].scrollPause);
-  snprintf(key, sizeof(key), "scrollAlignZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollAlignZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].scrollAlign);
-  snprintf(key, sizeof(key), "scrollEffectZone%uIn", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uIn"), zone);
   assignIfPresent(doc, key, zones[zone].scrollEffectIn);
-  snprintf(key, sizeof(key), "scrollEffectZone%uOut", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uOut"), zone);
   assignIfPresent(doc, key, zones[zone].scrollEffectOut);
-  snprintf(key, sizeof(key), "charspacingZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("charspacingZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].charspacing);
-  snprintf(key, sizeof(key), "fontZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("fontZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].font);
-  snprintf(key, sizeof(key), "mqttTextTopicZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("mqttTextTopicZone%u"), zone);
   assignIfPresent(doc, key, MQTTZones[zone].message);
-  snprintf(key, sizeof(key), "mqttPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("mqttPostfixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].mqttPostfix);
-  snprintf(key, sizeof(key), "clockDisplayFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("clockDisplayFormatZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].clockDisplayFormat);
-  snprintf(key, sizeof(key), "owmWhatToDisplayZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("owmWhatToDisplayZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].owmWhatToDisplay);
-  snprintf(key, sizeof(key), "haSensorIdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("haSensorIdZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].haSensorId);
-  snprintf(key, sizeof(key), "haSensorPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("haSensorPostfixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].haSensorPostfix);
-  snprintf(key, sizeof(key), "ds18b20PostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("ds18b20PostfixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].ds18b20Postfix);
-  snprintf(key, sizeof(key), "woprUpdateIntervalZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("woprUpdateIntervalZone%u"), zone);
   assignIfPresent(doc, key, woprZones[zone].updateInterval);
-  snprintf(key, sizeof(key), "scrollInfiniteZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("scrollInfiniteZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].scrollInfinite);
 
-  snprintf(key, sizeof(key), "countdownFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownFormatZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].countdownFormat);
-  snprintf(key, sizeof(key), "countdownFinishZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownFinishZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].countdownFinish);
-  snprintf(key, sizeof(key), "countdownShowUnitsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownShowUnitsZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].countdownShowUnits);
-  snprintf(key, sizeof(key), "countdownPrefixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownPrefixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].countdownPrefix);
-  snprintf(key, sizeof(key), "countdownSuffixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownSuffixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].countdownSuffix);
-  snprintf(key, sizeof(key), "countdownTargetZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("countdownTargetZone%u"), zone);
   if (doc.containsKey(key)) {
     String target = doc[key].as<String>();
     if (target.length() > 0)
@@ -1050,53 +1062,53 @@ void restoreZoneSettingsFromDoc(const JsonDocument &doc, uint8_t zone) {
       countdownState[zone] = CountdownState{};
   }
 
-  snprintf(key, sizeof(key), "stockSymbolsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockSymbolsZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].stockSymbols);
-  snprintf(key, sizeof(key), "stockDisplayFormatZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockDisplayFormatZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].stockDisplayFormat);
-  snprintf(key, sizeof(key), "stockPrefixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockPrefixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].stockPrefix);
-  snprintf(key, sizeof(key), "stockPostfixZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockPostfixZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].stockPostfix);
-  snprintf(key, sizeof(key), "stockShowArrowsZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("stockShowArrowsZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].stockShowArrows);
 
   // Progress Bar
-  snprintf(key, sizeof(key), "pbEnableZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbEnableZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].enabled);
-  snprintf(key, sizeof(key), "pbSrcTypeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbSrcTypeZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dataSourceType);
-  snprintf(key, sizeof(key), "pbSrcIdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbSrcIdZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dataSourceId);
-  snprintf(key, sizeof(key), "pbMinZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbMinZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].minValue);
-  snprintf(key, sizeof(key), "pbMaxZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbMaxZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].maxValue);
-  snprintf(key, sizeof(key), "pbCondEnZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondEnZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].conditionEnabled);
-  snprintf(key, sizeof(key), "pbCondSrcTZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondSrcTZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].conditionSourceType);
-  snprintf(key, sizeof(key), "pbCondSrcIZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondSrcIZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].conditionSourceId);
-  snprintf(key, sizeof(key), "pbCondValZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbCondValZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].conditionValue);
-  snprintf(key, sizeof(key), "pbDynModeZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynModeZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynamicMode);
-  snprintf(key, sizeof(key), "pbDynAnimZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynAnimZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynamicAnimation);
-  snprintf(key, sizeof(key), "pbDynSpdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynSpdZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynamicSpeedMs);
-  snprintf(key, sizeof(key), "pbDynSrcTZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynSrcTZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynSourceType);
-  snprintf(key, sizeof(key), "pbDynSrcIZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynSrcIZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynSourceId);
-  snprintf(key, sizeof(key), "pbDynR1ValZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR1ValZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynRule1Value);
-  snprintf(key, sizeof(key), "pbDynR2ValZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR2ValZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynRule2Value);
-  snprintf(key, sizeof(key), "pbDynR2AnimZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR2AnimZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynRule2Animation);
-  snprintf(key, sizeof(key), "pbDynR2SpdZone%u", zone);
+  snprintf_P(key, sizeof(key), PSTR("pbDynR2SpdZone%u"), zone);
   assignIfPresent(doc, key, progressBars[zone].dynRule2SpeedMs);
 }
 
@@ -1176,7 +1188,7 @@ bool deserializeRestoreSection(JsonDocument &destination,
       destination, source, DeserializationOption::Filter(filter));
   source.close();
   if (error || destination.overflowed()) {
-    Serial.printf("\n[Restore] JSON section failed: %s overflow=%u",
+    Serial.printf_P(PSTR("\n[Restore] JSON section failed: %s overflow=%u"),
                   error.c_str(), destination.overflowed() ? 1 : 0);
     return false;
   }
@@ -1271,7 +1283,7 @@ bool restoreConfigurationFromTempFile() {
     schedulerAbandonStaging(i);
     for (uint8_t z = 0; z < kZoneCapacity; ++z) {
       char key[32];
-      snprintf(key, sizeof(key), "scheduleBar%uZone%u", i, z);
+      snprintf_P(key, sizeof(key), PSTR("scheduleBar%uZone%u"), i, z);
       DynamicJsonDocument filter(96);
       filter[key] = true;
       if (!deserializeRestoreSection(doc, filter))
@@ -1292,7 +1304,7 @@ bool restoreConfigurationFromTempFile() {
   if (backupVersion >= 2) {
     for (uint8_t i = 0; i < MAX_PROFILES; i++) {
       char profileKey[24];
-      snprintf(profileKey, sizeof(profileKey), "scheduleProfile%u", i);
+      snprintf_P(profileKey, sizeof(profileKey), PSTR("scheduleProfile%u"), i);
       ScheduleProfile &profile = schedulerSharedProfileBuffer();
       schedulerLoadProfile(i, profile);
       // Read one field at a time: full profiles can exceed the 2KB arena.
@@ -1378,7 +1390,7 @@ bool webServicePendingRestore() {
   restoreState = restored ? 3 : 4;
   if (restored) restoreRebootAt = millis() + 3000UL;
   else initConfig = true;
-  Serial.printf("\n[Restore] Deferred restore %s", restored ? "complete" : "failed");
+  Serial.printf_P(PSTR("\n[Restore] Deferred restore %s"), restored ? "complete" : "failed");
   return true;
 #else
   return false;
@@ -1443,17 +1455,27 @@ void setupWebRoutes() {
 
   server.on("/api/diagnostics", HTTP_GET,
             [](AsyncWebServerRequest *request) {
-              char body[400];
+              char body[512];
 #if defined(ESP8266)
-              snprintf(body, sizeof(body),
-                       "{\"heap\":%u,\"maxBlock\":%u,\"fragmentation\":%u,"
+              uint32_t dramFree, dramBlock;
+              uint8_t dramFragmentation;
+              {
+                HeapSelectDram heap;
+                dramFree = ESP.getFreeHeap();
+                dramBlock = ESP.getMaxFreeBlockSize();
+                dramFragmentation = ESP.getHeapFragmentation();
+              }
+              const auto iram = secondaryNetworkHeap();
+              snprintf_P(body, sizeof(body),
+                       PSTR("{\"heap\":%u,\"maxBlock\":%u,\"fragmentation\":%u,"
                        "\"webRequests\":%u,\"apiRequests\":%u,"
                        "\"webPriority\":%s,\"httpsActive\":%s,"
                        "\"httpsAbortRequested\":%s,\"resetCode\":%u,"
                        "\"uptimeMs\":%lu,\"bootComplete\":%s,"
-                       "\"displayFlip\":%s,\"displayFlipApplied\":%s,\"displayModules\":%u}",
-                       ESP.getFreeHeap(), ESP.getMaxFreeBlockSize(),
-                       ESP.getHeapFragmentation(),
+                       "\"displayFlip\":%s,\"displayFlipApplied\":%s,\"displayModules\":%u,"
+                       "\"iramHeap\":%u,\"iramMaxBlock\":%u,"
+                       "\"owmUpdates\":%lu,\"owmLastSuccessMs\":%lu}"),
+                       dramFree, dramBlock, dramFragmentation,
                        webPriorityActiveRequestCount(),
                        webPriorityActiveApiCount(),
                        webPriorityIsActive(millis()) ? "true" : "false",
@@ -1463,21 +1485,26 @@ void setupWebRoutes() {
                        allTestsFinish && !initConfig ? "true" : "false",
                        displayFlip ? "true" : "false",
                        displayRotation::flipped ? "true" : "false",
-                       displayRotation::moduleCount);
+                       displayRotation::moduleCount, iram.freeBytes,
+                       iram.largestBlock, static_cast<unsigned long>(owmSuccessfulUpdates()),
+                       static_cast<unsigned long>(owmLastSuccessMillis()));
 #else
               const String sketchMd5 = ESP.getSketchMD5();
               Preferences storageStats;
               const unsigned nvsFreeEntries = storageStats.freeEntries();
-              snprintf(body, sizeof(body),
-                       "{\"heap\":%u,\"webPriority\":false,"
+              snprintf_P(body, sizeof(body),
+                       PSTR("{\"heap\":%u,\"webPriority\":false,"
                        "\"httpsActive\":%s,\"uptimeMs\":%lu,\"bootComplete\":%s,"
                        "\"displayFlip\":%s,\"displayFlipApplied\":%s,\"displayModules\":%u,"
-                       "\"sketchMD5\":\"%s\",\"nvsFreeEntries\":%u}",
+                       "\"sketchMD5\":\"%s\",\"nvsFreeEntries\":%u,"
+                       "\"owmUpdates\":%lu,\"owmLastSuccessMs\":%lu}"),
                        ESP.getFreeHeap(), isFetchingHttps ? "true" : "false", millis(),
                        allTestsFinish && !initConfig ? "true" : "false",
                        displayFlip ? "true" : "false",
                        displayRotation::flipped ? "true" : "false",
-                       displayRotation::moduleCount, sketchMd5.c_str(), nvsFreeEntries);
+                       displayRotation::moduleCount, sketchMd5.c_str(), nvsFreeEntries,
+                       static_cast<unsigned long>(owmSuccessfulUpdates()),
+                       static_cast<unsigned long>(owmLastSuccessMillis()));
 #endif
               AsyncWebServerResponse *response =
                   request->beginResponse(200, "application/json", body);
@@ -1548,15 +1575,15 @@ void setupWebRoutes() {
                   "application/json",
                   [enabled, synced, pending, failed, active](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
                     ChunkWindowPrint out(buffer, maxLen, index);
-                    out.printf("{\"schedulerEnabled\":%s,\"ntpSynced\":%s,",
+                    out.printf_P(PSTR("{\"schedulerEnabled\":%s,\"ntpSynced\":%s,"),
                                enabled ? "true" : "false",
                                synced ? "true" : "false");
-                    out.printf("\"storagePending\":%s,\"storageError\":%s,",
+                    out.printf_P(PSTR("\"storagePending\":%s,\"storageError\":%s,"),
                                pending ? "true" : "false",
                                failed ? "true" : "false");
-                    out.print("\"ntpServer\":");
+                    out.print(F("\"ntpServer\":"));
                     writeJsonEscaped(out, ntpServer);
-                    out.printf(",\"lastActiveProfile\":%d,\"profileCount\":%u}",
+                    out.printf_P(PSTR(",\"lastActiveProfile\":%d,\"profileCount\":%u}"),
                                active, (unsigned)MAX_PROFILES);
                     return out.copied();
                   });
@@ -1808,20 +1835,19 @@ void setupWebRoutes() {
       return;
     }
 #endif
+    BackupStream<BackupWriter, ChunkWindowPrint> cursor(MAX_PROFILES);
     AsyncWebServerResponse *response = request->beginChunkedResponse(
         "application/json",
-        [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-          ChunkWindowPrint out(buffer, maxLen, index);
-          writeBackupJson(out);
-          return out.copied();
+        [cursor](uint8_t *buffer, size_t maxLen, size_t) mutable -> size_t {
+          return cursor.fill(buffer, maxLen);
         });
     if (!response) {
       sendBusyJson(request);
       return;
     }
     char filename[80];
-    snprintf(filename, sizeof(filename),
-             "attachment; filename=wledPixel-%s_backup.json",
+    snprintf_P(filename, sizeof(filename),
+             PSTR("attachment; filename=wledPixel-%s_backup.json"),
              shortMACaddr.c_str());
     response->addHeader("Content-Disposition", filename);
     addApiResponseHeaders(response);
@@ -1831,7 +1857,7 @@ void setupWebRoutes() {
   server.on("/api/restore-status", HTTP_GET, [](AsyncWebServerRequest *request) {
 #if defined(ESP8266)
     char body[32];
-    snprintf(body, sizeof(body), "{\"state\":%u}", restoreState);
+    snprintf_P(body, sizeof(body), PSTR("{\"state\":%u}"), restoreState);
     request->send(200, "application/json", body);
 #else
     request->send(200, "application/json", "{\"state\":0}");
@@ -1890,7 +1916,7 @@ void setupWebRoutes() {
           schedulerAbandonStaging(i);
           for (uint8_t z = 0; z < kZoneCapacity; ++z) {
             char key[32];
-            snprintf(key, sizeof(key), "scheduleBar%uZone%u", i, z);
+            snprintf_P(key, sizeof(key), PSTR("scheduleBar%uZone%u"), i, z);
             if (!doc.containsKey(key)) continue;
             if (doc[key].isNull()) {
               // An already inherited bar needs no record or namespace.
@@ -1930,7 +1956,7 @@ void setupWebRoutes() {
         } else {
           for (uint8_t i = 0; i < MAX_PROFILES; i++) {
             char profileKey[24];
-            snprintf(profileKey, sizeof(profileKey), "scheduleProfile%u", i);
+            snprintf_P(profileKey, sizeof(profileKey), PSTR("scheduleProfile%u"), i);
             JsonObjectConst po = doc[profileKey].as<JsonObjectConst>();
             if (po.isNull())
               continue;
@@ -2009,36 +2035,37 @@ void setupWebRoutes() {
   // ─── Zone Settings JSON API
   // ──────────────────────────────────────────────────
   server.on("/api/zone-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+    const WebRuntimeSnapshot runtime;
     AsyncWebServerResponse *response = request->beginChunkedResponse(
         "application/json",
-        [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+        [runtime](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
           ChunkWindowPrint out(buffer, maxLen, index);
           bool first = true;
           out.print('{');
-          writeJsonStringField(out, "deviceName", shortMACaddr, first);
+          writeJsonStringField(out, F("deviceName"), shortMACaddr, first);
 #if defined(ESP32)
-          writeJsonCStringField(out, "platform", "ESP32", first);
+          writeJsonCStringField(out, F("platform"), "ESP32", first);
 #elif defined(ESP8266)
-          writeJsonCStringField(out, "platform", "ESP8266", first);
+          writeJsonCStringField(out, F("platform"), "ESP8266", first);
 #else
-          writeJsonCStringField(out, "platform", "Unknown", first);
+          writeJsonCStringField(out, F("platform"), "Unknown", first);
 #endif
-          writeJsonCStringField(out, "firmwareVer", firmwareVer, first);
-          writeJsonNumberField(out, "zoneNumbers", zoneNumbers, first);
-          writeJsonNumberField(out, "intensity", intensity + 1, first);
-          writeJsonStringField(out, "wifiSsid", WiFi.SSID(), first);
-          writeJsonStringField(out, "wifiIp", WiFi.localIP().toString(), first);
-          writeJsonStringField(out, "wifiGateway",
+          writeJsonCStringField(out, F("firmwareVer"), firmwareVer, first);
+          writeJsonNumberField(out, F("zoneNumbers"), zoneNumbers, first);
+          writeJsonNumberField(out, F("intensity"), intensity + 1, first);
+          writeJsonStringField(out, F("wifiSsid"), WiFi.SSID(), first);
+          writeJsonStringField(out, F("wifiIp"), WiFi.localIP().toString(), first);
+          writeJsonStringField(out, F("wifiGateway"),
                                WiFi.gatewayIP().toString(), first);
-          writeJsonNumberField(out, "wifiRssi", WiFi.RSSI(), first);
-          writeJsonStringField(out, "mqttDevicePrefix", MQTTGlobalPrefix,
+          writeJsonNumberField(out, F("wifiRssi"), runtime.rssi, first);
+          writeJsonStringField(out, F("mqttDevicePrefix"), MQTTGlobalPrefix,
                                first);
           writeJsonStringField(
               out, "ds18b20Temp",
-              dsTemp == "-127" ? String("Not connected") : dsTemp, first);
+              runtime.temperature == "-127" ? String("Not connected") : runtime.temperature, first);
           for (uint8_t i = 0; i < kZoneCapacity; i++)
             writeZoneSettingsFields(out, i, first);
-          writeJsonBoolField(out, "stockShowArrows",
+          writeJsonBoolField(out, F("stockShowArrows"),
                              zones[0].stockShowArrows, first);
           out.print('}');
           return out.copied();
@@ -2054,11 +2081,12 @@ void setupWebRoutes() {
   // ─── Service Settings JSON API ─────────────────────────────────────────────
   server.on(
       "/api/service-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+        const WebRuntimeSnapshot runtime;
         AsyncWebServerResponse *response = request->beginChunkedResponse(
             "application/json",
-            [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+            [runtime](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
               ChunkWindowPrint out(buffer, maxLen, index);
-              writeServiceSettingsJson(out);
+              writeServiceSettingsJson(out, runtime);
               return out.copied();
             });
         if (!response) {
@@ -2072,55 +2100,56 @@ void setupWebRoutes() {
   // ─── PB Debug Endpoint ────────────────────────────────────────────────────
   server.on("/api/pb-debug", HTTP_GET,
       [](AsyncWebServerRequest *request) {
+        const WebRuntimeSnapshot runtime;
         AsyncWebServerResponse *response = request->beginChunkedResponse(
             "application/json",
-            [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+            [runtime](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
               ChunkWindowPrint out(buffer, maxLen, index);
-              out.printf("{\"zoneNumbers\":%u,\"mqttConnected\":%s",
-                         zoneNumbers, mqttClient.connected() ? "true" : "false");
+              out.printf_P(PSTR("{\"zoneNumbers\":%u,\"mqttConnected\":%s"),
+                         zoneNumbers, runtime.mqttConnected ? "true" : "false");
               for (uint8_t i = 0; i < zoneNumbers && i < 4; i++) {
                 bool first = true;
-                out.printf(",\"zone%u\":{", i);
-                writeJsonBoolField(out, "enabled", progressBars[i].enabled,
+                out.printf_P(PSTR(",\"zone%u\":{"), i);
+                writeJsonBoolField(out, F("enabled"), progressBars[i].enabled,
                                    first);
-                writeJsonBoolField(out, "dynamicMode",
+                writeJsonBoolField(out, F("dynamicMode"),
                                    progressBars[i].dynamicMode, first);
-                writeJsonStringField(out, "dataSourceType",
+                writeJsonStringField(out, F("dataSourceType"),
                                      progressBars[i].dataSourceType, first);
-                writeJsonStringField(out, "dataSourceId",
+                writeJsonStringField(out, F("dataSourceId"),
                                      progressBars[i].dataSourceId, first);
-                writeJsonNumberField(out, "currentValue",
+                writeJsonNumberField(out, F("currentValue"),
                                      progressBars[i].currentValue, first);
-                writeJsonBoolField(out, "conditionEnabled",
+                writeJsonBoolField(out, F("conditionEnabled"),
                                    progressBars[i].conditionEnabled, first);
-                writeJsonBoolField(out, "conditionMet",
+                writeJsonBoolField(out, F("conditionMet"),
                                    progressBars[i].conditionMet, first);
-                writeJsonBoolField(out, "barActive", progressBars[i].barActive,
+                writeJsonBoolField(out, F("barActive"), progressBars[i].barActive,
                                    first);
-                writeJsonStringField(out, "dynSourceType",
+                writeJsonStringField(out, F("dynSourceType"),
                                      progressBars[i].dynSourceType, first);
-                writeJsonStringField(out, "dynSourceId",
+                writeJsonStringField(out, F("dynSourceId"),
                                      progressBars[i].dynSourceId, first);
-                writeJsonStringField(out, "dynRule1Value",
+                writeJsonStringField(out, F("dynRule1Value"),
                                      progressBars[i].dynRule1Value, first);
-                writeJsonNumberField(out, "dynRule1Anim",
+                writeJsonNumberField(out, F("dynRule1Anim"),
                                      progressBars[i].dynamicAnimation, first);
-                writeJsonNumberField(out, "dynRule1Speed",
+                writeJsonNumberField(out, F("dynRule1Speed"),
                                      progressBars[i].dynamicSpeedMs, first);
-                writeJsonStringField(out, "dynRule2Value",
+                writeJsonStringField(out, F("dynRule2Value"),
                                      progressBars[i].dynRule2Value, first);
-                writeJsonNumberField(out, "dynRule2Anim",
+                writeJsonNumberField(out, F("dynRule2Anim"),
                                      progressBars[i].dynRule2Animation, first);
-                writeJsonNumberField(out, "dynRule2Speed",
+                writeJsonNumberField(out, F("dynRule2Speed"),
                                      progressBars[i].dynRule2SpeedMs, first);
-                writeJsonStringField(out, "dynCurrentSensorValue",
+                writeJsonStringField(out, F("dynCurrentSensorValue"),
                                      progressBars[i].dynCurrentSensorValue,
                                      first);
-                writeJsonNumberField(out, "dynActiveAnim",
+                writeJsonNumberField(out, F("dynActiveAnim"),
                                      progressBars[i].dynActiveAnim, first);
-                writeJsonNumberField(out, "dynPhase", progressBars[i].dynPhase,
+                writeJsonNumberField(out, F("dynPhase"), progressBars[i].dynPhase,
                                      first);
-                writeJsonNumberField(out, "dynPosition",
+                writeJsonNumberField(out, F("dynPosition"),
                                      progressBars[i].dynPosition, first);
                 out.print('}');
               }
@@ -2176,7 +2205,7 @@ void setupWebRoutes() {
             // Finalize the update
             bool success = false;
             if (Update.end(true)) {
-              Serial.printf("OTA Update Success: %u bytes\n", otaTotalSize);
+              Serial.printf_P(PSTR("OTA Update Success: %u bytes\n"), otaTotalSize);
               success = true;
             } else {
               Update.printError(Serial);
@@ -2193,7 +2222,7 @@ void setupWebRoutes() {
             request->send(response);
 
             if (success) {
-              Serial.println("OTA Success, setting reboot flag...");
+              Serial.println(F("OTA Success, setting reboot flag..."));
               shouldReboot = true;
             }
           } else {
@@ -2305,8 +2334,7 @@ void setupWebRoutes() {
           otaScanOverlapLen = newOverlapLen;
 
           if (!otaPlatformOk) {
-            Serial.printf(
-                "OTA REJECTED: binary contains '%s' marker, device is %s!\n",
+            Serial.printf_P(PSTR("OTA REJECTED: binary contains '%s' marker, device is %s!\n"),
                 wrongPlatform, deviceName);
             // Abort the Updater so next attempt can call begin() cleanly
             if (globalOtaInProgress) {
@@ -2382,7 +2410,7 @@ void setupWebRoutes() {
     for (int i = 0; i < params; i++) {
       const AsyncWebParameter *p = request->getParam((size_t)i);
       if (p && p->isPost()) {
-        Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+        Serial.printf_P(PSTR("POST[%s]: %s\n"), p->name().c_str(), p->value().c_str());
         int8_t zone = detectZoneFromParamName(p->name());
         if (zone >= 0 && p->name().startsWith("message")) {
           zoneNewMessage(zone, p->value().c_str(), "", true, true);
@@ -2537,14 +2565,14 @@ void setupWebRoutes() {
           }
           for (uint8_t zone = 0; zone < kZoneCapacity; zone++) {
             char field[16];
-            snprintf(field, sizeof(field), "zone%uBegin", zone);
+            snprintf_P(field, sizeof(field), PSTR("zone%uBegin"), zone);
             if (p->name() == field) {
               uint8_t value = p->value().toInt();
               if (zones[zone].begin != value)
                 displayLayoutChanged = true;
               zones[zone].begin = value;
             }
-            snprintf(field, sizeof(field), "zone%uEnd", zone);
+            snprintf_P(field, sizeof(field), PSTR("zone%uEnd"), zone);
             if (p->name() == field) {
               uint8_t value = p->value().toInt();
               if (zones[zone].end != value)
@@ -2764,12 +2792,12 @@ void setupWebRoutes() {
           mqttUsername = p->value().c_str();
         if (p->name() == "mqttPassword") {
           String val = p->value();
-          Serial.print("API Config: Received mqttPassword: ");
+          Serial.print(F("API Config: Received mqttPassword: "));
           Serial.println(val);
           if (val != "********") {
             mqttPassword = val.c_str();
           } else {
-            Serial.println("API Config: Ignoring masked password");
+            Serial.println(F("API Config: Ignoring masked password"));
           }
         }
 
@@ -2863,58 +2891,58 @@ void setupWebRoutes() {
         // pbMax0, pbCondEn0, pbCondSrcT0, pbCondSrcI0, pbCondVal0, etc.
         for (uint8_t z = 0; z < kZoneCapacity; z++) {
           char pname[24];
-          snprintf(pname, sizeof(pname), "pbEnable%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbEnable%u"), z);
           if (p->name() == pname)
             progressBars[z].enabled = parseBoolParam(p->value());
-          snprintf(pname, sizeof(pname), "pbSrcType%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbSrcType%u"), z);
           if (p->name() == pname)
             progressBars[z].dataSourceType = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbSrcId%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbSrcId%u"), z);
           if (p->name() == pname)
             progressBars[z].dataSourceId = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbMin%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbMin%u"), z);
           if (p->name() == pname)
             progressBars[z].minValue = p->value().toFloat();
-          snprintf(pname, sizeof(pname), "pbMax%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbMax%u"), z);
           if (p->name() == pname)
             progressBars[z].maxValue = p->value().toFloat();
-          snprintf(pname, sizeof(pname), "pbCondEn%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbCondEn%u"), z);
           if (p->name() == pname)
             progressBars[z].conditionEnabled = parseBoolParam(p->value());
-          snprintf(pname, sizeof(pname), "pbCondSrcT%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbCondSrcT%u"), z);
           if (p->name() == pname)
             progressBars[z].conditionSourceType = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbCondSrcI%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbCondSrcI%u"), z);
           if (p->name() == pname)
             progressBars[z].conditionSourceId = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbCondVal%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbCondVal%u"), z);
           if (p->name() == pname)
             progressBars[z].conditionValue = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbDynMode%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynMode%u"), z);
           if (p->name() == pname)
             progressBars[z].dynamicMode = parseBoolParam(p->value());
-          snprintf(pname, sizeof(pname), "pbDynAnim%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynAnim%u"), z);
           if (p->name() == pname)
             progressBars[z].dynamicAnimation = p->value().toInt();
-          snprintf(pname, sizeof(pname), "pbDynSpd%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynSpd%u"), z);
           if (p->name() == pname)
             progressBars[z].dynamicSpeedMs = p->value().toInt();
-          snprintf(pname, sizeof(pname), "pbDynSrcT%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynSrcT%u"), z);
           if (p->name() == pname)
             progressBars[z].dynSourceType = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbDynSrcI%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynSrcI%u"), z);
           if (p->name() == pname)
             progressBars[z].dynSourceId = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbDynR1Val%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynR1Val%u"), z);
           if (p->name() == pname)
             progressBars[z].dynRule1Value = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbDynR2Val%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynR2Val%u"), z);
           if (p->name() == pname)
             progressBars[z].dynRule2Value = p->value().c_str();
-          snprintf(pname, sizeof(pname), "pbDynR2Anim%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynR2Anim%u"), z);
           if (p->name() == pname)
             progressBars[z].dynRule2Animation = p->value().toInt();
-          snprintf(pname, sizeof(pname), "pbDynR2Spd%u", z);
+          snprintf_P(pname, sizeof(pname), PSTR("pbDynR2Spd%u"), z);
           if (p->name() == pname)
             progressBars[z].dynRule2SpeedMs = p->value().toInt();
         }
@@ -2983,10 +3011,15 @@ void setupWebRoutes() {
       }
       if (keyValue == "zoneSettings" && n < kZoneCapacity &&
           zones[n].workMode == "mqttClient") {
+#if defined(ESP8266)
+        // Reconnect from loop(), where subscribing cannot interrupt a write.
+        shouldMqttDisconnect = true;
+#else
         if (mqttClient.connected() && MQTTZones[n].message != "" &&
             MQTTZones[n].message != " ") {
           mqttClient.subscribe(MQTTZones[n].message.c_str());
         }
+#endif
       }
       if (keyValue == "cronProfile") {
         bool draftOnly =
@@ -3053,6 +3086,9 @@ void setupWebRoutes() {
         }
 
         // Resubscribe to MQTT PB topics (device is already connected)
+#if defined(ESP8266)
+        shouldMqttDisconnect = true;
+#else
         if (mqttClient.connected()) {
           for (uint8_t z = 0; z < zoneNumbers && z < 4; z++) {
             if (!progressBars[z].enabled) continue;
@@ -3072,12 +3108,13 @@ void setupWebRoutes() {
               if (progressBars[z].dynSourceType == "mqtt" &&
                   progressBars[z].dynSourceId.length() > 0) {
                 mqttClient.subscribe(progressBars[z].dynSourceId.c_str());
-                Serial.printf("\n[PB] Subscribe dyn src: %s",
+                Serial.printf_P(PSTR("\n[PB] Subscribe dyn src: %s"),
                               progressBars[z].dynSourceId.c_str());
               }
             }
           }
         }
+#endif
 
         // Immediately redraw active bars
         updateProgressBars();
@@ -3121,10 +3158,10 @@ void setupWebRoutes() {
               clearPreferencesNamespace("stockSettings");
               for (uint8_t i = 0; i < MAX_PROFILES; i++) {
                 char ns[12];
-                snprintf(ns, sizeof(ns), "cronP%u", i);
+                snprintf_P(ns, sizeof(ns), PSTR("cronP%u"), i);
                 clearPreferencesNamespace(ns);
                 for (uint8_t z = 0; z < kZoneCapacity; z++) {
-                  snprintf(ns, sizeof(ns), "cronB%u%u", i, z);
+                  snprintf_P(ns, sizeof(ns), PSTR("cronB%u%u"), i, z);
                   clearPreferencesNamespace(ns);
                 }
               }

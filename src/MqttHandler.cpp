@@ -50,11 +50,11 @@ bool mqttHasHeadroom(uint32_t minFreeHeap, uint32_t minMaxBlock) {
 
 void logMqttLowMem(const char *where) {
 #if defined(ESP8266)
-  Serial.printf("\n[MQTT] Skip %s due low mem. Heap=%u MaxBlock=%u Frag=%u%%", where,
+  Serial.printf_P(PSTR("\n[MQTT] Skip %s due low mem. Heap=%u MaxBlock=%u Frag=%u%%"), where,
                 ESP.getFreeHeap(), ESP.getMaxFreeBlockSize(),
                 ESP.getHeapFragmentation());
 #else
-  Serial.printf("\n[MQTT] Skip %s due low mem", where);
+  Serial.printf_P(PSTR("\n[MQTT] Skip %s due low mem"), where);
 #endif
 }
 
@@ -125,6 +125,10 @@ void MQTTPublishHADiscovry(const String &zone, const String &device_type) {
     char topic_config[120];
     char *buffer = sharedJsonBuffer();
     size_t bufferCapacity = sharedJsonBufferCapacity();
+    if (!buffer) {
+      Serial.println(F("[MQTT] Discovery deferred: no serialization buffer"));
+      return;
+    }
 
     // device block
     JsonObject device = root.createNestedObject("dev");
@@ -370,7 +374,7 @@ void MQTTPublishHADiscovry(const String &zone, const String &device_type) {
       return;
     }
 
-    Serial.printf("\n[MQTT] HA discovery publish type=%s topic=%s bytes=%u",
+    Serial.printf_P(PSTR("\n[MQTT] HA discovery publish type=%s topic=%s bytes=%u"),
                   device_type.c_str(), topic_config, static_cast<unsigned>(n));
     Serial.print(F("\nMQTT publish HA device state: "));
     mqttPublished = mqttClient.publish(topic_config, buffer, n);
@@ -397,6 +401,10 @@ void MQTTPublishState() {
     doc.clear();
     char *buffer = sharedJsonBuffer();
     size_t bufferCapacity = sharedJsonBufferCapacity();
+    if (!buffer) {
+      Serial.println(F("[MQTT] State publish deferred: no serialization buffer"));
+      return;
+    }
 
     doc["status"] = "online";
     doc["power"] = power;
@@ -404,7 +412,7 @@ void MQTTPublishState() {
     doc["wifiSsid"] = WiFi.SSID();
     for (uint8_t n = 0; n < zoneNumbers; n++) {
       char zoneKey[8];
-      snprintf(zoneKey, sizeof(zoneKey), "zone%u", n);
+      snprintf_P(zoneKey, sizeof(zoneKey), PSTR("zone%u"), n);
       JsonObject zoneObj = doc.createNestedObject(zoneKey);
       zoneObj["workMode"] = zones[n].workMode;
       zoneObj["charspacing"] = zones[n].charspacing;
@@ -560,9 +568,9 @@ void MQTTCallback(char *topic, byte *payload, int length) {
         woprZones[n].active = false;
       }
 
-      Serial.print("Debug: Processing mode update for zone ");
+      Serial.print(F("Debug: Processing mode update for zone "));
       Serial.print(n);
-      Serial.print(". New mode: ");
+      Serial.print(F(". New mode: "));
       Serial.println(zones[n].workMode);
 
       if (!disableServiceMessages) {
@@ -625,7 +633,7 @@ void MQTTCallback(char *topic, byte *payload, int length) {
         progressBars[i].dataSourceId.length() > 0 &&
         mqttTopicEquals(topic, progressBars[i].dataSourceId)) {
       progressBars[i].currentValue = atof(payloadBuf);
-      Serial.printf("\n[PB] Zone %u data: %s -> %.2f", i,
+      Serial.printf_P(PSTR("\n[PB] Zone %u data: %s -> %.2f"), i,
                     payloadBuf, progressBars[i].currentValue);
     }
 
@@ -636,7 +644,7 @@ void MQTTCallback(char *topic, byte *payload, int length) {
         progressBars[i].conditionSourceId.length() > 0 &&
         mqttTopicEquals(topic, progressBars[i].conditionSourceId)) {
       progressBars[i].conditionMet = progressBars[i].conditionValue == payloadBuf;
-      Serial.printf("\n[PB] Zone %u condition: '%s' == '%s' -> %s", i,
+      Serial.printf_P(PSTR("\n[PB] Zone %u condition: '%s' == '%s' -> %s"), i,
                     payloadBuf,
                     progressBars[i].conditionValue.c_str(),
                     progressBars[i].conditionMet ? "true" : "false");
@@ -648,7 +656,7 @@ void MQTTCallback(char *topic, byte *payload, int length) {
         progressBars[i].dynSourceId.length() > 0 &&
         mqttTopicEquals(topic, progressBars[i].dynSourceId)) {
       progressBars[i].dynCurrentSensorValue = payloadBuf;
-      Serial.printf("\n[PB] Zone %u dyn src: '%s'", i, payloadBuf);
+      Serial.printf_P(PSTR("\n[PB] Zone %u dyn src: '%s'"), i, payloadBuf);
     }
   }
 
@@ -666,7 +674,7 @@ boolean reconnect() {
   mqttClient.setServer(mqttServerAddress.c_str(), mqttServerPort);
 
   char lwtTopic[80];
-  snprintf(lwtTopic, sizeof(lwtTopic), "%s/state", MQTTGlobalPrefix.c_str());
+  snprintf_P(lwtTopic, sizeof(lwtTopic), PSTR("%s/state"), MQTTGlobalPrefix.c_str());
   const char *lwtMessage = "{\"status\":\"offline\"}";
 
   if (mqttClient.connect(MQTTGlobalPrefix.c_str(), mqttUsername.c_str(),
@@ -698,7 +706,7 @@ boolean reconnect() {
           break;
         }
         char zoneBuf[4];
-        snprintf(zoneBuf, sizeof(zoneBuf), "%u", n);
+        snprintf_P(zoneBuf, sizeof(zoneBuf), PSTR("%u"), n);
         MQTTPublishHADiscovry(zoneBuf, "scrollAlign");
         yield();
         MQTTPublishHADiscovry(zoneBuf, "charspacing");

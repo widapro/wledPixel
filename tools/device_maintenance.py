@@ -140,8 +140,10 @@ class Device:
                 if not equivalent(got, want): raise RuntimeError('Profile mismatch: ' + key + ' fields ' + str([k for k in want if got.get(k) != want[k]]))
             elif key.startswith('scheduleBar'):
                 got = actual[key]
+                want = value
                 if got is not None: got = dict(got); got.pop('inherited', None)
-                if not equivalent(got, value): raise RuntimeError('Progress-bar mismatch: ' + key)
+                if want is not None: want = dict(want); want.pop('inherited', None)
+                if not equivalent(got, want): raise RuntimeError('Progress-bar mismatch: ' + key)
             elif legacy_empty_rule(expected, key, value, actual.get(key)):
                 print('Legacy unset rule normalized: ' + key + ' null -> empty string', flush=True)
             elif not equivalent(actual.get(key), value):

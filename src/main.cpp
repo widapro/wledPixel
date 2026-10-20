@@ -24,9 +24,9 @@ void setup() {
   readAllConfig();
   Serial.begin(115200);
   Serial.print(F("Start serial...."));
-  Serial.printf("\nCPU frequency: %u MHz\n", ESP.getCpuFreqMHz());
+  Serial.printf_P(PSTR("\nCPU frequency: %u MHz\n"), ESP.getCpuFreqMHz());
 #if defined(ESP8266)
-  Serial.printf("Reset reason: %s\n", ESP.getResetReason().c_str());
+  Serial.printf_P(PSTR("Reset reason: %s\n"), ESP.getResetReason().c_str());
 #endif
 
   initDisplay();
@@ -38,14 +38,14 @@ void setup() {
   P.setTextAlignment(0, PA_CENTER);
   P.setIntensity(7);
   P.setSpeed(0, 100);
-  P.print("Boot");
+  P.print(F("Boot"));
   P.displayAnimate();
 
 #if defined(ESP32)
   WiFi.mode(WIFI_STA);
 #endif
 
-  P.print("WiFi");
+  P.print(F("WiFi"));
   P.displayAnimate();
 
   wifiManagerPtr = new AsyncWiFiManager(&server, &dns);
@@ -58,7 +58,7 @@ void setup() {
       wifiManagerPtr->autoConnect(MQTTGlobalPrefix.c_str(), wifiAPpassword);
 
   if (!wifiRes) {
-    Serial.println("Wifi failed to connect");
+    Serial.println(F("Wifi failed to connect"));
   } else {
     Serial.print(F("Wifi connected to SSID: "));
     Serial.println(WiFi.SSID().c_str());
@@ -111,8 +111,9 @@ void setup() {
     for (uint8_t n = 0; n < zoneNumbers; n++) {
       if (zones[n].workMode == "owmWeather") {
         Serial.println(F("[OWM] Pre-fetching weather data during boot..."));
-        owmWeatherUpdate(owmCity, owmUnitsFormat, owmApiToken);
-        owmLastTime = millis(); // prevent immediate re-fetch in loop()
+        const auto result = owmWeatherUpdate(owmCity, owmUnitsFormat, owmApiToken);
+        owmLastTime = networkMemory::pollAnchor(
+            millis(), uint32_t(owmUpdateInterval) * 1000u, result);
         break; // one zone triggers the fetch; all share the data
       }
     }
@@ -143,26 +144,27 @@ void setup() {
     } else {
       type = "filesystem";
     }
-    Serial.println("OTA Start updating " + type);
+    Serial.print(F("OTA Start updating "));
+    Serial.println(type);
     P.displayClear();
     P.write("OTA...");
   });
-  ArduinoOTA.onEnd([]() { Serial.println("\nOTA End"); });
+  ArduinoOTA.onEnd([]() { Serial.println(F("\nOTA End")); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+    Serial.printf_P(PSTR("OTA Progress: %u%%\r"), (progress / (total / 100)));
   });
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("OTA Error[%u]: ", error);
+    Serial.printf_P(PSTR("OTA Error[%u]: "), error);
     if (error == OTA_AUTH_ERROR)
-      Serial.println("Auth Failed");
+      Serial.println(F("Auth Failed"));
     else if (error == OTA_BEGIN_ERROR)
-      Serial.println("Begin Failed");
+      Serial.println(F("Begin Failed"));
     else if (error == OTA_CONNECT_ERROR)
-      Serial.println("Connect Failed");
+      Serial.println(F("Connect Failed"));
     else if (error == OTA_RECEIVE_ERROR)
-      Serial.println("Receive Failed");
+      Serial.println(F("Receive Failed"));
     else if (error == OTA_END_ERROR)
-      Serial.println("End Failed");
+      Serial.println(F("End Failed"));
   });
   ArduinoOTA.begin();
 
@@ -176,8 +178,8 @@ void setup() {
     P.setZone(n, zones[n].begin, zones[n].end);
     P.setIntensity(n, intensity);
   }
-  Serial.printf("[OTA] Platform marker: %s\n", PLATFORM_MARKER);
-  Serial.println("Setup complete, entering loop");
+  Serial.printf_P(PSTR("[OTA] Platform marker: %s\n"), PLATFORM_MARKER);
+  Serial.println(F("Setup complete, entering loop"));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -190,7 +192,7 @@ void loop() {
       !schedulerHasPendingProgressBarSave() &&
       !hasDeferredConfigSaves() && !schedulerHasPendingProfileSave() &&
       !schedulerHasPendingProfileApply()) {
-    Serial.println("Rebooting...");
+    Serial.println(F("Rebooting..."));
     delay(100);
     ESP.restart();
   }
@@ -283,7 +285,7 @@ void loop() {
 #endif
 
   if (shouldUpdateNtp) {
-    Serial.println("Deferred NTP update...");
+    Serial.println(F("Deferred NTP update..."));
     ntpUpdateTime();
     shouldUpdateNtp = false;
   }
@@ -455,7 +457,7 @@ void loop() {
       // next TLS allocation doesn't crash into fragmented memory.
       stockFetchingRound = false;
       stockLastTime = millis();
-      Serial.printf("[Config] Heap after save: %u, MaxBlock: %u\n",
+      Serial.printf_P(PSTR("[Config] Heap after save: %u, MaxBlock: %u\n"),
                     ESP.getFreeHeap(), ESP.getMaxFreeBlockSize());
 #endif
     }
@@ -586,18 +588,18 @@ void loop() {
             float dsTempF = DallasTemperature::toFahrenheit(dsTempC);
             dtostrf(dsTempF, 4, 1, dsTempBuff);
             dsTemp = dsTempBuff;
-            Serial.printf("\nds18b20 measurement temperature: %s F",
+            Serial.printf_P(PSTR("\nds18b20 measurement temperature: %s F"),
                           dsTemp.c_str());
           } else {
             dtostrf(dsTempC, 4, 1, dsTempBuff);
             dsTemp = dsTempBuff;
-            Serial.printf("\nds18b20 measurement temperature: %s C",
+            Serial.printf_P(PSTR("\nds18b20 measurement temperature: %s C"),
                           dsTemp.c_str());
           }
           if (mqttEnable) {
             static char dsTopic[80] = {0};
             if (dsTopic[0] == '\0') {
-              snprintf(dsTopic, sizeof(dsTopic), "%s/temperature",
+              snprintf_P(dsTopic, sizeof(dsTopic), PSTR("%s/temperature"),
                        MQTTGlobalPrefix.c_str());
             }
             mqttClient.publish(dsTopic, dsTemp.c_str());
@@ -620,8 +622,9 @@ void loop() {
         currentMillis - owmLastTime >=
             (unsigned long)owmUpdateInterval * 1000) {
       heavyTaskExecutedThisLoop = true;
-      owmWeatherUpdate(owmCity, owmUnitsFormat, owmApiToken);
-      owmLastTime = currentMillis;
+      const auto result = owmWeatherUpdate(owmCity, owmUnitsFormat, owmApiToken);
+      owmLastTime = networkMemory::pollAnchor(
+          millis(), uint32_t(owmUpdateInterval) * 1000u, result);
       lastHeavyTaskTime = millis();
     }
 
@@ -951,7 +954,7 @@ void loop() {
           String state = haApiGetState(progressBars[i].dataSourceId);
           if (state.length() > 0) {
             progressBars[i].currentValue = state.toFloat();
-            Serial.printf("\n[PB] Zone %u HA data: '%s' -> %.2f", i,
+            Serial.printf_P(PSTR("\n[PB] Zone %u HA data: '%s' -> %.2f"), i,
                           state.c_str(), progressBars[i].currentValue);
           }
           progressBars[i].lastDataUpdate = currentMillis;
@@ -975,7 +978,7 @@ void loop() {
             progressBars[i].conditionMet =
                 (state == progressBars[i].conditionValue);
             progressBars[i].lastCondReceivedValue = state;
-            Serial.printf("\n[PB] Zone %u HA cond: '%s' == '%s' -> %s", i,
+            Serial.printf_P(PSTR("\n[PB] Zone %u HA cond: '%s' == '%s' -> %s"), i,
                           state.c_str(),
                           progressBars[i].conditionValue.c_str(),
                           progressBars[i].conditionMet ? "true" : "false");
@@ -998,7 +1001,7 @@ void loop() {
           String state = haApiGetState(progressBars[i].dynSourceId);
           if (state.length() > 0) {
             progressBars[i].dynCurrentSensorValue = state;
-            Serial.printf("\n[PB] Zone %u HA dyn src: '%s'", i,
+            Serial.printf_P(PSTR("\n[PB] Zone %u HA dyn src: '%s'"), i,
                           state.c_str());
           }
           progressBars[i].lastDynSrcUpdate = currentMillis;

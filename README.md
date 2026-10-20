@@ -5,7 +5,7 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
 <a href="https://github.com/widapro/wledPixel/releases" target="_blank">The latest firmware version can be found in Releases</a>
 
-The current development version is **v4.0-beta.3**. See the [beta release notes](RELEASE_NOTES_v4.0-beta.3.md) for changes since v3.6, upgrade instructions and known limitations. Back up your settings before testing the beta.
+The current development version is **v4.0-beta.4**. See the [beta release notes](RELEASE_NOTES_v4.0-beta.4.md) for the latest fixes, upgrade instructions and known limitations. The [v4.0-beta.3 notes](RELEASE_NOTES_v4.0-beta.3.md) describe profiles, scheduling and display rotation. Back up your settings before testing the beta.
 
 
 ## Supported key features:
@@ -419,8 +419,8 @@ Send sensor value each time when a value has been changed
 ```
 Replace **wledPixel-XXXX** and **sensor.example_temperature** with your own device prefix and sensor entity.
 
-### v4.0-beta.3 validation
+### v4.0-beta.4 validation
 
-See [release notes](RELEASE_NOTES_v4.0-beta.3.md) for changes, settings-backup compatibility and beta limitations,
+See [release notes](RELEASE_NOTES_v4.0-beta.4.md) for changes, settings-backup compatibility and beta limitations,
 and [local test documentation](test/README.md) for the test and HIL workflows.
 Local tests: `./tools/test_local.sh all`.

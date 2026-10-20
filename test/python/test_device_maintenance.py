@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -12,6 +13,22 @@ SPEC.loader.exec_module(MAINTENANCE)
 
 
 class FirmwareGuardTests(unittest.TestCase):
+    def test_backup_comparison_ignores_inherited_symmetrically(self):
+        class FakeDevice(MAINTENANCE.Device):
+            def request(self, *args, **kwargs):
+                return {'backupVersion': 3, 'scheduleBar0Zone0':
+                        {'inherited': False, 'dynamicMode': True}}
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'backup.json'
+            path.write_text(json.dumps(FakeDevice('unused').request()))
+            actual = FakeDevice('unused').verify(path)
+            self.assertFalse(actual['scheduleBar0Zone0']['inherited'])
+            path.write_text(json.dumps({'backupVersion': 3, 'scheduleBar0Zone0':
+                                       {'inherited': False, 'dynamicMode': False}}))
+            with self.assertRaisesRegex(RuntimeError, 'Progress-bar mismatch'):
+                FakeDevice('unused').verify(path)
+
     def test_correct_platform_and_version(self):
         for platform in ('ESP8266', 'ESP32'):
             image = b'\xe9headerWLEDPIXEL_PLATFORM_' + platform.encode() + b'\0v4.0-beta.3\0'

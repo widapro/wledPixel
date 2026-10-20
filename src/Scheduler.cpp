@@ -226,7 +226,7 @@ bool schedulerSaveProfile(uint8_t idx, const ScheduleProfile &p) {
 #else
   scheduleProfiles[idx] = p;
 #endif
-  Serial.printf("\n[SCHED] Profile %u saved: %u bytes", idx,
+  Serial.printf_P(PSTR("\n[SCHED] Profile %u saved: %u bytes"), idx,
                 static_cast<unsigned>(sizeof(p)));
   return true;
 }
@@ -282,7 +282,7 @@ bool schedulerServicePendingProfileApply() {
     return false;
   uint8_t idx = pendingProfileApplyIndex;
   pendingProfileApply = false;
-  Serial.printf("\n[SCHED] Manual apply queued profile %u\n", idx);
+  Serial.printf_P(PSTR("\n[SCHED] Manual apply queued profile %u\n"), idx);
   schedulerApplyProfile(idx);
   return true;
 }
@@ -299,8 +299,8 @@ void schedulerInitDefaults() {
     scheduleMeta[i].hour       = SCHED_NO_CHANGE_U8;
     scheduleMeta[i].dayOfWeek  = 0x7F;
     scheduleMeta[i].dayOfMonth = SCHED_NO_CHANGE_U32;
-    snprintf(scheduleMeta[i].name, sizeof(scheduleMeta[i].name),
-             "Profile %u", i + 1);
+    snprintf_P(scheduleMeta[i].name, sizeof(scheduleMeta[i].name),
+             PSTR("Profile %u"), i + 1);
 #else
     initProfileDefaults(scheduleProfiles[i], i);
 #endif
@@ -387,7 +387,7 @@ void schedulerApplyProfile(uint8_t idx) {
 #if defined(ESP8266)
   // Load full profile from NVS on demand (saves ~5KB of global RAM)
   if (!schedulerLoadProfile(idx, sharedProfileBuffer)) {
-    Serial.printf("[SCHED] Failed to load profile %u from NVS\n", idx);
+    Serial.printf_P(PSTR("[SCHED] Failed to load profile %u from NVS\n"), idx);
     return;
   }
   ScheduleProfile &p = sharedProfileBuffer;
@@ -410,7 +410,7 @@ void schedulerApplyProfile(uint8_t idx) {
   }
   bool needReboot = false;
 
-  Serial.printf("[SCHED] Applying profile %u: '%s'\n", idx, p.name);
+  Serial.printf_P(PSTR("[SCHED] Applying profile %u: '%s'\n"), idx, p.name);
 
   // ── Power ──
   if (p.power != SCHED_NO_CHANGE_U8) {
@@ -581,7 +581,7 @@ void schedulerApplyProfile(uint8_t idx) {
           schedulerLoadProgressBar(idx, z, sharedProgressBarBuffer);
       applyProgressBar(z, sharedProgressBarBuffer);
       progressBars[z].enabled = (p.pbEnable & (1 << z)) != 0;
-      Serial.printf("[SCHED] PB zone %u: %s, %s, mode=%s\n", z,
+      Serial.printf_P(PSTR("[SCHED] PB zone %u: %s, %s, mode=%s\n"), z,
                     progressBars[z].enabled ? "ON" : "OFF",
                     stored ? "profile settings" : "legacy current settings",
                     progressBars[z].dynamicMode ? "dynamic" : "regular");
@@ -647,7 +647,7 @@ void schedulerCheck() {
   uint8_t curDow    = now->tm_wday;  // 0=Sunday
   uint8_t curDom    = now->tm_mday;  // 1-31
 
-  Serial.printf("[SCHED] Check: %02u:%02u:%02u dow=%u dom=%u\n",
+  Serial.printf_P(PSTR("[SCHED] Check: %02u:%02u:%02u dow=%u dom=%u\n"),
                 curHour, curMinute, curSecond, curDow, curDom);
 
   // Evaluate each profile
@@ -665,7 +665,7 @@ void schedulerCheck() {
     // All criteria matched — apply profile
     if (profileLastRun[i] / 60UL == currentScheduleMinute)
       continue;
-    Serial.printf("[SCHED] Profile %u matched, applying '%s'\n",
+    Serial.printf_P(PSTR("[SCHED] Profile %u matched, applying '%s'\n"),
                   i, m.name);
     schedulerApplyProfile(i);
   }
