@@ -23,9 +23,6 @@ Give your messages and clock an outlined, shadowed pixel style with
 - The font uses about **1.8 KB of flash** and is distributed under the MIT license
   with attribution. The README includes a pixel preview and a real-device photo.
 
-The release photo is a JPEG converted from the supplied camera image, with
-EXIF, GPS, XMP, camera details and other metadata removed.
-
 ## Display profiles and scheduling
 
 - Store **4 profiles on ESP8266** or **8 on ESP32**, including the default profile.
