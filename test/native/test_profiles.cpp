@@ -75,6 +75,18 @@ int main() {
   assert(!strcmp(p.zoneStockSymbols[0], "AAPL"));
   assert(p.zoneScrollInfinite == 17);
 
+  // Backups and profile edits must accept the appended font ID without
+  // changing the IDs used by existing profiles.
+  doc.clear();
+  assert(!deserializeJson(doc, R"({"zoneFont":[6,5,3,0]})"));
+  applyRestoreProfile(doc.as<JsonObjectConst>(), p);
+  assert(p.zoneFont[0] == CFNT_PIXEL_3D && p.zoneFont[1] == CFNT_COMPACT);
+  assert(p.zoneFont[2] == CFNT_CYRILLIC && p.zoneFont[3] == CFNT_NO_CHANGE);
+  assert(schedulerProfileValid(p, 16));
+  p.zoneFont[3] = 7;
+  assert(!schedulerProfileValid(p, 16));
+  p.zoneFont[3] = CFNT_NO_CHANGE;
+
   // Every string override must preserve null, empty, and bounded values.
   doc.clear();
   doc["zoneHaSensorId"][0] = nullptr;

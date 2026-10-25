@@ -143,7 +143,7 @@ bool schedulerProfileValid(const ScheduleProfile &p, uint8_t modules) {
         (p.zoneEnd[z] != 255 && p.zoneEnd[z] >= modules) ||
         (p.zoneBegin[z] != 255 && p.zoneEnd[z] != 255 && p.zoneBegin[z] > p.zoneEnd[z]) ||
         p.zoneWorkMode[z] > CWRK_STOCK || p.zoneOwmDisplay[z] > COWM_DESCRIPTION ||
-        p.zoneClockFmt[z] > CCLK_HHMM12AP || p.zoneFont[z] > CFNT_COMPACT)
+        p.zoneClockFmt[z] > CCLK_HHMM12AP || p.zoneFont[z] > CFNT_PIXEL_3D)
       return false;
   }
   return true;

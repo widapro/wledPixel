@@ -275,6 +275,17 @@ void testTextEncodingCompactSymbols() {
   CHECK_BYTE(encoded[5], '~');
 }
 
+void testTextEncodingPixelFont() {
+  auto encoded = encodedBytes("12:34 23°C €", "pixelfont_3d_5x5_thin");
+  CHECK(encoded == std::vector<uint8_t>(
+      {'1', '2', ':', '3', '4', ' ', '2', '3', 176, 'C', ' ', 128}));
+  CHECK(encodedBytes("Аё", "pixelfont_3d_5x5_thin") ==
+        std::vector<uint8_t>({'?', '?'}));
+  CHECK(encodedBytes("\xA0", "pixelfont_3d_5x5_thin") ==
+        std::vector<uint8_t>({160}));
+  CHECK(encodedBytes("€", "default") == std::vector<uint8_t>({'?'}));
+}
+
 void testTextEncodingBoundsAndMalformedUtf8() {
   char oneByte[1] = {static_cast<char>(0x55)};
   utf8ToFontEncoding("abc", oneByte, sizeof(oneByte), "default");
@@ -328,6 +339,7 @@ int main() {
   run("scheduler matching", testSchedulerMatching);
   run("text encoding ASCII and Cyrillic", testTextEncodingAsciiAndCyrillic);
   run("text encoding compact symbols", testTextEncodingCompactSymbols);
+  run("text encoding PixelFonts 3D", testTextEncodingPixelFont);
   run("text encoding bounds and malformed UTF-8",
       testTextEncodingBoundsAndMalformedUtf8);
 

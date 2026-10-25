@@ -54,7 +54,7 @@ The compact-record codec is checked against truncation, corruption and bounds.
 
 `tools/device_maintenance.py` supports explicit `flash`, `restore`, `verify`
 and `profiles` actions with `--host` on ESP8266 and ESP32. Set
-`--version v4.0-beta.4` to check the expected version after boot; it is required
+`--version v4.0` to check the expected version after boot; it is required
 for `flash`, which checks the device platform, embedded platform marker and
 version before uploading any chunk. For ESP32, it also waits for the running
 sketch MD5 to match the exact uploaded

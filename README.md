@@ -5,7 +5,7 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
 <a href="https://github.com/widapro/wledPixel/releases" target="_blank">The latest firmware version can be found in Releases</a>
 
-The current development version is **v4.0-beta.4**. See the [beta release notes](RELEASE_NOTES_v4.0-beta.4.md) for the latest fixes, upgrade instructions and known limitations. The [v4.0-beta.3 notes](RELEASE_NOTES_v4.0-beta.3.md) describe profiles, scheduling and display rotation. Back up your settings before testing the beta.
+The latest stable version is **[v4.0](https://github.com/widapro/wledPixel/releases/tag/v4.0)**, with display profiles, scheduling, animated progress bars, display rotation and the new PixelFonts 3D font. See the [release notes](RELEASE_NOTES_v4.0.md) for changes, upgrade instructions and compatibility. Back up your settings before updating.
 
 
 ## Supported key features:
@@ -26,11 +26,11 @@ The current development version is **v4.0-beta.4**. See the [beta release notes]
 14. Support 4 independent display zones
    - **Rotate display 180°** in **Service Settings → System settings** rotates the entire display, including zones, animations and progress bars. Click **Apply** to save. This is one global setting shared by all profiles and retained after reboot.
 15. Support up to 12 display segments at the same time [configured in web UI]
-16. Included 3 different fonts
+16. Multiple fonts, including PixelFonts 3D
 17. Plus symbols font
 18. **Display profiles and scheduling**: 4 profiles on ESP8266 or 8 on ESP32, including the default profile; scheduled overrides and **Apply Now**.
 
-## Profiles and scheduling (v4.0 beta)
+## Profiles and scheduling (v4.0)
 
 Open **Profiles** to configure a default baseline and additional profiles. Profiles can override power, brightness, zone layout, display modes, fonts, scrolling, countdown, stock ticker and progress bars. **No change** preserves the active value. Saving a profile stores it; **Apply Now** saves and activates it. Changing the zone layout can restart the device.
 
@@ -46,6 +46,29 @@ Progress bars support **Regular** numeric/time mode and **Dynamic** animation mo
 - **3D Printed Case**: Download from <a href="https://www.printables.com/model/1565724-wledpixel-smart-wifi-led-matrix-clock-info-display" target="_blank">Printables</a>
 
 ## Fonts
+### PixelFonts 3D
+
+Select **PixelFonts 3D (Latin)** in a zone's **Font** field under **Profiles**, then
+use **Apply Now**. This is `pixelfont_3d_5x5_thin` from
+[mcer12/PixelFonts](https://github.com/mcer12/PixelFonts), converted for MD_MAX72XX.
+The outline and shadow fit the display's full 8-pixel height. ASCII letters,
+digits, punctuation and the euro sign use the original 3D glyphs; Cyrillic and
+accented letters are not included. Unsupported characters display `?`.
+Temperature degrees and stock arrows retain their existing plain glyphs, and
+blinking clock separators preserve their width. Characters are wider than the
+compact fonts, so longer messages may scroll. On a 32-column zone, set character
+spacing to **0** to fit a 24-hour `HH:MM` clock.
+
+<img width="898" alt="PixelFonts 3D on an 8-row matrix" src="img/WledPixel_font_PixelFonts3D.png">
+
+On a real display:
+
+<img width="898" alt="PixelFonts 3D on a wledPixel LED matrix display" src="img/WledPixel_PixelFonts3D.jpg">
+
+The font is MIT-licensed; attribution is in `lib/wledFont/PixelFonts-LICENSE.txt`.
+The generated header links the exact upstream BDF revision. To regenerate it,
+download that BDF and run `python3 tools/convert_pixelfont.py /path/to/font.bdf`.
+
 ### Compact + Symbols
 This font allows you to display text alongside icons within a single message.
 <img width="898" alt="Icons in Wled symbol font" src="img/WledPixel_font_Compact_Symbols.png">
@@ -419,8 +442,8 @@ Send sensor value each time when a value has been changed
 ```
 Replace **wledPixel-XXXX** and **sensor.example_temperature** with your own device prefix and sensor entity.
 
-### v4.0-beta.4 validation
+### v4.0 validation
 
-See [release notes](RELEASE_NOTES_v4.0-beta.4.md) for changes, settings-backup compatibility and beta limitations,
+See [release notes](RELEASE_NOTES_v4.0.md) for changes, settings-backup compatibility and validation,
 and [local test documentation](test/README.md) for the test and HIL workflows.
 Local tests: `./tools/test_local.sh all`.

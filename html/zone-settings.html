@@ -345,8 +345,8 @@
     // Dynamic JSON mapping helpers
     var WM_MAP = { "manualInput": 1, "wallClock": 2, "owmWeather": 3, "haClient": 4, "mqttClient": 5, "intTempSensor": 6, "wopr": 7, "countdown": 8, "stockTicker": 9 };
     var WM_REV = { 1: "manualInput", 2: "wallClock", 3: "owmWeather", 4: "haClient", 5: "mqttClient", 6: "intTempSensor", 7: "wopr", 8: "countdown", 9: "stockTicker" };
-    var FNT_MAP = { "default": 1, "wledFont": 2, "wledFont_cyrillic": 3, "wledSymbolFont": 4, "wledFont_CompactSymbols": 5 };
-    var FNT_REV = { 1: "default", 2: "wledFont", 3: "wledFont_cyrillic", 4: "wledSymbolFont", 5: "wledFont_CompactSymbols" };
+    var FNT_MAP = { "default": 1, "wledFont": 2, "wledFont_cyrillic": 3, "wledSymbolFont": 4, "wledFont_CompactSymbols": 5, "pixelfont_3d_5x5_thin": 6 };
+    var FNT_REV = { 1: "default", 2: "wledFont", 3: "wledFont_cyrillic", 4: "wledSymbolFont", 5: "wledFont_CompactSymbols", 6: "pixelfont_3d_5x5_thin" };
     var CLK_MAP = { "HHMM": 1, "HHMMSS": 2, "HH": 3, "MM": 4, "ddmmyyyy": 5, "ddmm": 6, "ddmmaa": 7, "aa": 8, "ddmmaahhmm": 9, "HHMM12": 10, "HHMM12AP": 11 };
     var CLK_REV = { 1: "HHMM", 2: "HHMMSS", 3: "HH", 4: "MM", 5: "ddmmyyyy", 6: "ddmm", 7: "ddmmaa", 8: "aa", 9: "ddmmaahhmm", 10: "HHMM12", 11: "HHMM12AP" };
     var OWM_MAP = { "owmTemperature": 1, "owmWeatherIcon": 2, "owmHumidity": 3, "owmPressure": 4, "owmWindSpeed": 5, "owmWeatherDescription": 6 };
@@ -363,7 +363,7 @@
     ];
     var OWM_OPTS = [{v:0,l:'No change'},{v:1,l:'Temperature'},{v:2,l:'Weather Icon'},{v:3,l:'Humidity'},{v:4,l:'Pressure'},{v:5,l:'Wind Speed'},{v:6,l:'Description'}];
     var CLK_OPTS = [{v:0,l:'No change'},{v:1,l:'HH:MM (24-hour)'},{v:10,l:'hh:mm (12-hour, no am/pm)'},{v:11,l:'hh:mm am/pm (12-hour)'},{v:2,l:'HH:MM:SS (24-hour)'},{v:3,l:'HH (24-hour)'},{v:4,l:'MM'},{v:5,l:'dd.mm.yyyy'},{v:6,l:'dd.mm'},{v:7,l:'dd.mm aa'},{v:8,l:'aa'},{v:9,l:'dd.mm aa HH:MM'}];
-    var FNT_OPTS = [{v:0,l:'No change'},{v:1,l:'Default'},{v:2,l:'Wled'},{v:3,l:'Cyrillic'},{v:4,l:'Symbol'},{v:5,l:'Compact Symbols'}];
+    var FNT_OPTS = [{v:0,l:'No change'},{v:1,l:'Default'},{v:2,l:'Wled'},{v:3,l:'Cyrillic'},{v:4,l:'Symbol'},{v:5,l:'Compact Symbols'},{v:6,l:'PixelFonts 3D (Latin)'}];
     var ALIGN_OPTS = [{v:'',l:'No change'},{v:'PA_LEFT',l:'Left'},{v:'PA_CENTER',l:'Center'},{v:'PA_RIGHT',l:'Right'}];
     var EFFECT_OPTS = [
       {v:'',l:'No change'},{v:'PA_NO_EFFECT',l:'NO_EFFECT'},{v:'PA_PRINT',l:'PRINT'},

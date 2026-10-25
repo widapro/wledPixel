@@ -74,8 +74,13 @@ void utf8ToFontEncoding(const char *src, char *dst, size_t dstSize,
     if ((b & 0xF0) == 0xE0) {
       uint8_t b1 = static_cast<uint8_t>(src[si + 1]);
       uint8_t b2 = b1 ? static_cast<uint8_t>(src[si + 2]) : 0;
-      dst[di++] = '?';
-      si += isContinuation(b1) && isContinuation(b2) ? 3 : 1;
+      bool valid = isContinuation(b1) && isContinuation(b2);
+      if (valid && b == 0xE2 && b1 == 0x82 && b2 == 0xAC &&
+          fontName == "pixelfont_3d_5x5_thin")
+        dst[di++] = static_cast<char>(128);
+      else
+        dst[di++] = '?';
+      si += valid ? 3 : 1;
       continue;
     }
 

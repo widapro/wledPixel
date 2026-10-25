@@ -1,4 +1,5 @@
 #include "DisplayUtils.h"
+#include "PixelFont3D.h"
 #include "Scheduler.h"
 #include "httpsRequestJson.h"
 #include "sharedScratch.h"
@@ -78,6 +79,8 @@ void applyZoneFont(int zone, const String &font) {
     P.setFont(zone, wledSymbolFont);
   if (font == F("wledFont_CompactSymbols"))
     P.setFont(zone, wledFont_CompactSymbols);
+  if (font == F("pixelfont_3d_5x5_thin"))
+    P.setFont(zone, pixelFont3D);
 }
 
 // ─── String → textEffect_t

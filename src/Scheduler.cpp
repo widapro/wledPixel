@@ -360,6 +360,7 @@ String cronFontToString(uint8_t val) {
     case CFNT_CYRILLIC: return F("wledFont_cyrillic");
     case CFNT_SYMBOL:   return F("wledSymbolFont");
     case CFNT_COMPACT:  return F("wledFont_CompactSymbols");
+    case CFNT_PIXEL_3D: return F("pixelfont_3d_5x5_thin");
     default:            return String();
   }
 }

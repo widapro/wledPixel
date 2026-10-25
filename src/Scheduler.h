@@ -58,7 +58,8 @@ enum CronFont : uint8_t {
   CFNT_WLED      = 2,
   CFNT_CYRILLIC  = 3,
   CFNT_SYMBOL    = 4,
-  CFNT_COMPACT   = 5
+  CFNT_COMPACT   = 5,
+  CFNT_PIXEL_3D  = 6
 };
 
 // On-flash profile format used before HA entity IDs were expanded. Kept only

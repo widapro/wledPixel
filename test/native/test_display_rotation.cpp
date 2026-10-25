@@ -1,5 +1,6 @@
 #include "DisplayRotation.h"
 #include <MD_MAX72xx.h>
+#include "../../lib/wledFont/PixelFont3D.h"
 #include <array>
 #include <iostream>
 #include <memory>
@@ -32,6 +33,49 @@ void refreshFrame(MD_MAX72XX &matrix) {
   for (uint16_t col = 0; col < matrix.getColumnCount(); ++col)
     matrix.setColumn(col, matrix.getColumn(col));
   matrix.update(MD_MAX72XX::ON);
+}
+
+void exercisePixelFont() {
+  displayRotation::moduleCount = 4;
+  displayRotation::flipped = false;
+  MD_MAX72XX matrix(MD_MAX72XX::FC16_HW, 5, 4);
+  check(matrix.begin(), "font test driver init failed");
+  check(matrix.setFont(pixelFont3D), "3D font selection failed");
+  uint8_t columns[8] = {};
+  // Check source BDF rows through the real driver, including both edge rows.
+  const std::array<uint8_t, 8> expectedA = {
+      0xfc, 0x86, 0xb6, 0x86, 0xb6, 0xb6, 0xfe, 0x7e};
+  check(matrix.getChar('A', sizeof(columns), columns) == 7, "wrong 3D A width");
+  for (uint8_t row = 0; row < 8; ++row) {
+    uint8_t pixels = 0;
+    for (uint8_t column = 0; column < 7; ++column)
+      if (columns[column] & (1u << row)) pixels |= 0x80u >> column;
+    check(pixels == expectedA[row], "3D glyph transposed, flipped or clipped");
+  }
+  for (uint16_t codepoint = 0; codepoint < 256; ++codepoint) {
+    const auto width = matrix.getChar(codepoint, sizeof(columns), columns);
+    check(width <= 8, "3D glyph wider than a module");
+    if (codepoint >= 32)
+      check(width > 0, "3D font missing a printable/fallback glyph");
+  }
+  const auto colonWidth = matrix.getChar(':', sizeof(columns), columns);
+  check(matrix.getChar(160, sizeof(columns), columns) == colonWidth,
+        "blinking 3D clock changes text width");
+  for (uint8_t column = 0; column < colonWidth; ++column)
+    check(columns[column] == 0, "clock blank has lit pixels");
+  // Punctuation has a different BDF y-offset from full-height capitals.
+  check(matrix.getChar('~', sizeof(columns), columns) == 8, "wrong tilde width");
+  for (uint8_t column : columns)
+    check((column & 0x81) == 0, "3D punctuation baseline shifted");
+  for (uint16_t codepoint : {24, 25, 128, 176}) {
+    check(matrix.getChar(codepoint, sizeof(columns), columns) > 0,
+          "missing arrow, euro or temperature symbol");
+  }
+  matrix.setChar(15, 'A');
+  checkFrame(matrix, false);
+  displayRotation::flipped = true;
+  refreshFrame(matrix);
+  checkFrame(matrix, true);
 }
 
 void exerciseDriver(bool hardwareSpi, uint8_t modules) {
@@ -93,8 +137,9 @@ int main() {
       exerciseDriver(true, modules);
       exerciseDriver(false, modules);
     }
+    exercisePixelFont();
     std::cout << "PASS display rotation: real MAX72XX driver, hardware/software SPI, "
-                 "pixels, partial updates, control packets and unchanged logical frame\n";
+                 "pixels, partial updates, control packets, 3D font and unchanged logical frame\n";
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;
