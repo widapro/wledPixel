@@ -41,6 +41,7 @@ Progress bars support **Regular** numeric/time mode and **Dynamic** animation mo
 ##### Ingredients:
 1. Dot matrix display MAX7219, something like this: <a href="https://aliexpress.com/item/32618155357.html" target="_blank">https://aliexpress.com/item/32618155357.html</a>
 2. ESP32 or WeMos D1 Mini (ESP8266), something like this: <a href="https://aliexpress.com/item/32651747570.html" target="_blank">https://aliexpress.com/item/32651747570.html</a>
+3. **Optional:** DS18B20 sensor for local temperature readings. The display works without it.
 
 ### 3D Printed Case
 - **3D Printed Case**: Download from <a href="https://www.printables.com/model/1565724-wledpixel-smart-wifi-led-matrix-clock-info-display" target="_blank">Printables</a>
@@ -146,7 +147,7 @@ This font maps standard ASCII characters directly to icons.
 #define CS_PIN    5          // ESP32 GPIO5
 #define CLK_PIN   18         // ESP32 GPIO18
 
-// Ds18b20 pinout
+// Optional DS18B20 temperature sensor
 const int oneWireBus = 4;    // ESP32 GPIO04
 ```
 
@@ -157,12 +158,15 @@ const int oneWireBus = 4;    // ESP32 GPIO04
 #define CS_PIN    D6         // WeMos D1 mini or ESP8266 -> GPIO12
 #define CLK_PIN   D5         // WeMos D1 mini or ESP8266 -> GPIO14
 
-// Ds18b20 pinout
+// Optional DS18B20 temperature sensor
 const int oneWireBus = D4;   // WeMos D1 mini or ESP8266 -> GPIO02
 ```
 
 
 ## Wiring
+
+**The DS18B20 connection shown below is optional.** Connect the sensor only if you want local temperature readings.
+
 ![Wiring diagram](img/wledPixel_Wiring.png)
 
 ## First boot:
