@@ -59,6 +59,12 @@ run_unit_tests() {
     "$project_dir/test/native/test_profile_storage.cpp" "$project_dir/src/SchedulerLogic.cpp" \
     -o "$build_dir/storage_tests"
   "$build_dir/storage_tests"
+  "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -DESP8266 \
+    -fsanitize=address,undefined -fno-omit-frame-pointer \
+    -I"$project_dir/test/native/storage_stubs" -I"$project_dir/test/native/stubs" -I"$project_dir/src" \
+    "$project_dir/test/native/test_profile_storage.cpp" "$project_dir/src/SchedulerLogic.cpp" \
+    -o "$build_dir/esp8266_storage_tests"
+  "$build_dir/esp8266_storage_tests"
   "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
     -I"$project_dir/test/native/storage_stubs" -I"$project_dir/test/native/stubs" -I"$project_dir/src" \

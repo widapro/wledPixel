@@ -49,6 +49,10 @@ ESP32 filesystem tests separately interrupt file creation, writes and atomic
 renames, with NVS unable to accept new writes. They verify migration from old NVS
 records, both banks, cancellation, corrupt commit pointers and factory cleanup.
 The compact-record codec is checked against truncation, corruption and bounds.
+MQTT regression tests cover the reported long topic, the 127-byte boundary,
+ASCII/UTF-8 overflow rejection, and migration of V2/V3 profiles and V1 bars.
+Migration is exercised for all banks, with raw ESP8266 records and both raw and
+compressed ESP32 records, including filesystem storage and a save/reload cycle.
 
 ## Profile integration checks
 

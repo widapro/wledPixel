@@ -54,7 +54,7 @@ static void copyProgressBarString(char *dest, size_t size,
 
 static void captureProgressBar(uint8_t zone, ScheduleProgressBar &out) {
   memset(&out, 0, sizeof(out));
-  out.version = 1;
+  out.version = SCHED_PROGRESS_BAR_VERSION;
   copyProgressBarString(out.dataSourceType, sizeof(out.dataSourceType),
                         progressBars[zone].dataSourceType);
   copyProgressBarString(out.dataSourceId, sizeof(out.dataSourceId),

@@ -1,8 +1,11 @@
 #include "ProfileStorage.h"
+#include "test_profile_migration.h"
 #include <cassert>
 #include <iostream>
 #include <vector>
 int main() {
+  checkProfileMigrations();
+  Preferences::disk.clear();
   for (size_t size : {size_t(1), size_t(2), size_t(3), size_t(127), size_t(128),
                       size_t(129), sizeof(ScheduleProgressBar), sizeof(ScheduleProfile)}) {
     for (int pattern = 0; pattern < 3; ++pattern) {
@@ -26,7 +29,7 @@ int main() {
   initProfileDefaults(oldProfile, 0);
   newProfile = oldProfile; newProfile.intensity = 12;
   ScheduleProgressBar oldBar = {}, newBar = {}, loadedBar;
-  oldBar.version = newBar.version = 1;
+  oldBar.version = newBar.version = SCHED_PROGRESS_BAR_VERSION;
   oldBar.maxValue = 100; newBar.maxValue = 200;
   Preferences prefs;
   prefs.begin("cronP0"); prefs.putBytes("data", &oldProfile, sizeof(oldProfile));
@@ -76,8 +79,12 @@ int main() {
   assert(store.load(0, loaded));
   const uint8_t active = store.bank(0);
   auto &blob = Preferences::disk[active == 1 ? "cronP0/data1" : "cronP0/data2"];
+#if !defined(ESP8266)
   assert(blob.size() < sizeof(ScheduleProfile));
   blob.back() ^= 1;
   assert(!store.load(0, loaded));
+#else
+  assert(blob.size() == sizeof(ScheduleProfile));
+#endif
   std::cout << "PASS compressed storage/checksum/bounds, atomic profile/PB commit, interrupted writes, reboot, alternate banks, abort\n";
 }

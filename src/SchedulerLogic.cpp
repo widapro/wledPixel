@@ -78,7 +78,7 @@ void schedulerMigrateProfileV2InPlace(ScheduleProfile &profile) {
   constexpr size_t oldTailOffset =
       offsetof(ScheduleProfileV2, zoneHaPostfix);
   constexpr size_t newTailOffset =
-      offsetof(ScheduleProfile, zoneHaPostfix);
+      offsetof(ScheduleProfileV3, zoneHaPostfix);
 
   // Move the unchanged tail first, from high addresses to high addresses.
   // memmove makes the migration safe while old and new formats share a single
@@ -96,8 +96,42 @@ void schedulerMigrateProfileV2InPlace(ScheduleProfile &profile) {
     if (dest[0] != static_cast<uint8_t>(SCHED_STR_NO_CHANGE))
       dest[31] = '\0';
   }
+  schedulerMigrateProfileV3InPlace(profile);
 }
 
+void schedulerMigrateProfileV3InPlace(ScheduleProfile &profile) {
+  uint8_t *bytes = reinterpret_cast<uint8_t *>(&profile);
+  constexpr size_t oldOffset = offsetof(ScheduleProfileV3, zoneMqttTopic);
+  constexpr size_t oldTail = offsetof(ScheduleProfileV3, zoneScrollSpeed);
+  constexpr size_t newTail = offsetof(ScheduleProfile, zoneScrollSpeed);
+  memmove(bytes + newTail, bytes + oldTail, sizeof(ScheduleProfileV3) - oldTail);
+  for (int z = 3; z >= 0; --z) {
+    uint8_t *dest = reinterpret_cast<uint8_t *>(profile.zoneMqttTopic[z]);
+    memmove(dest, bytes + oldOffset + z * 32, 32);
+    dest[31] = 0;
+    memset(dest + 32, 0, SCHED_SOURCE_ID_SIZE - 32);
+  }
+}
+
+void schedulerMigrateProgressBarV1InPlace(ScheduleProgressBar &bar) {
+  uint8_t *bytes = reinterpret_cast<uint8_t *>(&bar);
+  // Move each unchanged segment and its preceding string from back to front.
+  // This keeps migration within the shared buffer on the ESP8266.
+#define EXPAND_BAR_STRING(field, next, end) do { \
+    constexpr size_t oldStart = offsetof(ScheduleProgressBarV1, field); \
+    constexpr size_t oldEnd = offsetof(ScheduleProgressBarV1, next); \
+    constexpr size_t newEnd = offsetof(ScheduleProgressBar, next); \
+    memmove(bytes + newEnd, bytes + oldEnd, (end) - oldEnd); \
+    memmove(bar.field, bytes + oldStart, 48); \
+    bar.field[47] = '\0'; \
+    memset(bar.field + 48, 0, sizeof(bar.field) - 48); \
+  } while (0)
+  EXPAND_BAR_STRING(dynSourceId, dynRule1Value, sizeof(ScheduleProgressBarV1));
+  EXPAND_BAR_STRING(conditionSourceId, conditionValue, offsetof(ScheduleProgressBarV1, dynSourceId));
+  EXPAND_BAR_STRING(dataSourceId, minValue, offsetof(ScheduleProgressBarV1, conditionSourceId));
+#undef EXPAND_BAR_STRING
+  bar.version = SCHED_PROGRESS_BAR_VERSION;
+}
 
 template <size_t N>
 void sanitizeProfileString(char (&value)[N]) {

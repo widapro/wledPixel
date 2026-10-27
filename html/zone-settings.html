@@ -740,7 +740,7 @@
       h += '</select></div>';
       h += '<div class="col-md-5" id="' + base + 'SrcIWrap' + z +
         '"><label class="form-label" style="font-size:.75rem">Sensor ID / MQTT topic</label>';
-      h += '<input class="form-control form-control-sm" maxlength="47" id="' +
+      h += '<input class="form-control form-control-sm" data-max-bytes="127" id="' +
         base + 'SrcI' + z + '" value="' + escA(pb.dataSourceId) + '"></div>';
       h += '<div class="col-md-4 d-none" id="' + base + 'TimeWrap' + z +
         '"><label class="form-label" style="font-size:.75rem">Time mode</label>';
@@ -769,7 +769,7 @@
         '>Home Assistant</option><option value="mqtt"' +
         (pb.conditionSourceType == 'mqtt' ? ' selected' : '') +
         '>MQTT</option></select></div>';
-      h += '<div class="col-md-5"><input class="form-control form-control-sm" maxlength="47" id="' +
+      h += '<div class="col-md-5"><input class="form-control form-control-sm" data-max-bytes="127" id="' +
         base + 'CondSrcI' + z + '" value="' + escA(pb.conditionSourceId) +
         '" placeholder="Condition sensor / topic"></div>';
       h += '<div class="col-md-4"><input class="form-control form-control-sm" maxlength="23" id="' +
@@ -782,7 +782,7 @@
         (pb.dynSourceType == 'ha' ? ' selected' : '') +
         '>Home Assistant</option><option value="mqtt"' +
         (pb.dynSourceType == 'mqtt' ? ' selected' : '') + '>MQTT</option></select></div>';
-      h += '<div class="col-md-9"><label class="form-label" style="font-size:.75rem">Sensor ID / MQTT topic</label><input class="form-control form-control-sm" maxlength="47" id="' +
+      h += '<div class="col-md-9"><label class="form-label" style="font-size:.75rem">Sensor ID / MQTT topic</label><input class="form-control form-control-sm" data-max-bytes="127" id="' +
         base + 'DynSrcI' + z + '" value="' + escA(pb.dynSourceId) + '"></div>';
       h += '<div class="col-md-3"><label class="form-label" style="font-size:.75rem">Rule 1 value</label><input class="form-control form-control-sm" maxlength="23" id="' +
         base + 'DynR1Val' + z + '" value="' + escA(pb.dynRule1Value) + '"></div>';
@@ -976,7 +976,11 @@
           h += '</div>';
 
           h += '<div class="row g-2 mb-2 d-none" id="' + id + 'Zmqtt' + z + '">';
-          h += '<div class="col-md-6"><label class="form-label" style="font-size:.8rem">MQTT Zone Topic</label><input type="text" class="form-control form-control-sm" id="' + id + 'Zmt' + z + '" value="' + escA(p.zoneMqttTopic[z]) + '" placeholder="No change"></div>';
+          var profileTopic = spArr(p.zoneMqttTopic, z);
+          h += '<div class="col-md-6"><label class="form-label" style="font-size:.8rem">MQTT Zone Topic</label><input type="text" class="form-control form-control-sm" id="' + id + 'Zmt' + z + '" value="' + escA(profileTopic) + '" data-max-bytes="127" placeholder="No change">';
+          if (new TextEncoder().encode(profileTopic).length === 31)
+            h += '<div class="form-text text-warning">Possible legacy truncation at 31 bytes. Enter the full MQTT topic and save this profile.</div>';
+          h += '</div>';
           h += '<div class="col-md-6"><label class="form-label" style="font-size:.8rem">MQTT Postfix</label><input type="text" class="form-control form-control-sm" id="' + id + 'Zmp' + z + '" value="' + escA(spArr(p.zoneMqttPostfix, z)) + '" placeholder="-"></div>';
           h += '</div>';
 
@@ -1360,7 +1364,24 @@
       });
     }
 
+    function validateProfileSourceIds(id) {
+      var encoder = new TextEncoder();
+      for (var z = 0; z < 4; z++) {
+        var fields = ['Zmt', 'ZpbSrcI', 'ZpbCondSrcI', 'ZpbDynSrcI'];
+        for (var f = 0; f < fields.length; f++) {
+          var input = document.getElementById(id + fields[f] + z);
+          if (input && encoder.encode(input.value).length > 127) {
+            alert('Zone ' + (z + 1) + ': MQTT topic / source ID must fit in 127 UTF-8 bytes.');
+            input.focus();
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
     function saveProfile1(applyNow) {
+      if (!validateProfileSourceIds('p0')) return;
       var saveBtn = document.getElementById('saveBtn1');
       var applyBtn = document.getElementById('applyBtn1');
       var btn = applyNow ? applyBtn : saveBtn;
@@ -1520,6 +1541,7 @@
     }
 
     function saveScheduledProfile(i, applyNow) {
+      if (!validateProfileSourceIds(i === 0 ? 'p0' : 'sp' + i)) return;
       var saveBtn = document.getElementById('saveBtn' + (i + 1));
       var applyBtn = document.getElementById('applyBtn' + (i + 1));
       var btn = applyNow ? applyBtn : saveBtn;

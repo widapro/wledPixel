@@ -24,10 +24,12 @@ public:
     ProfileRecordStore prefs;
     if (!prefs.begin(ns, true)) return false;
     const char *key = slotKey(active);
-    bool legacyV2 = false;
-    bool ok = readRecord(prefs, key, out, sizeof(ScheduleProfileV2), &legacyV2);
+    size_t recordSize = 0;
+    bool ok = readRecord(prefs, key, out, sizeof(ScheduleProfileV2),
+                         sizeof(ScheduleProfileV3), &recordSize);
     prefs.end();
-    if (ok && legacyV2) schedulerMigrateProfileV2InPlace(out);
+    if (ok && recordSize == sizeof(ScheduleProfileV2)) schedulerMigrateProfileV2InPlace(out);
+    if (ok && recordSize == sizeof(ScheduleProfileV3)) schedulerMigrateProfileV3InPlace(out);
     if (ok) sanitizeScheduleProfile(out);
     return ok;
   }
@@ -64,20 +66,25 @@ public:
 private:
   template <typename Record>
   static bool readRecord(ProfileRecordStore &prefs, const char *key, Record &out,
-                         size_t legacySize = 0, bool *legacy = nullptr) {
+                         size_t legacySize = 0, size_t olderSize = 0,
+                         size_t *recordSize = nullptr) {
     const size_t len = prefs.getBytesLength(key);
     if (!len || len > sizeof(out)) return false;
 #if defined(ESP8266)
-    if (len != sizeof(out) && len != legacySize) return false;
-    if (legacy) *legacy = len == legacySize;
+    if (len != sizeof(out) && len != legacySize && len != olderSize) return false;
+    if (recordSize) *recordSize = len;
     return prefs.getBytes(key, &out, sizeof(out)) == len;
 #else
     uint8_t bytes[sizeof(out)];
     if (prefs.getBytes(key, bytes, sizeof(bytes)) != len) return false;
-    if (storageCodec::encoded(bytes, len))
-      return storageCodec::decode(bytes, len, reinterpret_cast<uint8_t *>(&out), sizeof(out));
-    if (len != sizeof(out) && len != legacySize) return false;
-    if (legacy) *legacy = len == legacySize;
+    const bool compressed = storageCodec::encoded(bytes, len);
+    const size_t decodedSize = compressed
+        ? static_cast<size_t>(bytes[4]) | (static_cast<size_t>(bytes[5]) << 8)
+        : len;
+    if (!decodedSize || (decodedSize != sizeof(out) && decodedSize != legacySize && decodedSize != olderSize)) return false;
+    if (recordSize) *recordSize = decodedSize;
+    if (compressed)
+      return storageCodec::decode(bytes, len, reinterpret_cast<uint8_t *>(&out), decodedSize);
     memcpy(&out, bytes, len);
     return true;
 #endif
@@ -102,7 +109,13 @@ private:
     if (!prefs.begin(ns, true)) return 0;
     const char *key = slotKey(slot);
     if (!prefs.isKey(key)) { prefs.end(); return 0; }
-    bool ok = readRecord(prefs, key, out) && out.version == 1;
+    size_t recordSize = 0;
+    bool ok = readRecord(prefs, key, out, sizeof(ScheduleProgressBarV1), 0, &recordSize);
+    if (ok && recordSize == sizeof(ScheduleProgressBarV1)) {
+      ok = out.version == 1;
+      if (ok) schedulerMigrateProgressBarV1InPlace(out);
+    }
+    ok = ok && out.version == SCHED_PROGRESS_BAR_VERSION;
     prefs.end();
     return ok ? 1 : -1;
   }

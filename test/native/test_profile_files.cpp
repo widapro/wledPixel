@@ -1,14 +1,18 @@
 #define WLED_TEST_PROFILE_FS
 #include "ProfileStorage.h"
+#include "test_profile_migration.h"
 #include <cassert>
 #include <iostream>
 bool ProfileRecordStore::mounted_ = false;
 int main() {
+  checkProfileMigrations();
+  Preferences::disk.clear();
+  fakeFs::disk.clear(); fakeFs::dirs.clear();
   ScheduleProfile oldProfile, newProfile, loaded;
   initProfileDefaults(oldProfile, 0);
   newProfile = oldProfile; newProfile.intensity = 12;
   ScheduleProgressBar oldBar = {}, newBar = {}, loadedBar;
-  oldBar.version = newBar.version = 1;
+  oldBar.version = newBar.version = SCHED_PROGRESS_BAR_VERSION;
   oldBar.maxValue = 100; newBar.maxValue = 200;
   Preferences prefs;
   prefs.begin("cronP0"); prefs.putBytes("data", &oldProfile, sizeof(oldProfile));

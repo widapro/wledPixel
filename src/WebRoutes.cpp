@@ -1294,7 +1294,7 @@ bool restoreConfigurationFromTempFile() {
       } else {
         ScheduleProgressBar &pb = schedulerSharedProgressBarBuffer();
         schedulerLoadProgressBar(i, z, pb);
-        applyRestoreProgressBar(doc[key].as<JsonObjectConst>(), pb);
+        if (!applyRestoreProgressBar(doc[key].as<JsonObjectConst>(), pb)) return false;
         if (!schedulerSaveProgressBar(i, z, pb)) return false;
       }
       yield();
@@ -1316,7 +1316,7 @@ bool restoreConfigurationFromTempFile() {
           return false;
         JsonObjectConst po = doc[profileKey].as<JsonObjectConst>();
         present = present || !po.isNull();
-        applyRestoreProfile(po, profile);
+        if (!applyRestoreProfile(po, profile)) return false;
         yield();
       }
       if (present && !schedulerSaveProfile(i, profile))
@@ -1339,7 +1339,7 @@ bool restoreConfigurationFromTempFile() {
         continue;
       ScheduleProfile &profile = schedulerSharedProfileBuffer();
       schedulerLoadProfile(i, profile);
-      applyRestoreProfile(profiles[i].as<JsonObjectConst>(), profile);
+      if (!applyRestoreProfile(profiles[i].as<JsonObjectConst>(), profile)) return false;
       if (!schedulerSaveProfile(i, profile))
         return false;
       yield();
@@ -1703,9 +1703,18 @@ void setupWebRoutes() {
       return;
     }
 
+    for (const char *name : {"dataSourceId", "conditionSourceId", "dynSourceId"}) {
+      if (request->hasParam(name, true) &&
+          request->getParam(name, true)->value().length() >= SCHED_SOURCE_ID_SIZE) {
+        request->send(400, "application/json",
+                      "{\"error\":\"MQTT topic / source ID exceeds 127 bytes\"}");
+        return;
+      }
+    }
+
     ScheduleProgressBar &pb = schedulerSharedProgressBarBuffer();
     schedulerLoadProgressBar(profileIdx, zone, pb);
-    pb.version = 1;
+    pb.version = SCHED_PROGRESS_BAR_VERSION;
 
 #define PB_POST_STR(name, field)                                                \
     if (request->hasParam(name, true))                                          \
@@ -1905,6 +1914,22 @@ void setupWebRoutes() {
           request->send(400, "application/json",
                         "{\"error\":\"Invalid JSON\"}");
           return;
+        }
+
+        for (uint8_t i = 0; i < MAX_PROFILES; ++i) {
+          char key[32];
+          snprintf_P(key, sizeof(key), PSTR("scheduleProfile%u"), i);
+          bool fits = profileSourceIdsFit(doc[key].as<JsonObjectConst>()) &&
+                      profileSourceIdsFit(doc["scheduleProfiles"][i].as<JsonObjectConst>());
+          for (uint8_t z = 0; z < kZoneCapacity; ++z) {
+            snprintf_P(key, sizeof(key), PSTR("scheduleBar%uZone%u"), i, z);
+            fits = fits && progressBarSourceIdsFit(doc[key].as<JsonObjectConst>());
+          }
+          if (!fits) {
+            request->send(400, "application/json",
+                          "{\"error\":\"MQTT topic / source ID exceeds 127 bytes\"}");
+            return;
+          }
         }
 
         applyRestoreScalarSettings(doc);
@@ -2465,6 +2490,18 @@ void setupWebRoutes() {
 
     // Resolve and load the scheduler profile before applying any other form
     // fields. Multipart/form parameter order is not a reliable API contract.
+    if (keyValue == "cronProfile") {
+      for (uint8_t z = 0; z < kZoneCapacity; ++z) {
+        char name[8]; snprintf_P(name, sizeof(name), PSTR("zmt%u"), z);
+        if (request->hasParam(name, true) &&
+            request->getParam(name, true)->value().length() >= SCHED_SOURCE_ID_SIZE) {
+          request->send(400, "application/json",
+                        "{\"error\":\"MQTT topic exceeds 127 bytes\"}");
+          return;
+        }
+      }
+    }
+
     if (keyValue == "cronProfile") {
       // Do not let a following chunk overwrite the shared profile buffer while
       // the previous chunk is still waiting to be persisted by main().

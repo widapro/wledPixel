@@ -8,6 +8,7 @@ inline TString restoredLiveString(JsonVariantConst value) {
   return value.isNull() ? TString() : value.template as<TString>();
 }
 #include <cstring>
+#include <initializer_list>
 
 // Missing keys preserve old backups; JSON null means "no change", whereas an
 // empty string explicitly clears a value. Keep these states distinct.
@@ -21,7 +22,20 @@ inline void restoreProfileString(JsonVariantConst value, char (&out)[N]) {
   }
 }
 
-inline void applyRestoreProfile(JsonObjectConst po, ScheduleProfile &profile) {
+inline bool profileSourceIdsFit(JsonObjectConst po) {
+  for (JsonVariantConst value : po["zoneMqttTopic"].as<JsonArrayConst>())
+    if (value.as<JsonString>().size() >= SCHED_SOURCE_ID_SIZE) return false;
+  return true;
+}
+
+inline bool progressBarSourceIdsFit(JsonObjectConst po) {
+  for (const char *key : {"dataSourceId", "conditionSourceId", "dynSourceId"})
+    if (po[key].as<JsonString>().size() >= SCHED_SOURCE_ID_SIZE) return false;
+  return true;
+}
+
+inline bool applyRestoreProfile(JsonObjectConst po, ScheduleProfile &profile) {
+  if (!profileSourceIdsFit(po)) return false;
   if (po.containsKey("enabled")) profile.enabled = po["enabled"].as<decltype(profile.enabled)>();
   if (po.containsKey("minute")) profile.minute = po["minute"].as<decltype(profile.minute)>();
   if (po.containsKey("hour")) profile.hour = po["hour"].as<decltype(profile.hour)>();
@@ -66,10 +80,12 @@ inline void applyRestoreProfile(JsonObjectConst po, ScheduleProfile &profile) {
     if (z < po["zoneStockPrefix"].size()) restoreProfileString(po["zoneStockPrefix"][z], profile.zoneStockPrefix[z]);
     if (z < po["zoneStockPostfix"].size()) restoreProfileString(po["zoneStockPostfix"][z], profile.zoneStockPostfix[z]);
   }
+  return true;
 }
 
-inline void applyRestoreProgressBar(JsonObjectConst po, ScheduleProgressBar &pb) {
-  pb.version = 1;
+inline bool applyRestoreProgressBar(JsonObjectConst po, ScheduleProgressBar &pb) {
+  if (!progressBarSourceIdsFit(po)) return false;
+  pb.version = SCHED_PROGRESS_BAR_VERSION;
   if (po.containsKey("dataSourceType")) {
     strncpy(pb.dataSourceType, po["dataSourceType"] | "", sizeof(pb.dataSourceType) - 1);
     pb.dataSourceType[sizeof(pb.dataSourceType) - 1] = '\0';
@@ -114,6 +130,7 @@ inline void applyRestoreProgressBar(JsonObjectConst po, ScheduleProgressBar &pb)
   if (po.containsKey("dynamicSpeedMs")) pb.dynamicSpeedMs = po["dynamicSpeedMs"].as<uint16_t>();
   if (po.containsKey("dynRule2Animation")) pb.dynRule2Animation = po["dynRule2Animation"].as<uint8_t>();
   if (po.containsKey("dynRule2SpeedMs")) pb.dynRule2SpeedMs = po["dynRule2SpeedMs"].as<uint16_t>();
+  return true;
 }
 
 static const char *const profileRestoreKeys[] = {

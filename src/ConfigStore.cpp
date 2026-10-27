@@ -209,8 +209,12 @@ void migrateLegacyScheduleProfile(const LegacyScheduleProfile &oldProfile,
   }
   memcpy(profile.zoneHaPostfix, oldProfile.zoneHaPostfix,
          sizeof(profile.zoneHaPostfix));
-  memcpy(profile.zoneMqttTopic, oldProfile.zoneMqttTopic,
-         sizeof(profile.zoneMqttTopic));
+  for (uint8_t z = 0; z < kZoneCapacity; ++z) {
+    memset(profile.zoneMqttTopic[z], 0, sizeof(profile.zoneMqttTopic[z]));
+    memcpy(profile.zoneMqttTopic[z], oldProfile.zoneMqttTopic[z],
+           sizeof(oldProfile.zoneMqttTopic[z]));
+    profile.zoneMqttTopic[z][sizeof(oldProfile.zoneMqttTopic[z]) - 1] = '\0';
+  }
   memcpy(profile.name, oldProfile.name, sizeof(profile.name));
   profile.name[sizeof(profile.name) - 1] = '\0';
 }
@@ -712,15 +716,10 @@ void readConfig(const char *groupName, uint8_t n) {
       uint8_t probe;
       size_t len = preferences.getBytes("data", &probe, 0);
 #endif
-      if (schedulerProfileBank(i) != 0) {
-        loaded = schedulerLoadStoredProfile(i, tmpProf);
-      } else if (len == sizeof(ScheduleProfile)) {
-        preferences.getBytes("data", &tmpProf, sizeof(ScheduleProfile));
+      if (schedulerLoadStoredProfile(i, tmpProf)) {
         loaded = true;
-      } else if (len == sizeof(ScheduleProfileV2)) {
-        preferences.getBytes("data", &tmpProf, sizeof(ScheduleProfileV2));
-        schedulerMigrateProfileV2InPlace(tmpProf);
-        loaded = true;
+      } else if (schedulerProfileBank(i) != 0) {
+        // A corrupt committed bank must not fall back to an older profile.
       } else if (len == sizeof(LegacyScheduleProfile)) {
         LegacyScheduleProfile lp;
         preferences.getBytes("data", &lp, sizeof(lp));
@@ -739,6 +738,10 @@ void readConfig(const char *groupName, uint8_t n) {
 #endif
         if (oldLen == sizeof(ScheduleProfile)) {
           preferences.getBytes(oldKey, &tmpProf, sizeof(ScheduleProfile));
+          loaded = true;
+        } else if (oldLen == sizeof(ScheduleProfileV3)) {
+          preferences.getBytes(oldKey, &tmpProf, sizeof(ScheduleProfileV3));
+          schedulerMigrateProfileV3InPlace(tmpProf);
           loaded = true;
         } else if (oldLen == sizeof(ScheduleProfileV2)) {
           preferences.getBytes(oldKey, &tmpProf, sizeof(ScheduleProfileV2));

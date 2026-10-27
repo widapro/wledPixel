@@ -5,7 +5,7 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
 <a href="https://github.com/widapro/wledPixel/releases" target="_blank">The latest firmware version can be found in Releases</a>
 
-The latest stable version is **[v4.0](https://github.com/widapro/wledPixel/releases/tag/v4.0)**, with display profiles, scheduling, animated progress bars, display rotation and the new PixelFonts 3D font. See the [release notes](RELEASE_NOTES_v4.0.md) for changes, upgrade instructions and compatibility. Back up your settings before updating.
+The latest stable version is **[v4.0.1](https://github.com/widapro/wledPixel/releases/tag/v4.0.1)**, fixing truncated MQTT topics in profiles and progress bars. It includes the profiles, scheduling, animated progress bars, display rotation and PixelFonts 3D font introduced in v4.0. See the [release notes](RELEASE_NOTES_v4.0.1.md) for changes, upgrade instructions and compatibility. Back up your settings before updating.
 
 
 ## Supported key features:
@@ -235,6 +235,8 @@ pio run -e esp32 -t upload
 *   **devicePrefix**: `wledPixel-{shortMAC}` (shown as `wledPixel-XXXX` in the examples below)
 *   **zone**: `zoneN` where N is 0, 1, 2, or 3.
 
+Custom zone topics and progress-bar source IDs in profiles support up to **127 UTF-8 bytes**. Longer values are rejected when saving. If an older firmware already truncated a topic, enter its full value again and save the profile.
+
 ### Zone Parameters
 
 | Topic Suffix | Description | Payload / Values |
@@ -446,8 +448,9 @@ Send sensor value each time when a value has been changed
 ```
 Replace **wledPixel-XXXX** and **sensor.example_temperature** with your own device prefix and sensor entity.
 
-### v4.0 validation
+### Validation
 
-See [release notes](RELEASE_NOTES_v4.0.md) for changes, settings-backup compatibility and validation,
+See [v4.0.1 release notes](RELEASE_NOTES_v4.0.1.md) for the MQTT fix and upgrade instructions,
+and [v4.0 release notes](RELEASE_NOTES_v4.0.md) for the full feature overview and compatibility details,
 and [local test documentation](test/README.md) for the test and HIL workflows.
 Local tests: `./tools/test_local.sh all`.

@@ -112,6 +112,11 @@ int main() {
   assert(static_cast<uint8_t>(p.zoneMqttTopic[0][0]) == SCHED_STR_NO_CHANGE);
   assert(p.zoneMqttTopic[1][0] == '\0');
   assert(!strcmp(p.zoneMqttTopic[2], "value"));
+  const char *longTopic = "esp8266_meteo_dacha/sensor/total_power_consumed_today";
+  doc.clear();
+  doc["zoneMqttTopic"][0] = longTopic;
+  applyRestoreProfile(doc.as<JsonObjectConst>(), p);
+  assert(!strcmp(p.zoneMqttTopic[0], longTopic));
   doc.clear();
   doc["zoneScrollAlign"][0] = nullptr;
   doc["zoneScrollAlign"][1] = "";
@@ -250,7 +255,7 @@ int main() {
   strcpy(old.name, "old");
   memcpy(&p, &old, sizeof(old));
   schedulerMigrateProfileV2InPlace(p);
-  assert(sizeof(p) == 1487);
+  assert(sizeof(p) == 1871);
   assert(!strcmp(p.name, "old"));
   for (int z = 0; z < 4; ++z) {
     assert(!strcmp(p.zoneStockSymbols[z], old.zoneStockSymbols[z]));
@@ -259,14 +264,39 @@ int main() {
   }
   memset(p.zoneMqttTopic[0], 'x', sizeof(p.zoneMqttTopic[0]));
   sanitizeScheduleProfile(p);
-  assert(strlen(p.zoneMqttTopic[0]) == 31);
+  assert(strlen(p.zoneMqttTopic[0]) == SCHED_SOURCE_ID_SIZE - 1);
 
   ScheduleProgressBar pb = {};
   doc.clear();
   assert(!deserializeJson(doc, R"({"dataSourceId":"sensor.progress","minValue":-12.5,"maxValue":99.25,"dynamicMode":true,"dynRule2SpeedMs":1234,"dynRule1Value":"active"})"));
   applyRestoreProgressBar(doc.as<JsonObjectConst>(), pb);
-  assert(pb.version == 1 && pb.dynamicMode);
+  assert(pb.version == SCHED_PROGRESS_BAR_VERSION && pb.dynamicMode);
   assert(pb.minValue == -12.5f && pb.maxValue == 99.25f);
   assert(pb.dynRule2SpeedMs == 1234 && !strcmp(pb.dynRule1Value, "active"));
+  // Topic and progress-bar IDs survive JSON restoration up to the byte bound.
+  for (const std::string &topic : {std::string(longTopic), std::string(127, 't')}) {
+    doc.clear();
+    for (int z = 0; z < 4; ++z) doc["zoneMqttTopic"][z] = topic;
+    assert(applyRestoreProfile(doc.as<JsonObjectConst>(), p));
+    for (int z = 0; z < 4; ++z) assert(p.zoneMqttTopic[z] == topic);
+    doc.clear();
+    for (const char *key : {"dataSourceId", "conditionSourceId", "dynSourceId"}) doc[key] = topic;
+    assert(applyRestoreProgressBar(doc.as<JsonObjectConst>(), pb));
+    assert(pb.dataSourceId == topic && pb.conditionSourceId == topic && pb.dynSourceId == topic);
+  }
+  std::string utf8;
+  for (int i = 0; i < 64; ++i) utf8 += "я"; // 64 characters, 128 bytes
+  for (const std::string &tooLong : {std::string(128, 't'), utf8}) {
+    auto previous = p;
+    doc.clear(); doc["zoneMqttTopic"][3] = tooLong; doc["intensity"] = 3;
+    assert(!applyRestoreProfile(doc.as<JsonObjectConst>(), p));
+    assert(!memcmp(&p, &previous, sizeof(p)));
+    for (const char *key : {"dataSourceId", "conditionSourceId", "dynSourceId"}) {
+      auto previousBar = pb;
+      doc.clear(); doc[key] = tooLong; doc["minValue"] = 42;
+      assert(!applyRestoreProgressBar(doc.as<JsonObjectConst>(), pb));
+      assert(!memcmp(&pb, &previousBar, sizeof(pb)));
+    }
+  }
   std::cout << "PASS profile restore, null/empty/absent, bounds, V2 migration, progress bars\n";
 }

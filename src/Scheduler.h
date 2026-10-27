@@ -62,53 +62,13 @@ enum CronFont : uint8_t {
   CFNT_PIXEL_3D  = 6
 };
 
-// On-flash profile format used before HA entity IDs were expanded. Kept only
-// for one-time migration; new code always writes ScheduleProfile below.
-typedef struct __attribute__((packed)) {
-  bool enabled;
-  uint8_t minute;
-  uint8_t hour;
-  uint8_t dayOfWeek;
-  uint32_t dayOfMonth;
-  uint8_t power;
-  uint8_t intensity;
-  uint8_t zoneCount;
-  uint8_t pbEnable;
-  uint8_t zoneBegin[4];
-  uint8_t zoneEnd[4];
-  uint8_t zoneWorkMode[4];
-  uint8_t zoneOwmDisplay[4];
-  uint8_t zoneClockFmt[4];
-  uint8_t zoneFont[4];
-  char zoneHaSensorId[4][32];
-  char zoneHaPostfix[4][6];
-  char zoneMqttTopic[4][32];
-  uint8_t zoneScrollSpeed[4];
-  uint8_t zoneScrollPause[4];
-  uint8_t zoneCharspacing[4];
-  uint8_t zoneScrollInfinite;
-  uint8_t zoneCountdownShowUnits;
-  uint8_t zoneStockShowArrows;
-  char zoneScrollAlign[4][10];
-  char zoneScrollEffectIn[4][24];
-  char zoneScrollEffectOut[4][24];
-  char zoneMqttPostfix[4][8];
-  char zoneDs18b20Postfix[4][8];
-  char zoneCountdownTarget[4][20];
-  char zoneCountdownFormat[4][16];
-  char zoneCountdownFinish[4][16];
-  char zoneCountdownPrefix[4][12];
-  char zoneCountdownSuffix[4][12];
-  char zoneStockSymbols[4][64];
-  char zoneStockDisplayFormat[4][16];
-  char zoneStockPrefix[4][12];
-  char zoneStockPostfix[4][12];
-  char name[12];
-} ScheduleProfileV2;
-
 // ─── Profile Struct ─────────────────────────────────────────────────────────
 
-typedef struct __attribute__((packed)) {
+// Keep the old packed layouts readable when field capacities change.
+constexpr size_t SCHED_SOURCE_ID_SIZE = 128; // 127 UTF-8 bytes plus NUL
+constexpr uint8_t SCHED_PROGRESS_BAR_VERSION = 2;
+template <size_t HaSize, size_t TopicSize>
+struct __attribute__((packed)) ScheduleProfileRecord {
   // Schedule (8 bytes)
   bool     enabled;                // job active
   uint8_t  minute;                 // 0-59, 255=every
@@ -133,9 +93,9 @@ typedef struct __attribute__((packed)) {
   uint8_t  zoneFont[4];            // CronFont
 
   // Per-zone strings
-  char     zoneHaSensorId[4][64];  // 0xFF first byte = no change
+  char     zoneHaSensorId[4][HaSize];  // 0xFF first byte = no change
   char     zoneHaPostfix[4][6];    // 0xFF first byte = no change
-  char     zoneMqttTopic[4][32];   // 0xFF first byte = no change
+  char     zoneMqttTopic[4][TopicSize];   // 0xFF first byte = no change
 
   // Extended per-zone state
   uint8_t  zoneScrollSpeed[4];      // 255=no change
@@ -161,32 +121,40 @@ typedef struct __attribute__((packed)) {
 
   // Metadata (12 bytes)
   char     name[12];
-} ScheduleProfile;
+};
+using ScheduleProfileV2 = ScheduleProfileRecord<32, 32>;
+using ScheduleProfileV3 = ScheduleProfileRecord<64, 32>;
+using ScheduleProfile = ScheduleProfileRecord<64, SCHED_SOURCE_ID_SIZE>;
+static_assert(sizeof(ScheduleProfileV2) == 1359, "V2 flash layout changed");
+static_assert(sizeof(ScheduleProfileV3) == 1487, "V3 flash layout changed");
 
 // Full progress-bar configuration is stored separately from ScheduleProfile.
-// Keeping it out of the already large profile block avoids another ~1.2 KB of
-// permanently allocated ESP8266 RAM and preserves profiles written by older
-// firmware.
-typedef struct __attribute__((packed)) {
+// Keeping it out of the profile block avoids retaining four additional bar
+// records per resident profile. Older on-flash layouts remain readable.
+template <size_t SourceSize>
+struct __attribute__((packed)) ScheduleProgressBarRecord {
   uint8_t version;
   char dataSourceType[6];
-  char dataSourceId[48];
+  char dataSourceId[SourceSize];
   float minValue;
   float maxValue;
   bool conditionEnabled;
   char conditionSourceType[6];
-  char conditionSourceId[48];
+  char conditionSourceId[SourceSize];
   char conditionValue[24];
   bool dynamicMode;
   uint8_t dynamicAnimation;
   uint16_t dynamicSpeedMs;
   char dynSourceType[6];
-  char dynSourceId[48];
+  char dynSourceId[SourceSize];
   char dynRule1Value[24];
   char dynRule2Value[24];
   uint8_t dynRule2Animation;
   uint16_t dynRule2SpeedMs;
-} ScheduleProgressBar;
+};
+using ScheduleProgressBarV1 = ScheduleProgressBarRecord<48>;
+using ScheduleProgressBar = ScheduleProgressBarRecord<SCHED_SOURCE_ID_SIZE>;
+static_assert(sizeof(ScheduleProgressBarV1) == 251, "V1 progress-bar flash layout changed");
 
 // ─── Lightweight metadata for schedule matching (ESP8266 keeps only this in RAM)
 typedef struct __attribute__((packed)) {
@@ -223,6 +191,8 @@ void schedulerInitDefaults();
 // On-demand profile loading from NVS (for ESP8266 memory savings)
 bool schedulerLoadProfile(uint8_t idx, ScheduleProfile &out);
 void schedulerMigrateProfileV2InPlace(ScheduleProfile &profile);
+void schedulerMigrateProfileV3InPlace(ScheduleProfile &profile);
+void schedulerMigrateProgressBarV1InPlace(ScheduleProgressBar &bar);
 void schedulerInitProfileForEdit(uint8_t idx, ScheduleProfile &out);
 bool schedulerSaveProfile(uint8_t idx, const ScheduleProfile &p);
 void schedulerSyncMeta(uint8_t idx, const ScheduleProfile &p);
