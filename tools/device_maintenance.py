@@ -212,6 +212,11 @@ def profile_tests(device, backup_path):
             raise RuntimeError('Apply Now did not finish: intensity=' + str(status['intensity']) +
                                ', active profile=' + str(metadata['lastActiveProfile']))
         print('PASS Apply Now changes intensity to 7', flush=True)
+        device.request('/api/reboot', {})
+        device.ready()
+        assert device.request('/api/scheduler/meta')['lastActiveProfile'] == idx
+        assert device.request('/api/hil/status')['intensity'] == 7
+        print('PASS applied profile and ON AIR identity survive reboot with scheduling disabled', flush=True)
 
         token = secrets.token_hex(10)
         device.request('/api/scheduler/edit?idx=3', {}, token)

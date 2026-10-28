@@ -22,7 +22,7 @@ void zoneShowModeMessage(int zone, const String &modeName);
 void updateSpriteData(uint8_t z);
 String flashClockDots(const String &t, const String &font);
 String getCurTime(const String &curZoneFont, const String &displayFormat);
-void ntpUpdateTime();
+bool ntpUpdateTime();
 bool isNumeric(const String &str);
 
 void displayAnimation();

@@ -1,9 +1,40 @@
 #include "ProfileStorage.h"
+#include "SchedulerStateStorage.h"
 #include "test_profile_migration.h"
 #include <cassert>
 #include <iostream>
 #include <vector>
 int main() {
+  // Reproduce Profile 3 surviving in the live settings while its ON AIR marker
+  // was lost on reboot. Exercise the same storage helpers as ConfigStore.
+  Preferences::disk.clear();
+  {
+    Preferences state;
+    state.begin("cronSettings");
+    assert(loadLastActiveProfile(state) == -1);
+    assert(storeLastActiveProfile(state, 2));
+  }
+  {
+    Preferences rebooted;
+    rebooted.begin("cronSettings");
+    assert(loadLastActiveProfile(rebooted) == 2);
+    Preferences::writesLeft = 0;
+    assert(storeLastActiveProfile(rebooted, 2)); // no rewrite every minute
+    assert(!storeLastActiveProfile(rebooted, 0));
+    assert(loadLastActiveProfile(rebooted) == 2);
+    Preferences::writesLeft = -1;
+    for (int8_t idx = 0; idx < MAX_PROFILES; ++idx) {
+      assert(storeLastActiveProfile(rebooted, idx));
+      assert(loadLastActiveProfile(rebooted) == idx);
+    }
+    assert(storeLastActiveProfile(rebooted, -1));
+    assert(loadLastActiveProfile(rebooted) == -1);
+    assert(rebooted.putUChar("lastActive", MAX_PROFILES));
+    assert(loadLastActiveProfile(rebooted) == -1);
+    assert(rebooted.putUChar("lastActive", 254));
+    assert(loadLastActiveProfile(rebooted) == -1);
+  }
+  Preferences::disk.clear();
   checkProfileMigrations();
   Preferences::disk.clear();
   for (size_t size : {size_t(1), size_t(2), size_t(3), size_t(127), size_t(128),

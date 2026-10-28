@@ -365,20 +365,6 @@ String cronFontToString(uint8_t val) {
   }
 }
 
-// ─── Force NTP Sync ─────────────────────────────────────────────────────────
-
-bool schedulerForceNtpSync() {
-  bool ok = timeClient.forceUpdate();
-  if (ok) {
-    ntpSyncedOnce = true;
-    previousNTPsyncMillis = millis();
-    Serial.println(F("[SCHED] Force NTP sync OK"));
-  } else {
-    Serial.println(F("[SCHED] Force NTP sync FAILED"));
-  }
-  return ok;
-}
-
 // ─── Apply Profile ──────────────────────────────────────────────────────────
 
 void schedulerApplyProfile(uint8_t idx) {
@@ -612,6 +598,8 @@ void schedulerApplyProfile(uint8_t idx) {
   // ── Update runtime state ──
   profileLastRun[idx] = timeClient.getEpochTime();
   lastActiveProfile = idx;
+  // Persist after the display settings, including before a layout reboot.
+  queueConfigSave("cronGlobal", 0);
 
   if (needReboot) {
     Serial.println(F("[SCHED] Zone layout changed, rebooting..."));

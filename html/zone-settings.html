@@ -805,7 +805,6 @@
       var h = '';
 
       var lastActive = SCHED_DATA.lastActiveProfile;
-      var isSchedulerEnabled = SCHED_DATA.schedulerEnabled;
       var profileCount = profileRenderCount();
 
       for (var i = 0; i < profileCount; i++) {
@@ -814,12 +813,9 @@
         var profNum = i + 1;
         var isDefault = (i === 0);
 
-        var isActive = false;
-        if (isDefault) {
-          isActive = (lastActive <= 0 || !isSchedulerEnabled);
-        } else {
-          isActive = (lastActive === i && isSchedulerEnabled);
-        }
+        // Scheduling controls future changes; disabling it leaves the last
+        // applied profile on the display. Older firmware has no saved identity.
+        var isActive = (lastActive === i || (isDefault && lastActive === -1));
 
         h += '<div class="accordion-item profile-' + (p.enabled ? 'enabled' : 'disabled') + '"><h2 class="accordion-header" id="spHead' + i + '">';
         h += '<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#spBody' + i + '">';
@@ -1735,19 +1731,35 @@
       var btn = document.getElementById('ntpSyncBtn');
       btn.disabled = true; btn.textContent = 'Syncing...';
       $.ajax({url: '/api/ntp-sync', method: 'POST', dataType: 'json'})
-        .done(function(d) {
-          btn.disabled = false; btn.textContent = 'Force NTP Sync';
-          if (d.success) {
-            var t = new bootstrap.Toast(document.getElementById('liveToastSuccess'));
-            t.show();
-            loadSchedulerData();
-          } else {
-            alert(d.error || 'NTP sync failed');
-          }
+        .done(function() {
+          setTimeout(checkNtpSync, 3000);
         })
         .fail(function() {
           btn.disabled = false; btn.textContent = 'Force NTP Sync';
           alert('NTP sync request failed');
+        });
+    }
+
+    function checkNtpSync() {
+      fetchWithRetry('/api/ntp-status', {cache: 'no-store'}, 2, 2000)
+        .then(function(data) {
+          if (data.state === 'syncing') {
+            setTimeout(checkNtpSync, 3000);
+            return;
+          }
+          var btn = document.getElementById('ntpSyncBtn');
+          btn.disabled = false; btn.textContent = 'Force NTP Sync';
+          if (data.state === 'synced') {
+            new bootstrap.Toast(document.getElementById('liveToastSuccess')).show();
+            loadSchedulerData();
+          } else {
+            alert('NTP sync failed. Check the server address and network.');
+          }
+        })
+        .catch(function() {
+          var btn = document.getElementById('ntpSyncBtn');
+          btn.disabled = false; btn.textContent = 'Force NTP Sync';
+          alert('Could not read NTP synchronization status.');
         });
     }
 

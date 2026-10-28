@@ -1,4 +1,5 @@
 #include "DisplayRotation.h"
+#include "DisplaySnapshot.h"
 #include <MD_MAX72xx.h>
 #include "../../lib/wledFont/PixelFont3D.h"
 #include <array>
@@ -115,6 +116,76 @@ void exerciseDriver(bool hardwareSpi, uint8_t modules) {
   checkFrame(matrix, false);
 }
 
+void exerciseSnapshot() {
+  MD_MAX72XX matrix(MD_MAX72XX::FC16_HW, 5, 16);
+  check(matrix.begin(), "snapshot driver init failed");
+  struct Zone { uint8_t begin, end; };
+  // An inactive zone and spare driver buffers must not inflate the preview.
+  const Zone zones[] = {{0, 1}, {2, 3}, {0, 15}, {255, 255}};
+  displaySnapshot::Frame frame;
+  for (const uint8_t modules : {1, 2, 4, 16}) {
+    const Zone layout[] = {{0, static_cast<uint8_t>(modules - 1)}, {0, 15}};
+    displayRotation::moduleCount = modules;
+    for (const bool flipped : {false, true}) {
+      displayRotation::flipped = flipped;
+      matrix.update(MD_MAX72XX::OFF);
+      for (uint16_t col = 0; col < 128; ++col)
+        matrix.setColumn(col, (col * 37u + 3u) & 0xffu);
+      matrix.update(MD_MAX72XX::ON);
+      const auto transactions = displayTest::transactions;
+      displaySnapshot::capture(frame, matrix, layout, 1, true, flipped, 1234);
+      check(frame.modules == modules, "snapshot includes unconfigured modules");
+      check(frame.power && frame.capturedAt == 1234, "snapshot metadata incorrect");
+      check(transactions == displayTest::transactions, "snapshot wrote to display");
+      for (uint16_t column = 0; column < modules * 8u; ++column) {
+        const uint16_t physicalColumn = modules * 8u - 1 - column;
+        for (uint8_t row = 0; row < 8; ++row) {
+          const bool physical = displayTest::registers[physicalColumn / 8][row + 1] &
+                                (1u << (physicalColumn % 8));
+          check(physical == bool(frame.data[column] & (1u << row)),
+                "snapshot does not match physical display orientation");
+        }
+      }
+      const auto frozen = frame;
+      matrix.setColumn(0, 0);
+      check(frame.data[flipped ? 0 : modules * 8u - 1] ==
+            frozen.data[flipped ? 0 : modules * 8u - 1], "snapshot is not immutable");
+    }
+  }
+  displaySnapshot::capture(frame, matrix, zones, 1, true, false, 1);
+  check(frame.modules == 2, "two configured modules must show exactly two modules");
+  displaySnapshot::capture(frame, matrix, zones, 2, true, false, 1);
+  check(frame.modules == 4, "snapshot missed a second active zone");
+  displaySnapshot::capture(frame, matrix, zones, 1, false, true, 2);
+  check(!frame.power, "powered-off snapshot reported on");
+  for (uint16_t col = 0; col < frame.modules * 8u; ++col)
+    check(frame.data[col] == 0, "powered-off snapshot shows stale lit pixels");
+  const Zone invalid[] = {{0, 1}, {0, 255}, {5, 3}};
+  displaySnapshot::capture(frame, matrix, invalid, 3, true, false, 3);
+  check(frame.modules == 2, "invalid zone inflated snapshot geometry");
+
+  struct Profile { char name[12]; };
+  Profile profiles[] = {{"Default"}, {"Night"}, {"Third"}, {"Fourth"},
+                        {"Fifth"}, {"Sixth"}, {"Seventh"}, {"Eighth"}};
+  for (const uint8_t count : {4, 8}) {
+    for (int8_t active = -1; active < count; ++active) {
+      displaySnapshot::captureProfile(frame, profiles, count, active);
+      const uint8_t expected = active < 0 ? 0 : active;
+      check(frame.profileIndex == expected, "snapshot active profile differs from ON AIR");
+      check(std::strcmp(frame.profileName, profiles[expected].name) == 0,
+            "snapshot profile name is incorrect");
+    }
+  }
+  displaySnapshot::captureProfile(frame, profiles, 4, 7);
+  check(frame.profileIndex == 0, "invalid active profile did not fall back to default");
+  displaySnapshot::captureProfile(frame, profiles, 8, 1);
+  profiles[1].name[0] = 'X';
+  check(std::strcmp(frame.profileName, "Night") == 0, "captured profile name is not immutable");
+  std::memset(profiles[1].name, 'A', sizeof(profiles[1].name));
+  displaySnapshot::captureProfile(frame, profiles, 8, 1);
+  check(std::strlen(frame.profileName) == 11, "unterminated profile name escaped its buffer");
+}
+
 int main() {
   try {
     // All MAX7219 registers and byte values must survive two transforms.
@@ -138,8 +209,9 @@ int main() {
       exerciseDriver(false, modules);
     }
     exercisePixelFont();
+    exerciseSnapshot();
     std::cout << "PASS display rotation: real MAX72XX driver, hardware/software SPI, "
-                 "pixels, partial updates, control packets, 3D font and unchanged logical frame\n";
+                 "pixels, partial updates, control packets, 3D font, snapshots and unchanged logical frame\n";
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

@@ -185,7 +185,6 @@ extern int8_t   lastActiveProfile;
 
 void schedulerCheck();
 void schedulerApplyProfile(uint8_t idx);
-bool schedulerForceNtpSync();
 void schedulerInitDefaults();
 
 // On-demand profile loading from NVS (for ESP8266 memory savings)

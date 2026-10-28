@@ -1,6 +1,7 @@
 #include "WebRoutes.h"
 #include "ConfigStore.h"
 #include "DisplayUtils.h"
+#include "DisplaySnapshot.h"
 #include "HilTest.h"
 #include "MqttHandler.h"
 #include "Scheduler.h"
@@ -1174,7 +1175,10 @@ void persistRestoredConfiguration() {
     saveVarsToConfFile("zoneSettings", i);
     saveVarsToConfFile("pbSettings", i);
   }
-  saveSchedulerEnabledToConfFile();
+  // Backups contain live settings, but no identity of the profile that applied
+  // them. Do not retain an unrelated ON AIR marker from before the restore.
+  lastActiveProfile = -1;
+  saveSchedulerStateToConfFile();
 }
 
 #if defined(ESP8266)
@@ -1452,6 +1456,42 @@ void setupWebRoutes() {
       return;
     request->send(404, "text/plain", "Not found");
   });
+
+  server.on("/api/display/frame", HTTP_GET,
+            [](AsyncWebServerRequest *request) {
+              if (globalOtaInProgress) {
+                sendBusyJson(request);
+                return;
+              }
+              const auto snapshot = displaySnapshot::request();
+              AsyncWebServerResponse *response = request->beginChunkedResponse(
+                  "application/json",
+                  [snapshot](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+                    if (!snapshot->ready.load(std::memory_order_acquire))
+                      return RESPONSE_TRY_AGAIN;
+                    const auto &frame = snapshot->frame;
+                    ChunkWindowPrint out(buffer, maxLen, index);
+                    out.printf("{\"modules\":%u,\"rows\":8,\"columns\":%u,"
+                               "\"power\":%s,\"capturedAt\":%lu,\"data\":[",
+                               frame.modules, frame.modules * 8u,
+                               frame.power ? "true" : "false",
+                               static_cast<unsigned long>(frame.capturedAt));
+                    for (uint16_t column = 0; column < frame.modules * 8u; ++column) {
+                      if (column)
+                        out.print(',');
+                      out.print(frame.data[column]);
+                    }
+                    out.printf("],\"profileIndex\":%u,\"profileName\":", frame.profileIndex);
+                    writeJsonEscaped(out, frame.profileName);
+                    out.print('}');
+                    return out.copied();
+                  });
+              if (!response) {
+                sendBusyJson(request);
+                return;
+              }
+              request->send(response);
+            });
 
   server.on("/api/diagnostics", HTTP_GET,
             [](AsyncWebServerRequest *request) {
@@ -1818,22 +1858,34 @@ void setupWebRoutes() {
                   "{\"status\":\"queued\"}");
   });
 
-  // ─── NTP Force Sync ────────────────────────────────────────────────────────
+  // ─── NTP status and queued force sync ──────────────────────────────────────
+  server.on("/api/ntp-status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    const auto status = ntpSyncState.getStatus();
+    const bool syncing = shouldUpdateNtp || status == NtpSyncState::Status::Pending ||
+                         status == NtpSyncState::Status::Running;
+    const char *state = syncing ? "syncing" :
+        status == NtpSyncState::Status::Succeeded ? "synced" :
+        status == NtpSyncState::Status::Failed ? "failed" : "never";
+    const uint32_t lastSync = ntpSyncState.lastSyncUtc();
+    const unsigned long localEpoch = lastSync ? timeClient.getEpochTime() : 0;
+    char json[256];
+    snprintf_P(json, sizeof(json), PSTR(
+        "{\"state\":\"%s\",\"synced\":%s,\"configured\":%s,"
+        "\"localEpoch\":%lu,\"utcOffsetSeconds\":%ld,\"lastSyncUtc\":%lu}"),
+        state, lastSync ? "true" : "false", ntpServer.length() ? "true" : "false",
+        localEpoch, static_cast<long>(ntpTimeZone * 3600),
+        static_cast<unsigned long>(lastSync));
+    request->send(200, "application/json", json);
+  });
+
   server.on("/api/ntp-sync", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (ntpServer.length() == 0) {
       request->send(400, "application/json",
                     "{\"success\":false,\"error\":\"NTP server not configured\"}");
       return;
     }
-    bool ok = schedulerForceNtpSync();
-    if (ok) {
-      String t = timeClient.getFormattedTime();
-      request->send(200, "application/json",
-                    "{\"success\":true,\"time\":\"" + t + "\"}");
-    } else {
-      request->send(200, "application/json",
-                    "{\"success\":false,\"error\":\"NTP sync failed. Check server address and network.\"}");
-    }
+    ntpSyncState.request(); // Repeated clicks share the pending/running attempt.
+    request->send(202, "application/json", "{\"state\":\"syncing\"}");
   });
 
   // ─── Backup API ────────────────────────────────────────────────────────────

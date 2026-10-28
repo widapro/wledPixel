@@ -8,6 +8,43 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
     <link rel="icon" href="data:image/svg+xml,%3C%3Fxml version='1.0' encoding='UTF-8'%3F%3E%3C!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'%3E%3Csvg height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3,9H7V5H3V9M3,14H7V10H3V14M8,14H12V10H8V14M13,14H17V10H13V14M8,9H12V5H8V9M13,5V9H17V5H13M18,14H22V10H18V14M3,19H7V15H3V19M8,19H12V15H8V19M13,19H17V15H13V19M18,19H22V15H18V19M18,5V9H22V5H18Z'/%3E%3C/svg%3E" type="image/svg+xml">
     <title>WledPixel</title>
+    <style>
+      .snapshot-toolbar, .snapshot-actions {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+      }
+      .snapshot-toolbar { justify-content: space-between; }
+      .snapshot-actions { margin-left: auto; }
+      .snapshot-color-picker {
+        display: inline-flex; align-items: center; gap: 10px; padding: 5px 12px;
+        background: #f5f6f8; border: 1px solid #e1e5eb; border-radius: 999px;
+      }
+      .snapshot-color-label { font-size: 12px; color: #687180; white-space: nowrap; }
+      .snapshot-color-options { display: flex; align-items: center; gap: 3px; }
+      .snapshot-color-options label { display: flex; padding: 4px; cursor: pointer; }
+      .snapshot-color-options input {
+        appearance: none; -webkit-appearance: none; width: 18px; height: 18px;
+        margin: 0; border: 1px solid #0002; border-radius: 50%; cursor: pointer;
+        background: var(--led-color); box-shadow: inset 0 -1px 2px #0001;
+        transition: transform .15s, outline-color .15s;
+      }
+      .snapshot-color-options input:hover { transform: scale(1.12); }
+      .snapshot-color-options input:checked { outline: 2px solid #687180; outline-offset: 3px; }
+      .snapshot-color-options input:focus-visible { outline: 2px solid #0d6efd; outline-offset: 3px; }
+      .snapshot-flip-button {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        min-height: 38px; padding: 6px 12px; border: 1px solid #e1e5eb;
+        border-radius: 999px; background: #f5f6f8; color: #687180; font-size: 14px;
+      }
+      .snapshot-flip-button:hover { border-color: #aeb8c5; }
+      .snapshot-flip-button[aria-pressed="true"] { background: #e8f0fe; border-color: #bfd3f5; color: #285fae; }
+      .snapshot-flip-button:focus-visible { outline: 2px solid #0d6efd; outline-offset: 3px; }
+      .display-snapshot-viewport { overflow-x: auto; padding: 8px 0 16px; }
+      #displaySnapshotCanvas {
+        display: block; max-width: 100%; height: auto; border-radius: 14px;
+        background: #0b0e13; box-shadow: 0 4px 14px #0003;
+      }
+      #displaySnapshotCanvas[hidden] { display: none; }
+    </style>
   </head>
   <body>
       <header>
@@ -50,10 +87,32 @@
     </div>
   </header>
   <div class="container">
-    <main>
-        <div class="py-5 text-center">
-            <h2>wledPixel dot led Display</h2>
-        </div>
+    <main class="pt-4">
+        <section class="mb-4" aria-labelledby="displaySnapshotHeading">
+          <div class="snapshot-toolbar mb-2">
+            <h4 id="displaySnapshotHeading" class="mb-0">Display snapshot</h4>
+            <div class="snapshot-actions">
+              <div class="snapshot-color-picker">
+                <span class="snapshot-color-label" id="snapshotColorLabel">LED color</span>
+                <div class="snapshot-color-options" role="radiogroup" aria-labelledby="snapshotColorLabel">
+                  <label title="Red"><input type="radio" name="snapshotColor" value="red" aria-label="Red" style="--led-color: #ff4a32" checked onchange="setDisplaySnapshotColor(this.value)"></label>
+                  <label title="Yellow-green"><input type="radio" name="snapshotColor" value="yellowGreen" aria-label="Yellow-green" style="--led-color: #d5f542" onchange="setDisplaySnapshotColor(this.value)"></label>
+                  <label title="Neon blue"><input type="radio" name="snapshotColor" value="neonBlue" aria-label="Neon blue" style="--led-color: #54eaff" onchange="setDisplaySnapshotColor(this.value)"></label>
+                  <label title="White"><input type="radio" name="snapshotColor" value="white" aria-label="White" style="--led-color: #f3f7ff" onchange="setDisplaySnapshotColor(this.value)"></label>
+                </div>
+              </div>
+              <button id="flipDisplaySnapshot" type="button" class="snapshot-flip-button" aria-label="Rotate snapshot 180°" aria-pressed="false" title="Rotate this preview by 180°" onclick="setDisplaySnapshotFlip(!snapshotFlipped)">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10a8 8 0 1 1 2 9M4 4v6h6"/></svg>
+                <span>180°</span>
+              </button>
+              <button id="refreshDisplaySnapshot" type="button" class="btn btn-outline-primary" onclick="refreshDisplaySnapshot()">Refresh</button>
+            </div>
+          </div>
+          <div class="display-snapshot-viewport">
+            <canvas id="displaySnapshotCanvas" role="img" aria-label="Display snapshot" hidden></canvas>
+          </div>
+          <p id="displaySnapshotStatus" class="text-muted small" role="status" aria-live="polite">Loading snapshot...</p>
+        </section>
         <div class="row g-5">
             <div class="col-md-5 col-lg-4 order-md-last">
               <h4 class="d-flex justify-content-between align-items-center mb-3">
@@ -63,7 +122,6 @@
                 <li class="list-group-item d-flex justify-content-between lh-sm">
                   <div>
                     <h6 class="my-0">wledPixel</h6>
-                    <small class="text-muted">wledPixel dot led Display</small>
                   </div>
                   <span class="text-muted" id="firmwareVer">...</span>
                 </li>
@@ -199,6 +257,131 @@
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script>
+    const SNAPSHOT_COLORS = {
+      red: {label: 'Red', lit: '#ff4a32', glow: '#ff3018'},
+      yellowGreen: {label: 'Yellow-green', lit: '#d5f542', glow: '#b3ed00'},
+      neonBlue: {label: 'Neon blue', lit: '#54eaff', glow: '#00cfff'},
+      white: {label: 'White', lit: '#f3f7ff', glow: '#dce9ff'}
+    };
+    const SNAPSHOT_COLOR_STORAGE_KEY = 'wledPixel.snapshotColor';
+    const SNAPSHOT_FLIP_STORAGE_KEY = 'wledPixel.snapshotFlip';
+    let snapshotColor = 'red';
+    let snapshotFlipped = false;
+    let snapshotFrame = null;
+
+    function initDisplaySnapshotColor() {
+      let saved = 'red';
+      try { saved = localStorage.getItem(SNAPSHOT_COLOR_STORAGE_KEY) || 'red'; } catch (error) {}
+      setDisplaySnapshotColor(saved, false);
+    }
+
+    function setDisplaySnapshotColor(color, persist = true) {
+      snapshotColor = Object.prototype.hasOwnProperty.call(SNAPSHOT_COLORS, color) ? color : 'red';
+      document.querySelectorAll('input[name="snapshotColor"]').forEach(input => {
+        input.checked = input.value === snapshotColor;
+      });
+      if (persist) {
+        try { localStorage.setItem(SNAPSHOT_COLOR_STORAGE_KEY, snapshotColor); } catch (error) {}
+      }
+      if (snapshotFrame) drawDisplaySnapshot(snapshotFrame);
+    }
+
+    function initDisplaySnapshotFlip() {
+      let flipped = false;
+      try { flipped = localStorage.getItem(SNAPSHOT_FLIP_STORAGE_KEY) === '1'; } catch (error) {}
+      setDisplaySnapshotFlip(flipped, false);
+    }
+
+    function setDisplaySnapshotFlip(flipped, persist = true) {
+      snapshotFlipped = !!flipped;
+      document.getElementById('flipDisplaySnapshot').setAttribute('aria-pressed', String(snapshotFlipped));
+      if (persist) {
+        try { localStorage.setItem(SNAPSHOT_FLIP_STORAGE_KEY, snapshotFlipped ? '1' : '0'); } catch (error) {}
+      }
+      if (snapshotFrame) drawDisplaySnapshot(snapshotFrame);
+    }
+
+    function drawDisplaySnapshot(frame) {
+      if (!Number.isInteger(frame.modules) || frame.modules < 1 || frame.modules > 16 ||
+          frame.rows !== 8 || frame.columns !== frame.modules * 8 ||
+          typeof frame.power !== 'boolean' || !Array.isArray(frame.data) ||
+          frame.data.length !== frame.columns ||
+          frame.data.some(value => !Number.isInteger(value) || value < 0 || value > 255)) {
+        throw new Error('Invalid display snapshot');
+      }
+      const canvas = document.getElementById('displaySnapshotCanvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas is unavailable');
+      snapshotFrame = frame;
+      const color = SNAPSHOT_COLORS[snapshotColor];
+      const padding = 16, pitch = 12, moduleSize = 8 * pitch;
+      const matrixWidth = frame.modules * moduleSize;
+      canvas.width = padding * 2 + matrixWidth;
+      canvas.height = padding * 2 + moduleSize;
+      ctx.fillStyle = '#0b0e13';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#252c35';
+      ctx.strokeRect(padding - 2, padding - 2, matrixWidth + 4, moduleSize + 4);
+      for (let module = 0; module < frame.modules; module++) {
+        const left = padding + module * moduleSize;
+        for (let column = 0; column < 8; column++) {
+          const screenColumn = module * 8 + column;
+          const pixels = frame.data[snapshotFlipped ? frame.columns - 1 - screenColumn : screenColumn];
+          for (let row = 0; row < 8; row++) {
+            const sourceRow = snapshotFlipped ? 7 - row : row;
+            const lit = frame.power && (pixels & (1 << sourceRow)) !== 0;
+            ctx.beginPath();
+            ctx.arc(left + column * pitch + pitch / 2,
+                    padding + row * pitch + pitch / 2, 3.6, 0, Math.PI * 2);
+            ctx.fillStyle = lit ? color.lit : '#252b34';
+            ctx.shadowColor = color.glow;
+            ctx.shadowBlur = lit ? 9 : 0;
+            ctx.fill();
+          }
+        }
+      }
+      ctx.shadowBlur = 0;
+      canvas.hidden = false;
+      canvas.setAttribute('aria-label', 'Display snapshot: ' + frame.modules +
+          (frame.modules === 1 ? ' module' : ' modules') + ', display ' + (frame.power ? 'on' : 'off') +
+          ', ' + color.label.toLowerCase() + ' LEDs' + (snapshotFlipped ? ', preview rotated 180 degrees' : ''));
+    }
+
+    async function refreshDisplaySnapshot() {
+      const button = document.getElementById('refreshDisplaySnapshot');
+      const status = document.getElementById('displaySnapshotStatus');
+      const canvas = document.getElementById('displaySnapshotCanvas');
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Refreshing...';
+      status.textContent = 'Loading snapshot...';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch('/api/display/frame', {cache: 'no-store', signal: controller.signal});
+        if (!response.ok) {
+          throw new Error(response.status === 429 || response.status === 503
+              ? 'Device is busy. Press Refresh to try again.' : 'Could not load snapshot. Press Refresh to try again.');
+        }
+        const frame = await response.json();
+        drawDisplaySnapshot(frame);
+        const profileName = typeof frame.profileName === 'string' ? frame.profileName.trim() : '';
+        const activeProfile = Number.isInteger(frame.profileIndex) && frame.profileIndex >= 0 && frame.profileIndex < 8
+            ? ' · Active profile: ' + (frame.profileIndex + 1) + (profileName ? ' (' + profileName + ')' : '') : '';
+        status.textContent = frame.modules + (frame.modules === 1 ? ' module' : ' modules') +
+            ' · Display ' + (frame.power ? 'on' : 'off') +
+            activeProfile +
+            ' · Snapshot at ' + new Date().toLocaleTimeString();
+      } catch (error) {
+        status.textContent = (canvas.hidden ? '' : 'Previous snapshot kept. ') +
+            (error.name === 'AbortError' ? 'Request timed out. Press Refresh to try again.' : error.message);
+      } finally {
+        clearTimeout(timeout);
+        button.disabled = false;
+        button.textContent = 'Refresh';
+      }
+    }
+
   function preparePostRequest(event, key, val) {
     event.preventDefault(); //This will prevent the default click action
 
@@ -277,6 +460,9 @@
     }
 
     window.onload = function() {
+        initDisplaySnapshotColor();
+        initDisplaySnapshotFlip();
+        document.getElementById('refreshDisplaySnapshot').disabled = true;
         fetchWithRetry('/api/zone-settings')
         .then(data => {
             document.getElementById('zone0WorkMode').innerText = data.workModeZone0;
@@ -330,6 +516,11 @@
                 document.getElementById('postZone1Text').disabled = true;
                 document.getElementById('messageZone1').placeholder = "Zone1 is not initialized";
             }
+        }).catch(function() {
+            // The snapshot remains available if the settings request fails.
+        }).finally(function() {
+            document.getElementById('refreshDisplaySnapshot').disabled = false;
+            refreshDisplaySnapshot();
         });
     };
 </script>

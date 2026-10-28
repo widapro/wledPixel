@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "NtpSyncState.h"
 
 #if defined(ESP8266)
 #pragma message "Compiling for ESP8266 board"
@@ -248,6 +249,7 @@ extern char zoneMessagesPending[4][100];
 
 // NTP
 extern String ntpServer;
+extern NtpSyncState ntpSyncState;
 extern float ntpTimeZone;
 extern unsigned long previousNTPsyncMillis;
 extern uint16_t ntpUpdateInterval;

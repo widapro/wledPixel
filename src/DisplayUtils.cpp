@@ -275,17 +275,27 @@ bool isNumeric(const String &str) {
 
 // ─── NTP Update
 // ────────────────────────────────────────────────────────────────
-void ntpUpdateTime() {
-  if (timeClient.update()) {
-    previousNTPsyncMillis = currentMillis;
+bool ntpUpdateTime() {
+  if (!ntpSyncState.begin())
+    return false;
+  // Callers already decide when an update is due. update() also returns false
+  // when its internal interval has not elapsed, which is not a sync failure.
+  const bool success = ntpServer.length() > 0 && timeClient.forceUpdate();
+  const unsigned long now = millis();
+  if (success) {
+    previousNTPsyncMillis = now;
     ntpSyncedOnce = true;
     Serial.print(F("\nNTP time synchronized successfully"));
   } else {
     previousNTPsyncMillis =
-        currentMillis - (ntpUpdateInterval * 3600 * 1000) + 30000;
+        now - (static_cast<unsigned long>(ntpUpdateInterval) * 3600000UL) + 30000UL;
     Serial.print(
         F("\nERROR: NTP time synchronization failed, will retry in 30s"));
   }
+  ntpSyncState.finish(success, success
+      ? timeClient.getEpochTime() - static_cast<long>(ntpTimeZone * 3600)
+      : 0);
+  return success;
 }
 
 // ─── Update Sprite Data
@@ -361,10 +371,6 @@ String flashClockDots(const String &t, const String &font) {
 // ─── Get Current Time
 // ──────────────────────────────────────────────────────────
 String getCurTime(const String &curZoneFont, const String &displayFormat) {
-  if (currentMillis - previousNTPsyncMillis >=
-      (unsigned)ntpUpdateInterval * 3600 * 1000)
-    ntpUpdateTime();
-
   String t = (String)timeClient.getFormattedTime();
 
   if (displayFormat == "HHMM12" || displayFormat == "HHMM12AP") {

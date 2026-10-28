@@ -1,6 +1,7 @@
 #include "ConfigStore.h"
 #include "Scheduler.h"
 #include "ConfigStringStorage.h"
+#include "SchedulerStateStorage.h"
 #include <cstdio>
 #include <cstring>
 
@@ -99,7 +100,7 @@ bool serviceDeferredConfigSave() {
   const char *groupName = deferredGroupName(entry.group);
   Serial.printf_P(PSTR("\n[Config] Deferred save: %s/%u"), groupName, entry.index);
   if (entry.group == DG_CRON_GLOBAL)
-    saveSchedulerEnabledToConfFile();
+    saveSchedulerStateToConfFile();
   else
     saveVarsToConfFile(groupName, entry.index);
   return true;
@@ -429,6 +430,7 @@ void saveVarsToConfFile(const char *groupName, uint8_t n) {
 
   if (strcmp(groupName, "cronSettings") == 0) {
     preferences.putBool("schEnable", schedulerEnabled);
+    storeLastActiveProfile(preferences, lastActiveProfile);
     preferences.end();
 #if !defined(ESP8266)
     // ESP32: save from in-memory array
@@ -452,9 +454,11 @@ void saveVarsToConfFile(const char *groupName, uint8_t n) {
   preferences.end();
 }
 
-void saveSchedulerEnabledToConfFile() {
+void saveSchedulerStateToConfFile() {
   preferences.begin("cronSettings", false);
   preferences.putBool("schEnable", schedulerEnabled);
+  if (!storeLastActiveProfile(preferences, lastActiveProfile))
+    Serial.println(F("[SCHED] Failed to save active profile"));
   preferences.end();
 }
 
@@ -694,6 +698,7 @@ void readConfig(const char *groupName, uint8_t n) {
 
   if (strcmp(groupName, "cronSettings") == 0) {
     schedulerEnabled = preferences.getBool("schEnable", false);
+    lastActiveProfile = loadLastActiveProfile(preferences);
     preferences.end();
     // Read each profile from its own namespace
     for (uint8_t i = 0; i < MAX_PROFILES; i++) {

@@ -5,7 +5,7 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
 <a href="https://github.com/widapro/wledPixel/releases" target="_blank">The latest firmware version can be found in Releases</a>
 
-The latest stable version is **[v4.0.1](https://github.com/widapro/wledPixel/releases/tag/v4.0.1)**, fixing truncated MQTT topics in profiles and progress bars. It includes the profiles, scheduling, animated progress bars, display rotation and PixelFonts 3D font introduced in v4.0. See the [release notes](RELEASE_NOTES_v4.0.1.md) for changes, upgrade instructions and compatibility. Back up your settings before updating.
+The latest stable version is **[v4.1](https://github.com/widapro/wledPixel/releases/tag/v4.1)**, adding display snapshots on Home, NTP status and manual synchronization in Service Settings, and fixing active-profile persistence across reboots. See the [release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1) for the changes. Back up your settings before updating.
 
 
 ## Supported key features:
@@ -20,6 +20,7 @@ The latest stable version is **[v4.0.1](https://github.com/widapro/wledPixel/rel
 9. **Progress Bar Overlay**: 1-pixel bottom-row bar on any zone — supports HA sensors, MQTT topics, and time-based modes
    - **Dynamic mode** adds 16 animations and two HA/MQTT value rules, with complete progress-bar settings stored per profile and zone.
 10. Full controll through **web UI**
+   - **Display snapshot** on Home shows lit and unlit pixels for the active zone layout. A snapshot loads once when opening the page; click **Refresh** for a new image. Display power and 180° rotation are reflected in the snapshot.
 11. Home Assistant MQTT discovery [When MQTT settings specified, device will be automatically send discovery message to HA]
 12. Control display as light in Home Assistant [MQTT setup required]
 13. Initial setup through wifi AP and web UI
@@ -30,11 +31,40 @@ The latest stable version is **[v4.0.1](https://github.com/widapro/wledPixel/rel
 17. Plus symbols font
 18. **Display profiles and scheduling**: 4 profiles on ESP8266 or 8 on ESP32, including the default profile; scheduled overrides and **Apply Now**.
 
+## Display snapshot (v4.1)
+
+Check what your display is showing directly on **Home**. The snapshot shows lit
+and unlit pixels for the configured module count, including clocks, text, icons
+and progress bars. It loads once when the page opens; click **Refresh** whenever
+you need a fresh image. The status line also shows the active profile number and
+name captured with that image.
+
+Choose red, yellow-green, neon blue or white LEDs beside the preview. The **180°**
+button rotates only the preview, independently of the hardware rotation setting,
+so a physically inverted display can be viewed upright. Both choices are saved
+in your browser for that device address. Changing the appearance redraws the
+existing snapshot without requesting another frame or changing device settings.
+
+![Display snapshot with LED colors, preview rotation and Refresh](img/wledPixel_display_snapshot_v4.1.png)
+
+## NTP status (v4.1)
+
+The NTP section in **Service Settings** shows the device's current date and time,
+UTC offset, sync status and last successful sync since restart. It uses the
+device's applied time zone, even if your browser uses a different one.
+
+Click **Sync now** to request a sync and see its progress and result. If a sync
+fails, the previous successful sync time stays visible and you can retry. Apply
+changes to the NTP settings before using Sync now.
+
 ## Profiles and scheduling (v4.0)
 
 Open **Profiles** to configure a default baseline and additional profiles. Profiles can override power, brightness, zone layout, display modes, fonts, scrolling, countdown, stock ticker and progress bars. **No change** preserves the active value. Saving a profile stores it; **Apply Now** saves and activates it. Changing the zone layout can restart the device.
 
 Enable scheduling and select hours, minutes, days of the week and days of the month. The scheduler uses the configured NTP time and time-zone offset and waits for a successful sync. To restore the baseline after another profile has run, apply or schedule the default profile explicitly.
+
+The **ON AIR** badge follows the last applied profile across reboots, including
+when scheduling is disabled. Disabling scheduling leaves that profile active.
 
 Progress bars support **Regular** numeric/time mode and **Dynamic** animation mode. Dynamic mode uses up to two HA/MQTT value rules with independent animations and speeds. Leaving both values unset runs Rule 1 continuously; configured rules hide the bar when neither value matches.
 
@@ -227,7 +257,18 @@ pio run -e esp32 -t upload
 ## API
 ```
 /api/temperature      - get measured temperature from connected ds18b20 sensor
+/api/display/frame    - get a one-shot pixel snapshot of the configured display (GET)
+/api/ntp-status       - get device time, UTC offset and NTP synchronization status (GET)
+/api/ntp-sync         - queue an NTP synchronization attempt (POST)
 ```
+
+The display snapshot contains `modules`, `rows` (8), `columns`, `power`,
+`capturedAt` (device uptime in milliseconds), `profileIndex` (zero-based),
+`profileName` and `data` (one byte per column, left to right, bit 0 at the top).
+Only modules in the active zone layout are
+included; spare driver capacity and layouts in other saved profiles do not
+increase its width. A powered-off display returns unlit pixels. The snapshot
+represents firmware output; it cannot detect disconnected or faulty LED hardware.
 
 ## MQTT Topics
 
@@ -450,7 +491,8 @@ Replace **wledPixel-XXXX** and **sensor.example_temperature** with your own devi
 
 ### Validation
 
-See [v4.0.1 release notes](RELEASE_NOTES_v4.0.1.md) for the MQTT fix and upgrade instructions,
-and [v4.0 release notes](RELEASE_NOTES_v4.0.md) for the full feature overview and compatibility details,
+See [v4.1 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1) for display snapshots, NTP controls and active-profile fixes,
+[v4.0.1 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.0.1) for the MQTT fix and upgrade instructions,
+and [v4.0 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.0) for the full feature overview and compatibility details,
 and [local test documentation](test/README.md) for the test and HIL workflows.
 Local tests: `./tools/test_local.sh all`.

@@ -15,9 +15,9 @@ __pycache__/
 
 # Local scripts and notes
 CHANGELOG.md
-RELEASE_NOTES_v3.6.md
 
 # Private release review material and unpublished build history
+RELEASE_NOTES*.md
 /RELEASE_REVIEW_*.md
 /release/
 

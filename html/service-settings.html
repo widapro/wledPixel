@@ -356,7 +356,7 @@
                 </div>
               </div>
               <div class="col-3">
-                <label for="timeZone" class="form-label">Update interval</label>
+                <label for="ntpUpdateInterval" class="form-label">Update interval</label>
                 <div class="input-group mb-3">
                   <input type="text" class="form-control" id="ntpUpdateInterval">
                   <span class="input-group-text">Hours</span>
@@ -374,6 +374,26 @@
 
               <button id="applyWallClockSettings" class="w-100 btn btn-primary btn-lg"
                 onClick="preparePostRequest(event, this.id, null);">Apply</button>
+
+              <div class="col-12">
+                <div class="card bg-light">
+                  <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                      <div role="status" aria-live="polite">
+                        <span id="ntpSyncSpinner" class="spinner-border spinner-border-sm text-primary me-2" hidden aria-hidden="true"></span>
+                        <span id="ntpSyncStatus" class="text-muted">Loading NTP status...</span>
+                      </div>
+                      <button type="button" id="ntpSyncNow" class="btn btn-outline-primary"
+                        onclick="syncNtpNow()" disabled>Sync now</button>
+                    </div>
+                    <div class="small text-muted">Current device time <span id="ntpClockZone"></span></div>
+                    <div id="ntpClockTime" class="fs-4 font-monospace mb-2">—</div>
+                    <div class="small">Last successful sync: <span id="ntpLastSync">Never since restart</span></div>
+                    <div id="ntpSyncMessage" class="small mt-2" role="status" aria-live="polite"></div>
+                    <div class="small text-muted mt-2">Apply changes above before syncing. Times use the device's applied time zone.</div>
+                  </div>
+                </div>
+              </div>
 
 
               <hr class="my-4">
@@ -571,6 +591,123 @@
 
   <script>
     var mqttIsConnected = false;
+    let ntpStatusData = null;
+    let ntpClockSampleAt = 0;
+    let ntpPollTimer = null;
+    let ntpStatusLoading = false;
+    let ntpSyncPosting = false;
+    let ntpStatusGeneration = 0;
+
+    function formatNtpTime(epoch) {
+      // localEpoch already includes the device's offset. UTC formatting avoids
+      // applying the browser's (possibly different) time zone a second time.
+      return new Date(epoch * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    }
+
+    function updateNtpClock() {
+      document.getElementById('ntpClockTime').textContent = ntpStatusData && ntpStatusData.synced
+        ? formatNtpTime(ntpStatusData.localEpoch + Math.floor((performance.now() - ntpClockSampleAt) / 1000))
+        : '—';
+    }
+
+    function renderNtpStatus() {
+      const data = ntpStatusData;
+      const syncing = ntpSyncPosting || (data && data.state === 'syncing');
+      const status = document.getElementById('ntpSyncStatus');
+      const button = document.getElementById('ntpSyncNow');
+      button.disabled = syncing || !data || !data.configured;
+      button.textContent = syncing ? 'Syncing...' : 'Sync now';
+      document.getElementById('ntpSyncSpinner').hidden = !syncing;
+      status.textContent = syncing ? 'Synchronizing with NTP server...' :
+        !data ? 'NTP status unavailable' :
+        !data.configured ? 'NTP server not configured' :
+        data.state === 'failed' ? 'Last synchronization failed' :
+        data.synced ? 'Clock synchronized' : 'Clock not synchronized';
+      status.className = syncing ? 'text-primary' :
+        !data || !data.configured || data.state === 'failed' ? 'text-danger' :
+        data.synced ? 'text-success' : 'text-warning';
+      if (data) {
+        const offset = data.utcOffsetSeconds;
+        document.getElementById('ntpClockZone').textContent = '(UTC' + (offset < 0 ? '−' : '+') +
+          String(Math.floor(Math.abs(offset) / 3600)).padStart(2, '0') + ':' +
+          String(Math.floor(Math.abs(offset) % 3600 / 60)).padStart(2, '0') + ')';
+        document.getElementById('ntpLastSync').textContent = data.lastSyncUtc
+          ? formatNtpTime(data.lastSyncUtc + offset) : 'Never since restart';
+        const message = document.getElementById('ntpSyncMessage');
+        message.className = 'small mt-2 ' + (data.state === 'failed' ? 'text-danger' : 'text-success');
+        message.textContent = syncing ? '' : data.state === 'failed'
+          ? 'NTP sync failed. Check the server address and network. You can try again.' +
+            (data.synced ? ' The clock continues from the last successful sync.' : '')
+          : data.state === 'synced' ? 'Synchronization completed successfully.' : '';
+      }
+      updateNtpClock();
+    }
+
+    async function fetchNtpJson(url, options) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      try {
+        const response = await fetch(url, {...options, cache: 'no-store', signal: controller.signal});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'HTTP ' + response.status);
+        return data;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    function scheduleNtpStatus(delay) {
+      clearTimeout(ntpPollTimer);
+      // Leave enough idle time for the ESP8266's web priority cooldown.
+      ntpPollTimer = setTimeout(refreshNtpStatus, delay);
+    }
+
+    async function refreshNtpStatus() {
+      if (ntpStatusLoading || ntpSyncPosting) {
+        scheduleNtpStatus(3000);
+        return;
+      }
+      ntpStatusLoading = true;
+      const generation = ntpStatusGeneration;
+      try {
+        const data = await fetchNtpJson('/api/ntp-status');
+        if (generation !== ntpStatusGeneration) return;
+        ntpStatusData = data;
+        ntpClockSampleAt = performance.now();
+        renderNtpStatus();
+      } catch (error) {
+        if (generation !== ntpStatusGeneration) return;
+        ntpStatusData = null;
+        renderNtpStatus();
+        document.getElementById('ntpSyncMessage').className = 'small mt-2 text-danger';
+        document.getElementById('ntpSyncMessage').textContent = 'Could not read device time. Retrying...';
+      } finally {
+        ntpStatusLoading = false;
+        scheduleNtpStatus(!ntpStatusData || ntpStatusData.state === 'syncing' ? 3000 : 10000);
+      }
+    }
+
+    async function syncNtpNow() {
+      if (ntpSyncPosting || (ntpStatusData && ntpStatusData.state === 'syncing')) return;
+      ntpSyncPosting = true;
+      ntpStatusGeneration++;
+      clearTimeout(ntpPollTimer);
+      renderNtpStatus();
+      document.getElementById('ntpSyncMessage').textContent = '';
+      try {
+        await fetchNtpJson('/api/ntp-sync', {method: 'POST'});
+        if (ntpStatusData) ntpStatusData.state = 'syncing';
+      } catch (error) {
+        document.getElementById('ntpSyncMessage').className = 'small mt-2 text-danger';
+        document.getElementById('ntpSyncMessage').textContent =
+          'Sync request could not be confirmed: ' + error.message + '. Checking device status...';
+      } finally {
+        ntpSyncPosting = false;
+        // The queued attempt runs after this response drains.
+        scheduleNtpStatus(3000);
+      }
+    }
+
     function fetchWithRetry(url, options, retries, delayMs) {
       if (retries === undefined) retries = 10;
       if (delayMs === undefined) delayMs = 2000;
@@ -595,6 +732,7 @@
     }
 
     window.onload = function (e) {
+      setInterval(updateNtpClock, 1000);
       // Fetch settings from API
       fetchWithRetry('/api/service-settings')
         .then(data => {
@@ -670,6 +808,7 @@
           setVal("ntpTimeZone", data.ntpTimeZone);
           setVal("ntpUpdateInterval", data.ntpUpdateInterval);
           setVal("ntpServer", data.ntpServer);
+          refreshNtpStatus();
           setVal("clockDisplayFormatZone0", data.clockDisplayFormatZone0);
           setVal("clockDisplayFormatZone1", data.clockDisplayFormatZone1);
           setVal("clockDisplayFormatZone2", data.clockDisplayFormatZone2);
@@ -1321,6 +1460,7 @@
 
       request.done(function (msg) {
         toastSuccess.show();
+        if (dataPost.key === 'wallClockSett') refreshNtpStatus();
       });
 
       request.fail(function (jqXHR, textStatus, responseText) {

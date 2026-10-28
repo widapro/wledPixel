@@ -5,6 +5,7 @@
 
 #include "ConfigStore.h"
 #include "DisplayUtils.h"
+#include "DisplaySnapshot.h"
 #include "HilTest.h"
 #include "MqttHandler.h"
 #include "Scheduler.h"
@@ -204,6 +205,9 @@ void loop() {
   }
 
   serviceDisplayOrientation();
+  // Complete a one-shot web capture between frames, before web priority can
+  // pause the foreground loop. No capture work runs without a request.
+  displaySnapshot::service();
 
   // During page load the ESP8266 should give the async web server the heap and
   // CPU budget first. Reboot requests still win; routine background work waits.
@@ -284,10 +288,12 @@ void loop() {
   }
 #endif
 
-  if (shouldUpdateNtp) {
+  if (shouldUpdateNtp || ntpSyncState.pending() ||
+      millis() - previousNTPsyncMillis >=
+          static_cast<unsigned long>(ntpUpdateInterval) * 3600000UL) {
     Serial.println(F("Deferred NTP update..."));
-    ntpUpdateTime();
     shouldUpdateNtp = false;
+    ntpUpdateTime();
   }
 
   // Handle OTA updates

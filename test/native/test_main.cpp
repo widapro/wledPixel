@@ -2,6 +2,7 @@
 #include "base64_utils.h"
 #include "countdown.h"
 #include "SchedulerLogic.h"
+#include "NtpSyncState.h"
 #include "stockTicker.h"
 
 #include <cstdlib>
@@ -55,6 +56,35 @@ unsigned long utcEpoch(int year, int month, int day, int hour = 0,
   if (epoch < 0)
     fail("unable to construct test epoch");
   return static_cast<unsigned long>(epoch);
+}
+
+void testNtpSyncRequestsAndHistory() {
+  NtpSyncState sync;
+  CHECK(sync.getStatus() == NtpSyncState::Status::Never);
+  CHECK(sync.lastSyncUtc() == 0);
+  CHECK(sync.request());
+  CHECK(sync.pending());
+  CHECK(!sync.request());
+  CHECK(sync.begin());
+  CHECK(!sync.pending());
+  CHECK(!sync.request());
+  CHECK(!sync.begin());
+  sync.finish(false, 0);
+  CHECK(sync.getStatus() == NtpSyncState::Status::Failed);
+  CHECK(sync.lastSyncUtc() == 0);
+  CHECK(sync.request());
+  CHECK(sync.begin());
+  const uint32_t firstSync = utcEpoch(2026, 10, 28, 12, 34, 56);
+  sync.finish(true, firstSync);
+  CHECK(sync.getStatus() == NtpSyncState::Status::Succeeded);
+  CHECK(sync.lastSyncUtc() == firstSync);
+  CHECK(sync.begin()); // Automatic updates use the same history.
+  sync.finish(false, 0);
+  CHECK(sync.lastSyncUtc() == firstSync);
+  CHECK(sync.request());
+  CHECK(sync.begin());
+  sync.finish(true, firstSync + 30);
+  CHECK(sync.lastSyncUtc() == firstSync + 30);
 }
 
 void testBase64RfcVectors() {
@@ -337,6 +367,7 @@ int main() {
   run("stock symbol parsing", testStockSymbolParsing);
   run("stock display formatting", testStockDisplayFormatting);
   run("scheduler matching", testSchedulerMatching);
+  run("NTP queued requests and successful sync history", testNtpSyncRequestsAndHistory);
   run("text encoding ASCII and Cyrillic", testTextEncodingAsciiAndCyrillic);
   run("text encoding compact symbols", testTextEncodingCompactSymbols);
   run("text encoding PixelFonts 3D", testTextEncodingPixelFont);
