@@ -5,7 +5,7 @@ MAX7219 LED dot matrix display driven by an ESP32 or ESP8266 MCU.
 
 <a href="https://github.com/widapro/wledPixel/releases" target="_blank">The latest firmware version can be found in Releases</a>
 
-The latest stable version is **[v4.1](https://github.com/widapro/wledPixel/releases/tag/v4.1)**, adding display snapshots on Home, NTP status and manual synchronization in Service Settings, and fixing active-profile persistence across reboots. See the [release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1) for the changes. Back up your settings before updating.
+The latest stable version is **[v4.1.1](https://github.com/widapro/wledPixel/releases/tag/v4.1.1)**, fixing stale text in Manual/MQTT zones and clearing MQTT postfixes in profiles, and adding an original Robot sprite with automatic migration from MARIO. See the [release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1.1) for the changes. Back up your settings before updating.
 
 
 ## Supported key features:
@@ -463,9 +463,13 @@ Default effects:
 * `FBALL`
 * `CHEVRON`
 * `WALKER`
-* `MARIO` (New!)
+* `ROBOT` — original 8×8 robot with blinking eyes
 * `GHOST` (New!)
 * `DINO` (New!)
+
+Existing `MARIO` settings and profiles automatically use `ROBOT`, including when
+restoring older backups. The legacy `MARIO` identifier is also accepted through
+MQTT and the API.
 
 
 ## Demo Video
@@ -491,7 +495,8 @@ Replace **wledPixel-XXXX** and **sensor.example_temperature** with your own devi
 
 ### Validation
 
-See [v4.1 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1) for display snapshots, NTP controls and active-profile fixes,
+See [v4.1.1 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1.1) for Manual/MQTT zone fixes, MQTT postfix clearing and the Robot sprite,
+[v4.1 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.1) for display snapshots, NTP controls and active-profile fixes,
 [v4.0.1 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.0.1) for the MQTT fix and upgrade instructions,
 and [v4.0 release notes](https://github.com/widapro/wledPixel/releases/tag/v4.0) for the full feature overview and compatibility details,
 and [local test documentation](test/README.md) for the test and HIL workflows.

@@ -50,6 +50,34 @@ int main() {
   assert(restoredLiveString<std::string>(live["text"]) == "off");
   assert(restoredLiveString<std::string>(live["number"]) == "123");
 
+  // Live settings, API and MQTT commands use the same identifier migration.
+  std::string legacyEffect = "MARIO";
+  migrateScrollEffect(legacyEffect);
+  assert(legacyEffect == "ROBOT");
+  for (const char *value : {"ROBOT", "HEART", "PA_SCROLL_LEFT", "", "MARIO_EXTRA"}) {
+    std::string effect = value;
+    migrateScrollEffect(effect);
+    assert(effect == value);
+  }
+
+  // Restore both effect directions while preserving null/empty overrides and
+  // the other selected effects in old backups.
+  {
+    ScheduleProfile restored;
+    initProfileDefaults(restored, 0);
+    DynamicJsonDocument backup(1024);
+    assert(!deserializeJson(backup, R"({"zoneScrollEffectIn":["MARIO","HEART",null,""],"zoneScrollEffectOut":[null,"MARIO","ROBOT","PA_NO_EFFECT"]})"));
+    assert(applyRestoreProfile(backup.as<JsonObjectConst>(), restored));
+    assert(!strcmp(restored.zoneScrollEffectIn[0], "ROBOT"));
+    assert(!strcmp(restored.zoneScrollEffectIn[1], "HEART"));
+    assert(static_cast<uint8_t>(restored.zoneScrollEffectIn[2][0]) == SCHED_STR_NO_CHANGE);
+    assert(restored.zoneScrollEffectIn[3][0] == '\0');
+    assert(static_cast<uint8_t>(restored.zoneScrollEffectOut[0][0]) == SCHED_STR_NO_CHANGE);
+    assert(!strcmp(restored.zoneScrollEffectOut[1], "ROBOT"));
+    assert(!strcmp(restored.zoneScrollEffectOut[2], "ROBOT"));
+    assert(!strcmp(restored.zoneScrollEffectOut[3], "PA_NO_EFFECT"));
+  }
+
   ScheduleProfile p;
   initProfileDefaults(p, 2);
   assert(static_cast<uint8_t>(p.zoneHaSensorId[0][0]) == SCHED_STR_NO_CHANGE);

@@ -124,7 +124,7 @@ textEffect_t stringToTextEffectT(const String &val) {
     return PA_SPRITE;
   if (val == F("WALKER"))
     return PA_SPRITE;
-  if (val == F("MARIO"))
+  if (val == F("ROBOT"))
     return PA_SPRITE;
   if (val == F("GHOST"))
     return PA_SPRITE;
@@ -344,9 +344,9 @@ void updateSpriteData(uint8_t z) {
   } else if (zones[z].scrollEffectIn == "WALKER" ||
              zones[z].scrollEffectOut == "WALKER") {
     P.setSpriteData(walker, W_WALKER, F_WALKER, walker, W_WALKER, F_WALKER);
-  } else if (zones[z].scrollEffectIn == "MARIO" ||
-             zones[z].scrollEffectOut == "MARIO") {
-    P.setSpriteData(mario, W_MARIO, F_MARIO, mario, W_MARIO, F_MARIO);
+  } else if (zones[z].scrollEffectIn == "ROBOT" ||
+             zones[z].scrollEffectOut == "ROBOT") {
+    P.setSpriteData(robot, W_ROBOT, F_ROBOT, robot, W_ROBOT, F_ROBOT);
   } else if (zones[z].scrollEffectIn == "GHOST" ||
              zones[z].scrollEffectOut == "GHOST") {
     P.setSpriteData(ghost, W_GHOST, F_GHOST, ghost, W_GHOST, F_GHOST);

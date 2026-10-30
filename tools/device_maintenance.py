@@ -248,10 +248,109 @@ def profile_tests(device, backup_path):
         print('User configuration restored after tests', flush=True)
 
 
+def manual_profile_tests(device, backup_path):
+    """Check real rendered pixels with normal firmware; always restore settings."""
+    backup = device.verify(backup_path)
+    runtime = device.request('/api/display/frame')
+    idx = device.request('/api/scheduler/meta')['profileCount'] - 1
+    token = secrets.token_hex(10)
+    modules = max(2, runtime['modules'])
+    split = modules // 2
+
+    def save_profile(**fields):
+        device.request(f'/api/scheduler/edit?idx={idx}', {}, token)
+        device.request('/api/config', {'key': 'cronProfile', 'idx': idx,
+                                      **fields}, token)
+        device.settled()
+
+    def apply_profile():
+        device.request(f'/api/scheduler/apply?idx={idx}', {})
+        # Leave the foreground loop time to save settings and render. Frequent
+        # polling deliberately pauses that work on ESP8266 via web priority.
+        time.sleep(8)
+        device.ready()
+        device.settled()
+        assert device.request('/api/scheduler/meta')['lastActiveProfile'] == idx
+        time.sleep(4)
+
+    def expect_pixels(lit, label):
+        frame = device.request('/api/display/frame')
+        assert frame['power'] and frame['modules'] == modules, frame
+        for zone, columns in enumerate((frame['data'][:split * 8],
+                                        frame['data'][split * 8:])):
+            assert any(columns) == lit, f'{label}: unexpected pixels in zone {zone}'
+        print('PASS ' + label, flush=True)
+
+    def send_text():
+        device.request('/api/message', {'messageZone0': 'A', 'messageZone1': 'B'})
+        time.sleep(4)
+        expect_pixels(True, 'new input renders in both zones')
+
+    try:
+        device.request('/api/scheduler/enabled?enabled=0', {})
+        device.request('/api/config', {'key': 'systemSettings',
+                                       'disableServiceMessages': 'true'})
+        fields = {'reset': 1, 'enabled': 'false', 'name': 'Input test',
+                  'power': 1, 'zoneCount': 2, 'pbEnable': 240,
+                  'zoneScrollInfinite': 255, 'zb0': 0, 'ze0': split - 1,
+                  'zb1': split, 'ze1': modules - 1}
+        for zone in range(4):
+            fields.update({f'zwm{zone}': 1, f'zf{zone}': 1,
+                           f'zspd{zone}': 10, f'zpause{zone}': 0,
+                           f'zefin{zone}': 'PA_PRINT', f'zefout{zone}': 'PA_NO_EFFECT',
+                           f'zmt{zone}': ''})
+        save_profile(**fields)
+        apply_profile()
+        expect_pixels(False, 'manual zones start empty after layout initialization')
+        send_text()
+        apply_profile()
+        expect_pixels(False, 'reapplying a manual profile clears previous input')
+        send_text()
+        device.request('/api/reboot', {})
+        device.ready()
+        expect_pixels(False, 'boot-test text and previous input do not survive reboot')
+
+        save_profile(zwm0=2, zwm1=2)
+        apply_profile()
+        expect_pixels(True, 'clock mode renders before switching to manual')
+        save_profile(zwm0=1, zwm1=1)
+        apply_profile()
+        expect_pixels(False, 'switching from clock to manual clears the old value')
+
+        save_profile(zwm1=5)
+        apply_profile()
+        send_text()
+        apply_profile()
+        expect_pixels(False, 'manual and MQTT zones both clear on profile apply')
+
+        device.request('/api/config', {'key': 'systemSettings',
+                                       'disableServiceMessages': 'false'})
+        apply_profile()
+        expect_pixels(True, 'service messages remain visible when enabled')
+        device.request('/api/config', {'key': 'systemSettings',
+                                       'disableServiceMessages': 'true'})
+        apply_profile()
+        expect_pixels(False, 'disabling service messages leaves input zones empty')
+    except Exception as error:
+        print('FAIL manual-zone tests: ' + str(error), flush=True)
+        raise
+    finally:
+        try:
+            device.request(f'/api/scheduler/edit-cancel?idx={idx}', {}, token,
+                           expected=(200, 409))
+        except (OSError, RuntimeError):
+            pass
+        device.restore(backup_path)
+        device.verify(backup_path)
+        device.request('/api/config', {'key': 'intensity',
+                                      'intensity': backup['intensity'] + 1 if runtime['power'] else 0})
+        print('User configuration restored after manual-zone tests', flush=True)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--host', required=True)
-    p.add_argument('action', choices=['flash', 'verify', 'restore', 'profiles'])
+    p.add_argument('action', choices=['flash', 'verify', 'restore', 'profiles', 'manual-zones'])
     p.add_argument('--binary')
     p.add_argument('--backup')
     p.add_argument('--version', help='Expected firmware version; required for flash')
@@ -259,6 +358,7 @@ def main():
     device = Device(args.host, args.version)
     if args.action == 'flash': device.flash(args.binary)
     elif args.action == 'profiles': profile_tests(device, args.backup)
+    elif args.action == 'manual-zones': manual_profile_tests(device, args.backup)
     elif args.action == 'restore': device.restore(args.backup); device.verify(args.backup)
     else: device.verify(args.backup)
 if __name__ == '__main__': main()

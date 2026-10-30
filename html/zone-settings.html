@@ -382,7 +382,7 @@
       {v:'ARROW',l:'Arrow'},{v:'SAILBOAT',l:'Sailboat'},{v:'STEAMBOAT',l:'Steamboat'},
       {v:'HEART',l:'Heart'},{v:'INVADER',l:'Invader'},{v:'ROCKET',l:'Rocket'},
       {v:'FBALL',l:'Fireball'},{v:'CHEVRON',l:'Chevron'},{v:'WALKER',l:'Walker'},
-      {v:'MARIO',l:'Mario'},{v:'GHOST',l:'Ghost'},{v:'DINO',l:'Dino'}
+      {v:'ROBOT',l:'Robot'},{v:'GHOST',l:'Ghost'},{v:'DINO',l:'Dino'}
     ];
     var COUNTDOWN_FORMAT_OPTS = [
       {v:'',l:'No change'},{v:'auto',l:'Auto'},{v:'YY',l:'YY'},{v:'YYMM',l:'YY MM'},
@@ -1472,8 +1472,9 @@
             for (var zfi = 0; zfi < zoneStringFields.length; zfi++) {
               var fieldValue = document.getElementById(
                 'p0' + zoneStringFields[zfi][0] + zoneIndex).value;
+              // An empty MQTT postfix clears the live value on Apply Now.
               zoneData[zoneStringFields[zfi][1] + zoneIndex] =
-                fieldValue === '' ? 'null' : fieldValue;
+                fieldValue === '' && zoneStringFields[zfi][1] !== 'zmp' ? 'null' : fieldValue;
             }
             return postProfileDraft(zoneData);
           });
@@ -1650,7 +1651,9 @@
           var fv = el ? el.value : '';
           var oldFv = snap[formKey];
           if (oldFv === undefined || fv !== oldFv) {
-            body += '&' + paramKey + '=' + encodeURIComponent(fv === '' ? 'null' : fv);
+            // null inherits the current value; clearing the postfix needs ''.
+            body += '&' + paramKey + '=' + encodeURIComponent(
+              fv === '' && strFields[fi][1] !== 'zmp' ? 'null' : fv);
             changed++;
           }
         }

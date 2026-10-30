@@ -401,11 +401,20 @@ void loop() {
         stockParseSymbols(n, zones[n].stockSymbols);
       }
 
-      // Clear boot messages to prevent them from looping in MQTT mode
-      if (!preserveVisibleFrame && zones[n].workMode == "mqttClient" &&
-          disableServiceMessages) {
-        strcpy(zoneMessages[n], "");
-        strcpy(zoneMessagesPending[n], "");
+      // Input-only modes have no initial value. Discard both the previous
+      // mode's text and boot-test text when no service message replaces them.
+      if (!preserveVisibleFrame && disableServiceMessages &&
+          (zones[n].workMode == "mqttClient" ||
+           zones[n].workMode == "manualInput")) {
+        zoneMessages[n][0] = '\0';
+        zoneMessagesPending[n][0] = '\0';
+        zones[n].newMessageAvailable = false;
+        zones[n].restoreEffects = true;
+        zones[n].textFits = true;
+        zoneServiceMessageScrolling[n] = false;
+        zoneScrollCompleteTime[n] = 0;
+        P.setTextBuffer(n, zoneMessages[n]);
+        P.displayReset(n);
         P.displayClear(n);
       }
       // Only call displayReset if we didn't just set a mode message

@@ -1,5 +1,6 @@
 #include "SchedulerLogic.h"
 #include "Scheduler.h"
+#include "ScrollEffects.h"
 
 bool schedulerTimeMatches(bool enabled, uint8_t minute, uint8_t hour,
                           uint8_t dayOfWeekMask, uint32_t dayOfMonthMask,
@@ -152,6 +153,8 @@ void sanitizeScheduleProfile(ScheduleProfile &profile) {
     sanitizeProfileString(profile.zoneScrollAlign[z]);
     sanitizeProfileString(profile.zoneScrollEffectIn[z]);
     sanitizeProfileString(profile.zoneScrollEffectOut[z]);
+    migrateScrollEffect(profile.zoneScrollEffectIn[z]);
+    migrateScrollEffect(profile.zoneScrollEffectOut[z]);
     sanitizeProfileString(profile.zoneMqttPostfix[z]);
     sanitizeProfileString(profile.zoneDs18b20Postfix[z]);
     sanitizeProfileString(profile.zoneCountdownTarget[z]);

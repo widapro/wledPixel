@@ -19,11 +19,11 @@ extern const uint8_t F_WAVE;
 extern const uint8_t W_WAVE;
 extern const uint8_t PROGMEM wave[];
 
-// ─── Mario
+// ─── Robot
 // ─────────────────────────────────────────────────────────────────────
-extern const uint8_t F_MARIO;
-extern const uint8_t W_MARIO;
-extern const uint8_t PROGMEM mario[];
+extern const uint8_t F_ROBOT;
+extern const uint8_t W_ROBOT;
+extern const uint8_t PROGMEM robot[];
 
 // ─── Ghost
 // ─────────────────────────────────────────────────────────────────────

@@ -456,13 +456,15 @@ bool applyCronProfileParam(ScheduleProfile &profile,
     else if (strcmp(field, "zalign") == 0)
       copyScheduleStringParam(profile.zoneScrollAlign[zone],
                               sizeof(profile.zoneScrollAlign[zone]), value);
-    else if (strcmp(field, "zefin") == 0)
+    else if (strcmp(field, "zefin") == 0) {
       copyScheduleStringParam(profile.zoneScrollEffectIn[zone],
                               sizeof(profile.zoneScrollEffectIn[zone]), value);
-    else if (strcmp(field, "zefout") == 0)
+      migrateScrollEffect(profile.zoneScrollEffectIn[zone]);
+    } else if (strcmp(field, "zefout") == 0) {
       copyScheduleStringParam(profile.zoneScrollEffectOut[zone],
                               sizeof(profile.zoneScrollEffectOut[zone]), value);
-    else if (strcmp(field, "zmp") == 0)
+      migrateScrollEffect(profile.zoneScrollEffectOut[zone]);
+    } else if (strcmp(field, "zmp") == 0)
       copyScheduleStringParam(profile.zoneMqttPostfix[zone],
                               sizeof(profile.zoneMqttPostfix[zone]), value);
     else if (strcmp(field, "zds") == 0)
@@ -1021,6 +1023,8 @@ void restoreZoneSettingsFromDoc(const JsonDocument &doc, uint8_t zone) {
   assignIfPresent(doc, key, zones[zone].scrollEffectIn);
   snprintf_P(key, sizeof(key), PSTR("scrollEffectZone%uOut"), zone);
   assignIfPresent(doc, key, zones[zone].scrollEffectOut);
+  migrateScrollEffect(zones[zone].scrollEffectIn);
+  migrateScrollEffect(zones[zone].scrollEffectOut);
   snprintf_P(key, sizeof(key), PSTR("charspacingZone%u"), zone);
   assignIfPresent(doc, key, zones[zone].charspacing);
   snprintf_P(key, sizeof(key), PSTR("fontZone%u"), zone);
@@ -2730,10 +2734,12 @@ void setupWebRoutes() {
             }
             if (p->name() == "scrollEffectIn") {
               zones[n].scrollEffectIn = p->value().c_str();
+              migrateScrollEffect(zones[n].scrollEffectIn);
               updateSpriteData(n);
             }
             if (p->name() == "scrollEffectOut") {
               zones[n].scrollEffectOut = p->value().c_str();
+              migrateScrollEffect(zones[n].scrollEffectOut);
               updateSpriteData(n);
             }
 

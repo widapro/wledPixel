@@ -2,6 +2,7 @@
 #include "Scheduler.h"
 #include "ConfigStringStorage.h"
 #include "SchedulerStateStorage.h"
+#include "ScrollEffects.h"
 #include <cstdio>
 #include <cstring>
 
@@ -510,6 +511,8 @@ void readConfig(const char *groupName, uint8_t n) {
     buildZoneKey(key, sizeof(key), n, "ScrolEfOut");
     zones[n].scrollEffectOut =
         preferences.getString(key, zones[n].scrollEffectOut);
+    migrateScrollEffect(zones[n].scrollEffectIn);
+    migrateScrollEffect(zones[n].scrollEffectOut);
     buildZoneKey(key, sizeof(key), n, "Font");
     zones[n].font = preferences.getString(key, zones[n].font);
     buildZoneKey(key, sizeof(key), n, "Charspac");

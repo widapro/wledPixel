@@ -17,6 +17,91 @@ PAGES = {
 
 
 class WebAssetTests(unittest.TestCase):
+    def test_mqtt_postfix_can_be_cleared_in_default_and_scheduled_profiles(self):
+        html = (ROOT / "html" / "zone-settings.html").read_text(encoding="utf-8")
+        snapshot_start = html.index("    function snapshotProfile(")
+        snapshot_end = html.index("    function updateProfileUI(", snapshot_start)
+        save_start = html.index("    function postProfileDraft(")
+        save_end = html.index("    function saveSchedulerGlobal(", save_start)
+        script = html[snapshot_start:snapshot_end] + html[save_start:save_end] + r'''
+const assert = require('assert');
+let fields, requests, notifications;
+global.PROFILE_SNAPSHOTS = {};
+global.document = {
+  getElementById(id) {
+    if (/^spHead/.test(id)) return null;
+    if (!fields[id]) fields[id] = {value: '', checked: false, textContent: 'Save'};
+    return fields[id];
+  },
+  querySelectorAll: () => []
+};
+global.$ = {param: data => new URLSearchParams(data).toString()};
+global.bootstrap = {Toast: function(element) {
+  this.show = () => notifications.push(element);
+}};
+global.setTimeout = () => {};
+global.waitForDevice = global.waitForProfileStorage = global.beginProfileEdit =
+  () => Promise.resolve();
+global.appendProgressBarSaves = chain => chain;
+global.cancelProfileEdit = () => { throw new Error('profile save failed'); };
+global.loadSchedulerData = () => {};
+global.fetchWithRetry = (url, options) => {
+  requests.push({url, params: new URLSearchParams(options.body)});
+  return Promise.resolve({});
+};
+
+async function save(index, applyNow, values, unchanged = false, largeDelta = false) {
+  fields = {}; requests = []; notifications = [];
+  const prefix = index === 0 ? 'p0' : 'sp' + index;
+  const element = suffix => document.getElementById(prefix + suffix);
+  element('DomAll').checked = true;
+  for (let z = 0; z < 4; z++) {
+    for (const suffix of ['Zpb', 'Zsi', 'Zcu', 'Zsa']) element(suffix + z).value = '-1';
+    element('Zmp' + z).value = unchanged ? values[z] : 'old';
+  }
+  PROFILE_SNAPSHOTS[index] = snapshotProfile(index);
+  values.forEach((value, z) => { element('Zmp' + z).value = value; });
+  if (largeDelta) {
+    for (let z = 0; z < 4; z++) element('Zmt' + z).value = 'topic/'.repeat(20);
+  }
+  if (index === 0) saveProfile1(applyNow);
+  else saveScheduledProfile(index, applyNow);
+  for (let attempt = 0; attempt < 100 && notifications.length === 0; attempt++)
+    await new Promise(resolve => setImmediate(resolve));
+  assert.deepStrictEqual(notifications, [document.getElementById('liveToastSuccess')]);
+  const config = requests.filter(request => request.url === '/api/config');
+  values.forEach((value, z) => {
+    const written = config.filter(request => request.params.has('zmp' + z));
+    assert.strictEqual(written.length, unchanged && index !== 0 ? 0 : 1);
+    if (written.length) assert.strictEqual(written[0].params.get('zmp' + z), value,
+      'an empty MQTT postfix must clear the value instead of inheriting it');
+  });
+  if (index !== 0) {
+    assert(config.every(request => !request.params.has('zhp0')),
+      'untouched inherited string fields must remain unchanged');
+    if (largeDelta) assert(config.some(request => request.params.get('draft') === '1'));
+  }
+  assert.strictEqual(requests.filter(request => request.url.startsWith('/api/scheduler/apply')).length,
+    applyNow ? 1 : 0);
+}
+
+(async () => {
+  for (const applyNow of [false, true]) {
+    for (const index of [0, 1, 3, 7]) {
+      await save(index, applyNow, ['', '', '', '']);
+      await save(index, applyNow, [' C', '°C', '&+=%', 'Вт']);
+      await save(index, applyNow, ['', '', '', ''], true);
+      if (index !== 0) await save(index, applyNow, ['', '', '', ''], false, true);
+    }
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+'''
+        result = subprocess.run(
+            [shutil.which("node"), "-"], input=script, text=True,
+            capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_on_air_follows_applied_profile_with_scheduling_on_or_off(self):
         html = (ROOT / "html" / "zone-settings.html").read_text(encoding="utf-8")
         start = html.index("    function buildProfilesAccordion(")

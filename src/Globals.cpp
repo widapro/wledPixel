@@ -25,7 +25,7 @@ bool shouldReboot = false;
 bool shouldUpdateNtp = false;
 size_t otaTotalSize = 0;
 String restoreJsonBuffer = "";
-const char *firmwareVer = "v4.1";
+const char *firmwareVer = "v4.1.1";
 // Platform marker embedded in binary — used for OTA platform validation
 // DO NOT REMOVE: this string is scanned in the binary during OTA upload
 #if defined(ESP8266)

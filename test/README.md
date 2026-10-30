@@ -70,6 +70,13 @@ tests competing editors, cancellation, commit, reboot, Apply Now and real NTP
 scheduling, then restores and compares the saved configuration. Keep the backup
 even if a test fails; interrupted network access can prevent automatic cleanup.
 
+The `manual-zones --backup /private/path/backup.json` action works with normal
+firmware and `/api/display/frame`. It temporarily uses the last profile and two
+zones to check empty Manual/MQTT buffers after profile application and reboot,
+clock-to-Manual transitions, new input and the service-message setting. It
+restores and verifies the original configuration in cleanup. Save a fresh
+complete backup before running it; the initial configuration must match it.
+
 For API clients, begin with `POST /api/scheduler/edit?idx=N` and a random
 `X-Profile-Edit` header (up to 24 characters). Send the same header on all profile
 and progress-bar writes. Stage progress bars before the final `cronProfile`

@@ -56,6 +56,33 @@ int main() {
       assert(!storageCodec::encode(raw.data(), raw.size(), encoded.data(), 9));
     }
   }
+  // Existing raw records and subsequently committed records must both replace
+  // the retired sprite without changing the remaining profile settings.
+  {
+    ScheduleProfile legacyEffect, loadedEffect;
+    initProfileDefaults(legacyEffect, 0);
+    strcpy(legacyEffect.zoneScrollEffectIn[0], "MARIO");
+    strcpy(legacyEffect.zoneScrollEffectOut[1], "MARIO");
+    strcpy(legacyEffect.zoneScrollEffectIn[2], "HEART");
+    legacyEffect.zoneScrollEffectOut[3][0] = '\0';
+    Preferences legacySettings;
+    legacySettings.begin("cronP0");
+    legacySettings.putBytes("data", &legacyEffect, sizeof(legacyEffect));
+    legacySettings.end();
+    ProfileStorage sprites;
+    assert(sprites.load(0, loadedEffect));
+    assert(!strcmp(loadedEffect.zoneScrollEffectIn[0], "ROBOT"));
+    assert(!strcmp(loadedEffect.zoneScrollEffectOut[1], "ROBOT"));
+    assert(!strcmp(loadedEffect.zoneScrollEffectIn[2], "HEART"));
+    assert(static_cast<uint8_t>(loadedEffect.zoneScrollEffectIn[3][0]) == SCHED_STR_NO_CHANGE);
+    assert(loadedEffect.zoneScrollEffectOut[3][0] == '\0');
+    assert(sprites.commit(0, legacyEffect));
+    ProfileStorage rebooted;
+    ScheduleProfile afterReboot;
+    assert(rebooted.load(0, afterReboot));
+    assert(!memcmp(&afterReboot, &loadedEffect, sizeof(afterReboot)));
+    Preferences::disk.clear();
+  }
   ScheduleProfile oldProfile, newProfile, loaded;
   initProfileDefaults(oldProfile, 0);
   newProfile = oldProfile; newProfile.intensity = 12;

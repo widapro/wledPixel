@@ -512,12 +512,16 @@ void MQTTCallback(char *topic, byte *payload, int length) {
 
     if (mqttTopicEquals(topic, MQTTZones[n].scrollEffectIn)) {
       zones[n].scrollEffectIn = payloadBuf;
+      migrateScrollEffect(zones[n].scrollEffectIn);
+      updateSpriteData(n);
       P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn),
                       stringToTextEffectT(zones[n].scrollEffectOut));
       zoneSettingsChanged = true;
     }
     if (mqttTopicEquals(topic, MQTTZones[n].scrollEffectOut)) {
       zones[n].scrollEffectOut = payloadBuf;
+      migrateScrollEffect(zones[n].scrollEffectOut);
+      updateSpriteData(n);
       P.setTextEffect(n, stringToTextEffectT(zones[n].scrollEffectIn),
                       stringToTextEffectT(zones[n].scrollEffectOut));
       zoneSettingsChanged = true;

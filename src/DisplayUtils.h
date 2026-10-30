@@ -3,6 +3,7 @@
 #include "Bitmaps.h"
 #include "DisplayRotation.h"
 #include "Globals.h"
+#include "ScrollEffects.h"
 #include "TextEncoding.h"
 #include <Arduino.h>
 

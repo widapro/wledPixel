@@ -1,5 +1,6 @@
 #pragma once
 #include "Scheduler.h"
+#include "ScrollEffects.h"
 #include <ArduinoJson.h>
 template <typename TString>
 inline TString restoredLiveString(JsonVariantConst value) {
@@ -68,6 +69,8 @@ inline bool applyRestoreProfile(JsonObjectConst po, ScheduleProfile &profile) {
     if (z < po["zoneScrollAlign"].size()) restoreProfileString(po["zoneScrollAlign"][z], profile.zoneScrollAlign[z]);
     if (z < po["zoneScrollEffectIn"].size()) restoreProfileString(po["zoneScrollEffectIn"][z], profile.zoneScrollEffectIn[z]);
     if (z < po["zoneScrollEffectOut"].size()) restoreProfileString(po["zoneScrollEffectOut"][z], profile.zoneScrollEffectOut[z]);
+    migrateScrollEffect(profile.zoneScrollEffectIn[z]);
+    migrateScrollEffect(profile.zoneScrollEffectOut[z]);
     if (z < po["zoneMqttPostfix"].size()) restoreProfileString(po["zoneMqttPostfix"][z], profile.zoneMqttPostfix[z]);
     if (z < po["zoneDs18b20Postfix"].size()) restoreProfileString(po["zoneDs18b20Postfix"][z], profile.zoneDs18b20Postfix[z]);
     if (z < po["zoneCountdownTarget"].size()) restoreProfileString(po["zoneCountdownTarget"][z], profile.zoneCountdownTarget[z]);
